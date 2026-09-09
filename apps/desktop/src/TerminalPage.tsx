@@ -87,9 +87,29 @@ export function TerminalPage({ workspaces, requestedTerminal, onConsumed, onErro
     let disposed = false;
     let resizeFrame = 0;
     host.current.replaceChildren();
-    const terminalTheme = () => document.documentElement.dataset.theme === "light"
-      ? { background: "#f4f2ec", foreground: "#202a34", cursor: "#2e6483", selectionBackground: "#b8dcea88" }
-      : { background: "#0b0e12", foreground: "#d9e2ee", cursor: "#7eb8e8", selectionBackground: "#36587588" };
+    const terminalTheme = () => ({
+      background: "#080b10",
+      foreground: "#e7edf5",
+      cursor: "#6ed3ff",
+      cursorAccent: "#080b10",
+      selectionBackground: "#2b536c",
+      black: "#080b10",
+      red: "#ff7a90",
+      green: "#6bd69e",
+      yellow: "#ffd37b",
+      blue: "#72b9ff",
+      magenta: "#d49bff",
+      cyan: "#66d9ef",
+      white: "#e7edf5",
+      brightBlack: "#718096",
+      brightRed: "#ff9aaa",
+      brightGreen: "#8be5b3",
+      brightYellow: "#ffe09c",
+      brightBlue: "#9acbff",
+      brightMagenta: "#e3baff",
+      brightCyan: "#9be8f3",
+      brightWhite: "#ffffff",
+    });
     const terminal = new Terminal({
       cursorBlink: true,
       cursorStyle: "bar",

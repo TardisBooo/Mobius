@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { Archive, Braces, Check, ChevronDown, FolderGit2, Languages, Layers2, LoaderCircle, Maximize2, Minus, Moon, NotebookPen, PanelRight, Plus, RefreshCw, Search, Sparkles, Sun, TerminalSquare, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { desktopApi } from "./api";
@@ -8,6 +8,7 @@ import { MobiusLogo } from "./MobiusLogo";
 import type { HealthStatus, ProviderIndexReport, TerminalInfo, WorkspaceView } from "./types";
 import "./mobius-shell.css";
 import "./relay-graph.css";
+import "./interaction-fixes.css";
 
 const TerminalPage = lazy(() => import("./TerminalPage").then((module) => ({ default: module.TerminalPage })));
 const WorkspaceAtlas = lazy(() => import("./WorkspaceAtlas").then((module) => ({ default: module.WorkspaceAtlas })));
@@ -117,6 +118,31 @@ export function App() {
       setError(String(reason));
     }
   }, []);
+  const startWindowDrag = useCallback((event: ReactMouseEvent<HTMLElement>) => {
+    if (event.button !== 0 || desktopApi.runtime !== "desktop") return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("button, input, select, textarea, a, [data-window-no-drag]")) return;
+    void getCurrentWindow().startDragging().catch((reason) => setError(String(reason)));
+  }, []);
+  const toggleWindowFromTitlebar = useCallback((event: ReactMouseEvent<HTMLElement>) => {
+    if (event.button !== 0 || desktopApi.runtime !== "desktop") return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("button, input, select, textarea, a, [data-window-no-drag]")) return;
+    void getCurrentWindow().toggleMaximize().catch((reason) => setError(String(reason)));
+  }, []);
+  // Tauri's data attribute is a useful fallback, but a native listener keeps
+  // the custom title bar draggable in WebView builds where the attribute is
+  // not delegated through nested React children.
+  useEffect(() => {
+    if (desktopApi.runtime !== "desktop") return;
+    const bar = document.querySelector<HTMLElement>(".mobius-topbar");
+    if (!bar) return;
+    const drag = (event: MouseEvent) => startWindowDrag(event as unknown as ReactMouseEvent<HTMLElement>);
+    const maximize = (event: MouseEvent) => toggleWindowFromTitlebar(event as unknown as ReactMouseEvent<HTMLElement>);
+    bar.addEventListener("mousedown", drag);
+    bar.addEventListener("dblclick", maximize);
+    return () => { bar.removeEventListener("mousedown", drag); bar.removeEventListener("dblclick", maximize); };
+  }, [startWindowDrag, toggleWindowFromTitlebar]);
   const refresh = async () => { setScanning(true); setIndexing(true); try { const report: ProviderIndexReport = await desktopApi.refreshSessions(); setToast(text.scanDone(report.indexed, report.unchanged)); await reload(); } catch (reason) { setError(String(reason)); await reload(); } finally { setScanning(false); } };
   const nav = useMemo<Array<{ id: Exclude<Page, "skills">; icon: ReactNode; label: string }>>(() => [
     { id: "workbench", icon: <TerminalSquare/>, label: text.workbench }, { id: "sessions", icon: <Archive/>, label: text.sessions }, { id: "notes", icon: <NotebookPen/>, label: text.notes }

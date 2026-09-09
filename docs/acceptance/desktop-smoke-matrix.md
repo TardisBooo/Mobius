@@ -16,7 +16,7 @@ Latest corrective evidence: [0.3.8 real trajectory / native resume / installer g
 
 | ID | Surface | Interaction / state | Expected result | Evidence |
 |---|---|---|---|---|
-| SH-01 | Window | drag title bar | Window moves; controls remain clickable | desktop recording |
+| SH-01 | Window | drag title bar | Window moves; controls remain clickable | interaction-regression.spec.ts (native mousedown path) |
 | SH-02 | Window | minimize, restore, maximize, restore | Native state changes once per click; app remains responsive | CTL-WINDOW |
 | SH-03 | Window | close | Process and PTYs terminate cleanly | final test step |
 | SH-04 | Global | light/dark switch on every page | No hard/low-contrast controls; no layout shift or overflow | CTL-THEME screenshots |
@@ -25,12 +25,12 @@ Latest corrective evidence: [0.3.8 real trajectory / native resume / installer g
 | SH-07 | Global | first-run guide: steps/back/skip/close | Focus is trapped/restored and completion persists | CTL-ONBOARD |
 | WB-01 | Workspaces | add via typed path / folder picker / cancel / invalid path | Valid isolated path registers once; invalid path is recoverable | FLOW-WORKSPACE |
 | WB-02 | Workspaces | expand/collapse project and select checkout | Tree state and detail selection are consistent | FLOW-WORKSPACE |
-| WB-03 | Workspaces | pin/unpin, drag into recent area | Recent set persists without changing project status | FLOW-WORKSPACE |
+| WB-03 | Workspaces | pin/unpin, drag into recent area | Recent set persists without changing project status | interaction-regression.spec.ts |
 | WB-04 | Details | Sessions / Files / Worktrees / Project skills tabs | Each tab loads and scrolls independently | FLOW-WORKSPACE |
 | WB-05 | Details | open terminal from project/session | PTY cwd equals checkout and accepts repeated input | FLOW-PTY |
 | WB-06 | Details | Handoff graph tab, source/target nodes and pending target | Only marker-correlated sessions join the chain; nodes open the exact indexed session | CORE-RELAY / FLOW-HANDOFF |
 | TM-01 | Terminal | create free PowerShell, choose/cancel folder | New tab only after confirmation | FLOW-PTY |
-| TM-02 | Terminal | type, paste, Enter, resize, switch tabs | Exact input/output retained; no freeze | FLOW-PTY |
+| TM-02 | Terminal | type, paste, Enter, resize, switch tabs | Exact input/output retained; no freeze; terminal remains readable in light mode | interaction-regression.spec.ts / FLOW-PTY |
 | TM-03 | Terminal | close active/background tab | Only requested PTY closes; focus moves predictably | FLOW-PTY |
 | TM-04 | Terminal | focus mode / Escape / return to workspaces / return to terminal | No stuck overlay; existing tabs remain reachable | FLOW-PTY |
 | TM-05 | Terminal | session reference picker search/filter/message/range/copy | Exact reference/package copied; terminal is not mutated automatically | FLOW-REFERENCE |
@@ -43,10 +43,10 @@ Latest corrective evidence: [0.3.8 real trajectory / native resume / installer g
 | SE-07 | Sessions | repeated A→B→C handoff | Immutable packages form one relay chain after target indexing | CORE-RELAY |
 | SE-08 | Sessions | copy precise reference / handoff packet | Clipboard output contains provider, session ID and message ordinal | FLOW-HANDOFF |
 | SE-09 | Mome | empty query, hit, miss, token bound, copy | Search is explicit, bounded and cited; no implicit injection | FLOW-MOME |
-| LI-01 | Library | recursive Canvas / Notes / Mounts folding | Every branch folds independently; selected item remains visible | FLOW-LIBRARY |
-| LI-02 | Notes | new, edit, autosave, explicit save, reopen | Content persists and duplicate saves are prevented | FLOW-NOTE |
+| LI-01 | Library | recursive Canvas / Notes / Mounts folding | Every branch folds independently; selected item remains visible | interaction-regression.spec.ts |
+| LI-02 | Notes | new, edit, autosave, explicit save, reopen | Content persists and duplicate saves are prevented | interaction-regression.spec.ts |
 | LI-03 | Notes | Source / Preview / Split and Markdown assets | Rendered Markdown is safe and readable in both themes | FLOW-NOTE |
-| LI-04 | Mounts | picker/manual path, mount, recursive browse, unmount | Mount is logical; source is unchanged | FLOW-MOUNT |
+| LI-04 | Mounts | picker/manual path, mount, recursive browse, unmount | Mount is logical; source is unchanged; virtual root is not duplicated | interaction-regression.spec.ts |
 | CA-01 | Canvas | create/open/rename/save/back/reopen/nested board | Scene and title persist; navigation never loses the board | FLOW-CANVAS |
 | CA-02 | Canvas | pan/zoom/fit/fullscreen/outline | Canvas remains responsive and occupies available space | FLOW-CANVAS |
 | CA-03 | Canvas | sticky/text/shape/frame/connector/drawing/erase | Each tool creates or changes only the intended object | FLOW-CANVAS |
@@ -63,6 +63,17 @@ Latest corrective evidence: [0.3.8 real trajectory / native resume / installer g
 | UX-02 | Every dialog | Escape, close button, Tab cycle, focus restore | Modal traps focus and restores trigger | CTL-A11Y |
 | UX-03 | Lists/canvas | wheel, nested scroll, 200% zoom, long CJK/path/title | No unusable overflow or dead scroll region | CTL-HARD |
 | UX-04 | Error paths | unavailable binary, bad directory, bad URL, read-only file | Local actionable error; current input/state preserved | CTL-ERROR |
+
+### Interaction regression checkpoint 2026-09-10
+
+`apps/desktop/tests/interaction-regression.spec.ts` was run against the packaged
+debug desktop binary over the WebView2 CDP endpoint with an isolated
+`E:\Workspaces\Mobius-Verification-20260910` fixture. The single test passed and
+covered the actual drag gesture, editable-note save and read-back, recursive
+mount folding/root de-duplication, forced-dark terminal contrast while the app
+is in light mode, and the custom title-bar drag listener. The test also failed
+on any page error or console error. This is fixture/UI evidence; it does not
+replace real external-Agent, PTY, or installer lifecycle gates.
 
 ## Coverage and release boundary
 

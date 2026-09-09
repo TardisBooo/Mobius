@@ -1,0 +1,70 @@
+/* Focused interaction fixes kept separate from the generated shell sheet. */
+
+.mobius-topbar[data-tauri-drag-region] {
+  cursor: grab;
+  user-select: none;
+}
+
+.mobius-topbar[data-tauri-drag-region]:active {
+  cursor: grabbing;
+}
+
+.mobius-topbar button,
+.mobius-topbar input,
+.mobius-topbar select,
+.mobius-topbar textarea {
+  cursor: pointer;
+}
+
+.atlas-tree-row[draggable="true"] {
+  cursor: grab;
+}
+
+.atlas-tree-row[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.recent-drop-target {
+  pointer-events: auto;
+}
+
+/* A terminal is intentionally dark in both app themes. PowerShell's ANSI
+   palette remains legible when the surrounding shell is in light mode. */
+:root,
+:root[data-theme="light"],
+:root[data-theme="dark"] {
+  --m-terminal: #080b10;
+  --m-terminal-text: #e7edf5;
+}
+
+.mobius-terminal .terminal-tabs {
+  background: #10151c;
+}
+
+.mobius-terminal .terminal-stage,
+.mobius-terminal .terminal-stage .xterm,
+.mobius-terminal .terminal-stage .xterm-viewport,
+.mobius-terminal .terminal-stage .xterm-screen {
+  background: #080b10 !important;
+}
+
+.mobius-terminal .terminal-stage .xterm-helper-textarea {
+  color: #e7edf5 !important;
+  caret-color: #6ed3ff;
+}
+
+.note-save-state {
+  font-weight: 650;
+}
+
+.note-save-state.saved {
+  color: var(--m-success);
+}
+
+.note-save-state.dirty {
+  color: var(--m-orange, var(--m-accent));
+}
+
+.note-save-state.error {
+  color: var(--m-danger);
+}

@@ -15,10 +15,14 @@ type NoteTab = { id: string; file: NoteFileInfo | null; title: string };
 const DRAFT_TAB_ID = "note:draft";
 
 function noteTree(files: NoteFileInfo[], rootLabel?: string): FileTreeNode {
-  const root: FileTreeNode = { name: rootLabel ?? "", path: "", children: [], files: [] };
+  // The mount header is already the virtual root. Strip every repeated root
+  // segment so a mount such as `Reference/Reference/file.md` is not rendered
+  // as a duplicate folder in the tree.
+  const normalizedRoot = rootLabel?.replace(/\\/g, "/").split("/").filter(Boolean).at(-1)?.toLocaleLowerCase();
+  const root: FileTreeNode = { name: "", path: "", children: [], files: [] };
   for (const file of files) {
     const parts = file.virtual_path.replace(/\\/g, "/").split("/").filter(Boolean);
-    if (rootLabel && parts[0]?.toLocaleLowerCase() === rootLabel.toLocaleLowerCase()) parts.shift();
+    while (normalizedRoot && parts[0]?.toLocaleLowerCase() === normalizedRoot) parts.shift();
     parts.pop();
     let cursor = root;
     for (const part of parts) {
@@ -37,18 +41,6 @@ function noteTree(files: NoteFileInfo[], rootLabel?: string): FileTreeNode {
     node.children.forEach(sort);
   };
   sort(root);
-  // A mounted folder can expose both its virtual root and a same-named child
-  // directory (for example `Reference/Reference`). Merge that visual-only
-  // duplicate while preserving every file and descendant.
-  if (root.name) {
-    const duplicateIndex = root.children.findIndex((child) => child.name.toLocaleLowerCase() === root.name.toLocaleLowerCase());
-    if (duplicateIndex >= 0) {
-      const [duplicate] = root.children.splice(duplicateIndex, 1);
-      root.children = [...duplicate.children, ...root.children];
-      root.files = [...duplicate.files, ...root.files];
-      sort(root);
-    }
-  }
   return root;
 }
 
@@ -149,7 +141,7 @@ export function NotesLibraryV2({ onError, onToast, locale, onOpenCanvas }: { onE
   const [files, setFiles] = useState<NoteFileInfo[]>([]); const [mounts, setMounts] = useState<MountInfo[]>([]); const [boards, setBoards] = useState<BoardDocument[]>([]); const [selected, setSelected] = useState<NoteFileInfo | null>(null);
   const [title, setTitle] = useState(""); const [body, setBody] = useState(""); const [query, setQuery] = useState(""); const [mode, setMode] = useState<ReadingMode>("source");
   const [mountOpen, setMountOpen] = useState(false); const [mountPath, setMountPath] = useState("D:\\DataVault\\"); const [virtualPath, setVirtualPath] = useState("Reference"); const mountPathRef = useRef<HTMLInputElement>(null);
-  const [saving, setSaving] = useState(false); const [reading, setReading] = useState(false); const lastSaved = useRef(""); const saveInFlight = useRef(false);
+  const [saving, setSaving] = useState(false); const [reading, setReading] = useState(false); const [saveState, setSaveState] = useState<"idle" | "dirty" | "saved" | "error">("idle"); const lastSaved = useRef(""); const saveInFlight = useRef(false);
   const [openTabs, setOpenTabs] = useState<NoteTab[]>([]); const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [navWidth, setNavWidth] = useState(() => { const value = Number(localStorage.getItem("mobius.library.nav-width")); return Number.isFinite(value) && value >= 220 && value <= 480 ? value : 285; });
   const splitterStart = useRef<{ x: number; width: number } | null>(null);
@@ -165,20 +157,22 @@ export function NotesLibraryV2({ onError, onToast, locale, onOpenCanvas }: { onE
   const draftKey = `${title}\u0000${body}`;
   const select = useCallback(async (file: NoteFileInfo) => {
     setSelected(file); setActiveTabId(file.id); setOpenTabs((current) => current.some((tab) => tab.id === file.id) ? current : [...current, { id: file.id, file, title: file.title }].slice(-12)); setTitle(file.title); setBody(""); setMode(file.read_only ? "preview" : "source"); setReading(true);
-    try { const raw = await desktopApi.readNoteFile(file.real_path); const next = file.read_only ? raw : editableNoteBody(raw, file.title); setBody(next); lastSaved.current = `${file.title}\u0000${next}`; } catch (reason) { onError(String(reason)); } finally { setReading(false); }
+    try { const raw = await desktopApi.readNoteFile(file.real_path); const next = file.read_only ? raw : editableNoteBody(raw, file.title); setBody(next); lastSaved.current = `${file.title}\u0000${next}`; setSaveState("saved"); } catch (reason) { setSaveState("error"); onError(String(reason)); } finally { setReading(false); }
   }, [onError]);
-  const create = useCallback(() => { setSelected(null); setActiveTabId(DRAFT_TAB_ID); setOpenTabs((current) => current.some((tab) => tab.id === DRAFT_TAB_ID) ? current : [...current, { id: DRAFT_TAB_ID, file: null, title: "" }].slice(-12)); setTitle(""); setBody(""); setMode("source"); lastSaved.current = ""; }, []);
+  const create = useCallback(() => { setSelected(null); setActiveTabId(DRAFT_TAB_ID); setOpenTabs((current) => current.some((tab) => tab.id === DRAFT_TAB_ID) ? current : [...current, { id: DRAFT_TAB_ID, file: null, title: "" }].slice(-12)); setTitle(""); setBody(""); setMode("source"); lastSaved.current = ""; setSaveState("idle"); }, []);
   const save = useCallback(async (quiet = false) => {
     if (!title.trim() || selected?.read_only || saveInFlight.current) return;
     const savedTitle = title.trim(); const savedBody = body; saveInFlight.current = true; setSaving(true);
     try {
+      setSaveState("dirty");
       const draft = { title: savedTitle, body: savedBody, project_slug: null, tags: [], source_ids: [] };
       const record = selected ? await desktopApi.updateNoteFile(selected.real_path, draft) : await desktopApi.createNote(draft);
       lastSaved.current = `${savedTitle}\u0000${savedBody}`;
       const nextFiles = await reload(); const updated = record.source_path ? nextFiles.find((file) => file.real_path === record.source_path) : undefined;
       if (updated) { setSelected(updated); setActiveTabId(updated.id); setOpenTabs((current) => current.map((tab) => tab.id === DRAFT_TAB_ID || tab.file?.real_path === updated.real_path ? { id: updated.id, file: updated, title: updated.title } : tab)); }
+      setSaveState("saved");
       if (!quiet) onToast(locale === "zh-CN" ? "笔记已保存" : "Note saved");
-    } catch (reason) { onError(String(reason)); } finally { saveInFlight.current = false; setSaving(false); }
+    } catch (reason) { setSaveState("error"); onError(String(reason)); } finally { saveInFlight.current = false; setSaving(false); }
   }, [body, locale, onError, onToast, reload, selected, title]);
   useEffect(() => { if (reading || !title.trim() || selected?.read_only || draftKey === lastSaved.current || saving) return; const timer = window.setTimeout(() => void save(true), 600); return () => window.clearTimeout(timer); }, [draftKey, reading, save, saving, selected?.read_only, title]);
   const chooseFolder = async () => { try { const path = await desktopApi.pickDirectory(mountPath); if (path) setMountPath(path); } catch (reason) { onError(String(reason)); } };
@@ -202,7 +196,7 @@ export function NotesLibraryV2({ onError, onToast, locale, onOpenCanvas }: { onE
       <TreeSection icon={<FileText size={15}/>} title={locale === "zh-CN" ? "笔记" : "Notes"} count={editableFiles.length} action={<button className="icon-soft" type="button" onClick={create} title={text.newNote}><Plus size={14}/></button>}><TreeBranch node={noteTree(editableFiles)} selectedId={selected?.id} onSelect={(file) => void select(file)}/></TreeSection>
       <TreeSection icon={<FolderPlus size={15}/>} title={locale === "zh-CN" ? "挂载" : "Mounts"} count={mounts.length} action={<button className="icon-soft" type="button" onClick={() => setMountOpen(true)} title={text.mount}><Plus size={14}/></button>}>{mounts.map((mountInfo) => <MountBranch key={mountInfo.id} mountInfo={mountInfo} files={visible.filter((file) => file.mount_id === mountInfo.id)} selectedId={selected?.id} locale={locale} onSelect={(file) => void select(file)} onUnmount={() => void unmount(mountInfo)}/>)}</TreeSection>
     </div></aside><div className="notes-library-splitter" role="separator" aria-orientation="vertical" aria-label="Resize library panel" tabIndex={0} onPointerDown={startResize} onKeyDown={keyboardResize}/>
-    <section className={`note-editor-v2 mode-${readOnly ? "preview" : mode}`}><div className="note-tabs-v2" role="tablist">{openTabs.map((tab) => { const active = activeTabId === tab.id; const tabTitle = tab.file?.id === selected?.id ? (title || tab.title) : (tab.file?.title || tab.title || text.untitled); return <div className={`note-tab-v2 ${active ? "active" : ""}`} key={tab.id}><button type="button" role="tab" aria-selected={active} onClick={() => { if (tab.file) void select(tab.file); else create(); }}><FileText size={13}/><span>{tabTitle}</span></button><button className="note-tab-close-v2" type="button" aria-label={`Close ${tabTitle}`} onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}><X size={12}/></button></div>; })}<button className="note-tab-new-v2" type="button" onClick={create} title={text.newNote}><Plus size={14}/></button></div><header><input value={title} onChange={(event) => setTitle(event.target.value)} readOnly={readOnly} placeholder={text.untitled}/><div className="note-view-switch" role="group" aria-label={text.preview}><button className={mode === "source" ? "active" : ""} disabled={readOnly} onClick={() => setMode("source")} title={text.source}><Code2 size={15}/><span>{text.source}</span></button><button className={mode === "preview" ? "active" : ""} onClick={() => setMode("preview")} title={text.preview}><Eye size={15}/><span>{text.preview}</span></button><button className={mode === "split" ? "active" : ""} disabled={readOnly} onClick={() => setMode("split")} title={text.split}><PanelRight size={15}/><span>{text.split}</span></button></div><div className="note-actions"><button className="soft-button" onClick={create}><Plus size={15}/>{text.newNote}</button><button className="primary-button" disabled={saving || readOnly || !title.trim()} onClick={() => void save()}>{saving ? <LoaderCircle className="spin" size={15}/> : <Save size={15}/>} {saving ? text.saving : text.save}</button></div></header><div className="note-content-v2">{!readOnly && mode !== "preview" ? <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder={text.noNotes}/> : null}{(readOnly || mode !== "source") ? <MarkdownPreview markdown={body} sourcePath={selected?.real_path ?? null} text={text}/> : null}</div>{selected ? <footer><span>{selected.virtual_path}</span><span>{readOnly ? text.readOnly : text.editable}</span></footer> : null}</section>
+    <section className={`note-editor-v2 mode-${readOnly ? "preview" : mode}`}><div className="note-tabs-v2" role="tablist">{openTabs.map((tab) => { const active = activeTabId === tab.id; const tabTitle = tab.file?.id === selected?.id ? (title || tab.title) : (tab.file?.title || tab.title || text.untitled); return <div className={`note-tab-v2 ${active ? "active" : ""}`} key={tab.id}><button type="button" role="tab" aria-selected={active} onClick={() => { if (tab.file) void select(tab.file); else create(); }}><FileText size={13}/><span>{tabTitle}</span></button><button className="note-tab-close-v2" type="button" aria-label={`Close ${tabTitle}`} onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}><X size={12}/></button></div>; })}<button className="note-tab-new-v2" type="button" onClick={create} title={text.newNote}><Plus size={14}/></button></div><header><input value={title} onChange={(event) => { setTitle(event.target.value); setSaveState("dirty"); }} readOnly={readOnly} placeholder={text.untitled}/><div className="note-view-switch" role="group" aria-label={text.preview}><button className={mode === "source" ? "active" : ""} disabled={readOnly} onClick={() => setMode("source")} title={text.source}><Code2 size={15}/><span>{text.source}</span></button><button className={mode === "preview" ? "active" : ""} onClick={() => setMode("preview")} title={text.preview}><Eye size={15}/><span>{text.preview}</span></button><button className={mode === "split" ? "active" : ""} disabled={readOnly} onClick={() => setMode("split")} title={text.split}><PanelRight size={15}/><span>{text.split}</span></button></div><div className="note-actions">{readOnly ? <button className="soft-button" type="button" onClick={() => { setSelected(null); setActiveTabId(DRAFT_TAB_ID); setOpenTabs((current) => current.some((tab) => tab.id === DRAFT_TAB_ID) ? current : [...current, { id: DRAFT_TAB_ID, file: null, title: "" }].slice(-12)); setTitle(`${title} copy`); setBody(body); setMode("source"); lastSaved.current = ""; setSaveState("dirty"); }}>Copy to note</button> : null}<button className="soft-button" onClick={create}><Plus size={15}/>{text.newNote}</button><button className="primary-button" disabled={saving || readOnly || !title.trim()} onClick={() => void save()}>{saving ? <LoaderCircle className="spin" size={15}/> : <Save size={15}/>} {saving ? text.saving : text.save}</button></div></header><div className="note-content-v2">{!readOnly && mode !== "preview" ? <textarea value={body} onChange={(event) => { setBody(event.target.value); setSaveState("dirty"); }} placeholder={text.noNotes}/> : null}{(readOnly || mode !== "source") ? <MarkdownPreview markdown={body} sourcePath={selected?.real_path ?? null} text={text}/> : null}</div>{selected ? <footer><span>{selected.virtual_path}</span><span className={`note-save-state ${saveState}`}>{readOnly ? (locale === "zh-CN" ? "只读挂载" : "Read-only mount") : saveState === "dirty" ? (locale === "zh-CN" ? "未保存" : "Unsaved changes") : saveState === "error" ? (locale === "zh-CN" ? "保存失败" : "Save failed") : saveState === "saved" ? (locale === "zh-CN" ? "已保存" : "Saved") : text.editable}</span></footer> : null}</section>
     {mountOpen ? <AccessibleDialog title={text.mount} closeLabel={text.cancel} onClose={() => setMountOpen(false)} initialFocusRef={mountPathRef}><div className="mount-dialog-v2"><label className="form-label">{text.path}<div className="folder-picker-input"><input ref={mountPathRef} value={mountPath} onChange={(event) => setMountPath(event.target.value)}/><button className="soft-button" type="button" onClick={() => void chooseFolder()}><FolderOpen size={15}/>{text.choose}</button></div><small>{text.chooseHint}</small></label><label className="form-label">{text.name}<input value={virtualPath} onChange={(event) => setVirtualPath(event.target.value)}/></label><p>{text.mountHint}</p><div className="modal-actions"><button className="soft-button" onClick={() => setMountOpen(false)}>{text.cancel}</button><button className="primary-button" onClick={() => void mount()} disabled={!mountPath.trim() || !virtualPath.trim()}>{text.mounted}</button></div></div></AccessibleDialog> : null}
   </div>;
 }
