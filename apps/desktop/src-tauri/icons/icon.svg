@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">MOBIUS ribbon</title>
+  <rect width="64" height="64" rx="15" fill="#0e1420"/>
+  <path d="M8 32c7-15 17-15 24 0s17 15 24 0c-7-15-17-15-24 0S15 47 8 32Z" fill="none" stroke="#6ab7ff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity=".38"/>
+  <path d="M8 32c7-15 17-15 24 0s17 15 24 0" fill="none" stroke="#eef4fb" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

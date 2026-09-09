@@ -1,0 +1,181 @@
+/* A compact, app-like first-run guide. This follows the existing visual tokens
+   while keeping the essential local-first contract above the fold. */
+.onboarding {
+  width: min(700px, calc(100vw - 44px));
+  max-height: min(680px, calc(100dvh - 44px));
+  scrollbar-gutter: stable;
+}
+
+.onboarding-top {
+  padding: 16px 22px 11px;
+}
+
+.onboarding-brand strong {
+  color: #213e34;
+  font-size: 15px;
+}
+
+.onboarding-progress {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 2px;
+  padding-inline: 22px;
+}
+
+.onboarding-progress button {
+  gap: 6px;
+  min-height: 40px;
+  padding: 8px 5px;
+}
+
+.onboarding-progress button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.onboarding-content {
+  min-height: 390px;
+  padding: 27px 46px 22px;
+}
+
+.onboarding-content h1 {
+  max-width: 565px;
+  margin-block: 6px 11px;
+  font-size: clamp(25px, 3.35vw, 34px);
+  line-height: 1.16;
+  text-wrap: balance;
+}
+
+.onboarding-content > p:not(.eyebrow) {
+  max-width: 565px;
+  font-size: 13px;
+  line-height: 1.62;
+  text-wrap: pretty;
+}
+
+.onboarding-evidence {
+  gap: 10px;
+  margin-top: 12px;
+  padding: 11px 13px;
+}
+
+.onboarding-evidence span {
+  margin-top: 3px;
+}
+
+.source-stats {
+  margin-top: 17px;
+}
+
+.source-stats article {
+  padding: 12px 14px;
+}
+
+.source-stats strong {
+  font-size: 23px;
+}
+
+.onboarding-source-list > div {
+  min-height: 37px;
+  padding: 8px 11px;
+}
+
+.onboarding-flow {
+  margin-block: 17px;
+  padding: 12px;
+}
+
+.onboarding-footer {
+  min-height: 64px;
+  padding: 12px 22px;
+}
+
+.onboarding-primary.inline-action {
+  margin-top: 13px;
+}
+
+.onboarding-content .onboarding-flow {
+  margin-block: 16px;
+}
+
+.onboarding-content .onboarding-evidence {
+  margin-top: 11px;
+}
+
+.onboarding-content .onboarding-evidence span {
+  line-height: 1.45;
+}
+
+.onboarding-content .onboarding-source-list {
+  max-height: 116px;
+  overflow: auto;
+}
+
+.onboarding-content .onboarding-source-list > div {
+  min-height: 34px;
+}
+
+.onboarding-content .source-stats {
+  margin-top: 13px;
+}
+
+.onboarding-content .source-stats article {
+  padding-block: 9px;
+}
+
+.onboarding-content .source-stats strong {
+  font-size: 19px;
+}
+
+.onboarding-content .onboarding-evidence + .onboarding-evidence {
+  margin-top: 8px;
+}
+
+.onboarding-content .onboarding-evidence strong {
+  font-size: 12px;
+}
+
+.onboarding-content .onboarding-evidence span {
+  font-size: 11px;
+}
+
+.onboarding-content .onboarding-evidence > svg {
+  width: 19px;
+  height: 19px;
+}
+
+@media (max-height: 620px) and (min-width: 621px) {
+  .onboarding-content {
+    min-height: 270px;
+    padding-block: 19px 16px;
+  }
+
+  .onboarding-evidence:last-child {
+    margin-top: 8px;
+  }
+
+  .onboarding-progress button {
+    min-height: 35px;
+  }
+}
+
+@media (max-width: 620px) {
+  .onboarding {
+    width: 100vw;
+    max-height: 100dvh;
+  }
+
+  .onboarding-content {
+    min-height: 0;
+    padding: 25px 22px 20px;
+  }
+
+  .onboarding-progress {
+    padding-inline: 16px;
+    grid-template-columns: repeat(6, 104px);
+  }
+
+  .onboarding-progress button {
+    min-width: 94px;
+  }
+}

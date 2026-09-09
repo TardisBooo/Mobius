@@ -1,0 +1,183 @@
+/* Whiteboard-only affordances. The stage keeps its existing compact shell,
+   while drawing modes make the current gesture unambiguous. */
+.board-stage[data-tool="select"] .react-flow__pane { cursor: default; }
+.board-stage[data-tool="hand"] .react-flow__pane { cursor: grab; }
+.board-stage[data-tool="hand"] .react-flow__pane:active { cursor: grabbing; }
+.board-stage[data-tool="pen"] .react-flow__pane,
+.board-stage[data-tool="highlighter"] .react-flow__pane { cursor: crosshair; }
+.board-stage[data-tool="eraser"] .react-flow__pane,
+.board-stage[data-tool="eraser"] .react-flow__node { cursor: cell; }
+
+.react-flow__node.drawing { pointer-events: auto; }
+.drawing-node { display: block; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.drawing-node.pen path { stroke: #244e3a; }
+.drawing-node.highlighter path { stroke: #f1ca56; opacity: .52; }
+.session-node > svg { color: #74659a; }
+
+/* Bookmark cards follow the familiar Notion/tldraw model: a bounded local
+   metadata request creates a rich card, while an actual player iframe remains
+   an explicit action for a small trusted-provider allow-list. */
+.board-stage { min-width: 0; min-height: 0; }
+.board-stage .react-flow { min-width: 0; min-height: 0; }
+.board-stage .react-flow__node { min-width: 0; }
+.board-stage .react-flow__node.selected .mobius-node { outline: 0; }
+.link-node {
+  grid-template-rows: 24px 29px minmax(78px, 1fr) minmax(38px, auto) 30px;
+  gap: 5px;
+  padding: 14px;
+  background: #fffdf8;
+  border-color: #d8d0e7;
+}
+.link-node .link-domain { min-width: 0; padding-right: 28px; }
+.link-domain em {
+  margin-left: auto;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: #e6dfef;
+  color: #71568d;
+  font: 700 8px/1 "Cascadia Mono", monospace;
+  letter-spacing: .08em;
+  font-style: normal;
+}
+.link-preview {
+  position: relative;
+  display: grid;
+  place-items: stretch;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid rgba(119, 95, 154, .15);
+  border-radius: 9px;
+  background: #f5f1f9;
+}
+.link-card-image,
+.link-direct-video,
+.link-embed {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #e9e7e2;
+  object-fit: cover;
+}
+.link-direct-video { object-fit: contain; }
+.link-embed { background: #171717; }
+.link-preview.is-embedded { background: #171717; }
+.link-preview .link-preview-local {
+  min-height: 0;
+}
+.link-preview-local {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px 96px 12px 12px;
+  color: #5f536f;
+}
+.link-preview-local > span { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 8px; background: #e3d9ef; color: #725c94; }
+.link-preview-local svg { width: 15px; height: 15px; }
+.link-preview-local strong,
+.link-preview-local small { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-preview-local strong { font-size: 11px; font-weight: 750; }
+.link-preview-local small { color: #857d8f; font-size: 9px; }
+.link-play {
+  position: absolute;
+  z-index: 3;
+  right: 10px;
+  bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  margin: 0;
+  padding: 5px 8px;
+  border: 1px solid #a99ac0;
+  border-radius: 7px;
+  background: #fffdf8;
+  color: #654f80;
+  font-size: 9px;
+  font-weight: 700;
+}
+.link-play svg { width: 13px; height: 13px; }
+.link-play:hover { background: #eee7f5; }
+.link-summary {
+  position: static !important;
+  z-index: auto;
+  width: 100% !important;
+  min-height: 38px;
+  height: 42px;
+  max-height: 64px;
+  padding: 5px 6px;
+  resize: vertical;
+  border: 1px solid rgba(122, 105, 140, .16) !important;
+  border-radius: 6px;
+  background: rgba(255, 253, 247, .88) !important;
+  color: #5e5964 !important;
+  font: 10px/1.45 "Segoe UI Variable Text", "Microsoft YaHei UI", sans-serif !important;
+}
+.link-footer { display: grid; grid-template-columns: minmax(0, 1fr) 25px; align-items: center; gap: 5px; min-width: 0; padding-top: 6px; }
+.link-footer .link-url { min-width: 0; height: 23px; padding: 0 5px; border: 1px solid transparent; border-radius: 5px; color: #786c85; font: 9px/1 "Cascadia Mono", monospace; }
+.link-footer .link-url:focus { border-color: #b6a4cf; background: #fffdf8; color: #4e415d; }
+.link-footer a { display: grid; place-items: center; width: 25px; height: 23px; padding: 0; border: 1px solid #ded7e9; border-radius: 6px; background: #fffdf8; color: #70568e; }
+.link-footer a:hover { background: #eee7f5; }
+.link-footer a svg { width: 13px; height: 13px; }
+.media-node .media-content { isolation: isolate; }
+.media-node .media-content img { background: #eeeee9; }
+.media-poster { cursor: pointer; }
+.media-poster:active,
+.link-play:active { transform: scale(.97); }
+.library-list > button.active {
+  background: #e1ecdf;
+  box-shadow: inset 0 0 0 1px #b7cfb7;
+  color: #2c694b;
+}
+
+/* Object actions belong to the card that invoked them. The React Flow stage
+   is the positioning context; coordinates are clamped before this element is
+   rendered so no menu can jump to the far edge or leave the canvas. */
+.board-stage .board-object-menu {
+  position: absolute;
+  z-index: 45;
+  inset: auto;
+  width: 240px;
+  max-width: calc(100% - 24px);
+}
+@media (max-width: 720px) {
+  .board-toolbar { gap: 0; max-width: calc(100% - 20px); overflow-x: auto; border-radius: 11px; }
+  .board-toolbar > i { margin: 0 2px; }
+  .board-topbar { padding-inline: 10px; }
+  .board-breadcrumb input { min-width: 82px; }
+  .board-save { width: 31px; padding: 0; font-size: 0; }
+  .board-save svg { margin: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .media-poster:active,
+  .link-play:active { transform: none; }
+}
+
+/* The feature stylesheet is lazy-loaded after the application shell. Keep
+   externally sourced link cards inside the dark night-drive canvas instead of
+   letting their safe local fallback regress to the earlier paper palette. */
+:root[data-theme="dark"] .board-stage .link-node {
+  background: linear-gradient(145deg, rgba(46, 30, 83, .98), rgba(14, 15, 39, .98));
+  border-color: rgba(183, 117, 255, .48);
+  color: #e8edff;
+}
+:root[data-theme="dark"] .board-stage .link-node > span,
+:root[data-theme="dark"] .board-stage .link-node > a { color: #dda9ff; }
+:root[data-theme="dark"] .board-stage .link-node > a { border-top-color: rgba(183, 117, 255, .22); }
+:root[data-theme="dark"] .board-stage .link-node textarea { color: #e8edff; }
+:root[data-theme="dark"] .board-stage .link-domain em { background: rgba(183, 117, 255, .16); color: #ddb6ff; }
+:root[data-theme="dark"] .board-stage .link-preview { border-color: rgba(183, 117, 255, .22); background: #090a1d; }
+:root[data-theme="dark"] .board-stage .link-preview-local { color: #e8edff; }
+:root[data-theme="dark"] .board-stage .link-preview-local > span { background: rgba(183, 117, 255, .18); color: #e4bfff; }
+:root[data-theme="dark"] .board-stage .link-preview-local small { color: #99a6ca; }
+:root[data-theme="dark"] .board-stage .link-play { border-color: rgba(73, 231, 255, .42); background: rgba(13, 14, 35, .92); color: #49e7ff; }
+:root[data-theme="dark"] .board-stage .link-play:hover { background: rgba(73, 231, 255, .14); }
+:root[data-theme="dark"] .board-stage .link-summary { border-color: rgba(183, 117, 255, .22)!important; background: rgba(7, 8, 23, .56)!important; color: #e8edff!important; }
+:root[data-theme="dark"] .board-stage .link-footer .link-url { color: #cfb2e8; }
+:root[data-theme="dark"] .board-stage .link-footer .link-url:focus { border-color: #49e7ff; background: rgba(73, 231, 255, .08); color: #e8edff; }
+:root[data-theme="dark"] .board-stage .link-footer a { border-color: rgba(183, 117, 255, .32); background: rgba(13, 14, 35, .76); color: #e5c1ff; }
+:root[data-theme="dark"] .board-stage .link-footer a:hover { background: rgba(183, 117, 255, .16); }

@@ -1,0 +1,34 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Frontend / Tauri
+apps/desktop/node_modules/
+apps/desktop/dist/
+apps/desktop/src-tauri/target/
+apps/website/node_modules/
+apps/website/dist/
+/.research/
+apps/desktop/test-results/
+apps/desktop/.playwright-cli/
+
+# Local development state — authoritative data belongs in D:\DataVault\MyDesk
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.log
+key.txt
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+# Private production workspace; never part of the open-source application
+/media/
+/docs/launch/
+/docs/release/
+/deploy/
+/production/

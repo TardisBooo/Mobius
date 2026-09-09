@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 48" role="img" aria-labelledby="title">
+  <title id="title">MÖBIUS ribbon</title>
+  <path d="M7 24c7-15 17-15 25 0s18 15 25 0c-7-15-17-15-25 0S14 39 7 24Z" fill="none" stroke="#161616" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity=".4"/>
+  <path d="M7 24c7-15 17-15 25 0s18 15 25 0" fill="none" stroke="#161616" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

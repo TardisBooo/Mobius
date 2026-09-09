@@ -1,0 +1,76 @@
+/* Disclosure controls shared by canvas and mounted-library roots. */
+.library-mount-head {
+  gap: 4px;
+  padding: 2px 4px;
+}
+
+.library-mount-toggle {
+  display: grid;
+  grid-template-columns: 14px 14px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 31px;
+  flex: 1;
+  padding: 3px 5px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--m-text);
+  text-align: start;
+}
+
+.library-mount-toggle:hover,
+.library-tree-toggle:hover {
+  background: var(--m-hover);
+}
+
+.library-mount-toggle span {
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-mount-toggle small {
+  color: var(--m-muted);
+  font: 9px ui-monospace, monospace;
+}
+
+.library-board-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.library-board-row > .library-tree-file {
+  flex: 1;
+  padding-inline-start: 5px !important;
+}
+
+.library-tree-toggle {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 30px;
+  flex: 0 0 24px;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--m-muted);
+}
+
+.library-tree-toggle:hover {
+  color: var(--m-text);
+}
+
+.library-tree-spacer {
+  width: 24px;
+  flex: 0 0 24px;
+}
+
+@media (forced-colors: active) {
+  .library-mount-toggle:focus-visible,
+  .library-tree-toggle:focus-visible {
+    outline: 2px solid CanvasText;
+  }
+}

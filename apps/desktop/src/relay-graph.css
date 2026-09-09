@@ -1,0 +1,50 @@
+.workspace-relay-graph { display: grid; gap: 12px; padding: 14px; }
+.workspace-relay-graph > header { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.workspace-relay-graph > header span { display:block; margin-top:6px; color:var(--m-muted); }
+.relay-chain-card { border:1px solid var(--m-line); border-radius:10px; overflow:hidden; }
+.relay-chain-card > header { display:flex; justify-content:space-between; gap:12px; padding:12px; background:var(--m-surface); }
+.relay-chain-card time { color:var(--m-muted); font-size:12px; }
+.relay-chain-flow { display:grid; gap:12px; padding:12px; }
+.workspace-relay-graph .relay-edge { display:grid; grid-template-columns:minmax(0,1fr) 48px minmax(0,1fr); align-items:center; gap:8px; margin:0; padding:0; border:0; }
+.workspace-relay-graph .relay-edge > button, .workspace-relay-graph .relay-pending { width:100%; min-height:84px; }
+.relay-edge > button,.relay-pending { display:grid; gap:8px; min-width:0; padding:14px; border-radius:8px; background:var(--m-raised); color:var(--m-text); text-align:start; }
+.relay-edge strong { overflow-wrap:anywhere; font-size:13px; }
+.relay-edge > button:hover { background:var(--m-hover); }
+.relay-arrow { display:grid; justify-items:center; gap:5px; color:var(--m-muted); font-size:12px; }
+.relay-pending { border:1px dashed var(--m-line); }
+.board-breadcrumb input { min-height:32px; }
+.mobius-app .primary-button { color:#fff; }
+.relay-chain { overflow: hidden; border: 1px solid var(--m-line); border-radius: 11px; background: var(--m-surface); }
+.relay-chain > header { display: flex; align-items: center; justify-content: space-between; padding: 9px 11px; border-bottom: 1px solid var(--m-line); }
+.relay-chain > header strong { font-size: 11px; }
+.relay-chain > header small { color: var(--m-muted); font: 9px ui-monospace, monospace; }
+.relay-edge-list { display: grid; gap: 8px; padding: 10px; }
+.relay-edge-card { display: grid; grid-template-columns: minmax(0,1fr) 26px minmax(0,1fr); gap: 8px; align-items: center; }
+.relay-edge-card > svg { justify-self: center; color: var(--m-accent); }
+.relay-session-node, .relay-pending-node { display: grid; gap: 3px; min-height: 58px; padding: 9px; border: 1px solid var(--m-line); border-radius: 8px; background: var(--m-raised); color: var(--m-text); text-align: start; }
+.relay-session-node:hover { border-color: var(--m-accent); background: var(--m-hover); }
+.relay-session-node strong, .relay-pending-node strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.relay-session-node small, .relay-pending-node small { color: var(--m-muted); font: 8px ui-monospace, monospace; }
+.relay-pending-node { border-style: dashed; }
+.relay-graph-empty { display: grid; place-content: center; justify-items: center; min-height: 230px; padding: 24px; color: var(--m-muted); text-align: center; }
+.relay-graph-empty strong { margin-top: 10px; color: var(--m-text); font-size: 12px; }
+.relay-graph-empty p { max-width: 420px; margin: 6px 0 0; font-size: 10px; line-height: 1.5; }
+.session-tree-v2 button { min-height: 28px; }
+.mobius-notice button {
+  display: inline-grid;
+  place-items: center;
+  min-width: 28px;
+  min-height: 28px;
+  margin: -6px -6px -6px auto;
+  border-radius: 7px;
+}
+.terminal-tabs > .icon-button {
+  min-width: 34px;
+  width: 34px;
+}
+.terminal-tab-close {
+  min-width: 28px;
+  min-height: 28px;
+}
+.mobius-notice button:hover { background: var(--m-hover); }
+.atlas-filter input, .session-search-v2 input, .skills-search-v2 input, .notes-search-v2 input { height: 100%; }

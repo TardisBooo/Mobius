@@ -1,0 +1,30 @@
+[package]
+name = "mobius-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+mydesk-core = { path = "../../../crates/mydesk-core" }
+chrono.workspace = true
+parking_lot.workspace = true
+portable-pty.workspace = true
+regex.workspace = true
+reqwest.workspace = true
+# Windows uses rfd's native IFileDialog implementation. Disable Linux portal
+# defaults so the desktop lockfile does not pull unrelated portal runtimes.
+rfd = { version = "0.15", default-features = false, features = ["common-controls-v6"] }
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2", features = [] }
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
