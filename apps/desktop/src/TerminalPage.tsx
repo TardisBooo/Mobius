@@ -3,11 +3,23 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { listen } from "@tauri-apps/api/event";
 import { AtSign, Minimize2, Plus, TerminalSquare, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { desktopApi } from "./api";
 import { useI18n } from "./i18n";
 import { SessionReferencePicker } from "./SessionReferencePicker";
 import type { TerminalInfo, TerminalOutput, WorkspaceView } from "./types";
+
+function shellQuotePath(path: string) { return `'${path.replace(/'/g, "''")}'`; }
+
+function droppedPaths(dataTransfer: DataTransfer) {
+  const paths = Array.from(dataTransfer.files).map((file) => (file as File & { path?: string }).path).filter((path): path is string => Boolean(path));
+  if (paths.length) return paths;
+  const raw = dataTransfer.getData("text/uri-list") || dataTransfer.getData("text/plain");
+  return raw.split(/\r?\n/).map((value) => value.trim()).filter(Boolean).map((value) => {
+    if (/^file:\/\//i.test(value)) { try { return decodeURIComponent(value.replace(/^file:\/\//i, "").replace(/^\/+/, "")); } catch { return value.replace(/^file:\/\//i, ""); } }
+    return value;
+  });
+}
 
 export function TerminalPage({ workspaces, requestedTerminal, onConsumed, onError, focusMode = false, onExitFocus }: {
   workspaces: WorkspaceView[];
@@ -27,6 +39,13 @@ export function TerminalPage({ workspaces, requestedTerminal, onConsumed, onErro
   const snapshotLoading = useRef<string | null>(null);
   const queuedOutput = useRef<Record<string, TerminalOutput[]>>({});
   const lastSequence = useRef<Record<string, number>>({});
+  const pasteIntoTerminal = useCallback(async (terminalId: string | null) => {
+    if (!terminalId) return;
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) await desktopApi.writeTerminal(terminalId, text);
+    } catch (error) { onError(String(error)); }
+  }, [onError]);
 
   useEffect(() => {
     void desktopApi.listTerminals().then((items) => {
@@ -69,10 +88,12 @@ export function TerminalPage({ workspaces, requestedTerminal, onConsumed, onErro
     let resizeFrame = 0;
     host.current.replaceChildren();
     const terminalTheme = () => document.documentElement.dataset.theme === "light"
-      ? { background: "#ffffff", foreground: "#202a34", cursor: "#2e6483", selectionBackground: "#b8dcea88" }
+      ? { background: "#f4f2ec", foreground: "#202a34", cursor: "#2e6483", selectionBackground: "#b8dcea88" }
       : { background: "#0b0e12", foreground: "#d9e2ee", cursor: "#7eb8e8", selectionBackground: "#36587588" };
     const terminal = new Terminal({
       cursorBlink: true,
+      cursorStyle: "bar",
+      cursorWidth: 2,
       convertEol: false,
       fontFamily: '"Cascadia Mono", "JetBrains Mono", Consolas, monospace',
       fontSize: 13,
@@ -125,6 +146,16 @@ export function TerminalPage({ workspaces, requestedTerminal, onConsumed, onErro
     const input = terminal.onData((data) => {
       void desktopApi.writeTerminal(activeId, data).catch((error) => onError(String(error)));
     });
+    // xterm's browser paste handling is inconsistent in desktop WebViews.
+    // Route Ctrl/Cmd+V through the system clipboard explicitly.
+    terminal.attachCustomKeyEventHandler((event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === "v") {
+        event.preventDefault();
+        void pasteIntoTerminal(activeId);
+        return false;
+      }
+      return true;
+    });
     const observer = new ResizeObserver(resize);
     observer.observe(host.current);
     return () => {
@@ -137,7 +168,7 @@ export function TerminalPage({ workspaces, requestedTerminal, onConsumed, onErro
       terminalRef.current = null;
       terminal.dispose();
     };
-  }, [activeId, onError]);
+  }, [activeId, onError, pasteIntoTerminal]);
 
   const create = async () => {
     const checkout = workspaces.flatMap((workspace) => workspace.checkouts)[0];
@@ -171,7 +202,7 @@ export function TerminalPage({ workspaces, requestedTerminal, onConsumed, onErro
       <button className="terminal-context-action" type="button" onClick={() => setReferenceOpen(true)} title="Copy an explicit session reference"><AtSign size={16}/>{t("Context")}</button>
       {focusMode ? <button className="terminal-exit-focus" type="button" onClick={onExitFocus}><Minimize2 size={15}/>Exit focus · Esc</button> : null}
     </div>
-    {activeId ? <div className="terminal-stage" ref={host}/> : <div className="empty-state"><TerminalSquare size={38}/><strong>{t("No terminal")}</strong><button className="primary-button" onClick={() => void create()}><Plus size={16}/>{t("New PowerShell")}</button></div>}
+    {activeId ? <div className="terminal-stage" ref={host} onContextMenu={(event) => { event.preventDefault(); void pasteIntoTerminal(activeId); }} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }} onDrop={(event) => { event.preventDefault(); const paths = droppedPaths(event.dataTransfer); if (paths.length) { void desktopApi.writeTerminal(activeId, paths.map(shellQuotePath).join(" ")).catch((error) => onError(String(error))); terminalRef.current?.focus(); } }}/>: <div className="empty-state"><TerminalSquare size={38}/><strong>{t("No terminal")}</strong><button className="primary-button" onClick={() => void create()}><Plus size={16}/>{t("New PowerShell")}</button></div>}
     {referenceOpen ? <SessionReferencePicker onClose={() => setReferenceOpen(false)} onError={onError}/> : null}
   </section>;
 }

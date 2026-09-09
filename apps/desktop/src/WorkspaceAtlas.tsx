@@ -68,6 +68,8 @@ export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onTo
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedCheckoutId, setSelectedCheckoutId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropActive, setDropActive] = useState(false);
   const [path, setPath] = useState("E:\\Workspaces\\");
   const addPathRef = useRef<HTMLInputElement>(null);
   const [pins, setPins] = useState<string[]>(() => {
@@ -105,8 +107,22 @@ export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onTo
     localStorage.setItem("mobius.workspace.current", id);
     setExpanded((current) => new Set(current).add(id));
   };
-  const beginDrag = (event: DragEvent<HTMLElement>, id: string) => { event.dataTransfer.setData("application/x-mobius-workspace", id); event.dataTransfer.effectAllowed = "copy"; };
-  const dropProject = (event: DragEvent<HTMLElement>) => { event.preventDefault(); const id = event.dataTransfer.getData("application/x-mobius-workspace"); if (id && workspaces.some((item) => item.workspace.id === id)) pin(id); };
+  const beginDrag = (event: DragEvent<HTMLElement>, id: string) => {
+    // WebView drag events are not consistently propagated when the source is
+    // a nested button. Keep a plain-text fallback so the drop target also
+    // works with OS/browser drag implementations.
+    event.dataTransfer.setData("application/x-mobius-workspace", id);
+    event.dataTransfer.setData("text/plain", id);
+    event.dataTransfer.effectAllowed = "copy";
+    setDraggingId(id);
+  };
+  const dropProject = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    setDropActive(false);
+    setDraggingId(null);
+    const id = event.dataTransfer.getData("application/x-mobius-workspace") || event.dataTransfer.getData("text/plain");
+    if (id && workspaces.some((item) => item.workspace.id === id)) pin(id);
+  };
   const create = async () => {
     if (!path.trim()) return;
     try { await desktopApi.registerWorkspace(path.trim()); await reload(); setAdding(false); onToast(locale === "zh-CN" ? "工作区已登记" : "Workspace registered"); }
@@ -127,9 +143,9 @@ export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onTo
         const isOpen = expanded.has(item.workspace.id);
         const isSelected = selected?.workspace.id === item.workspace.id;
         return <section key={item.workspace.id} className={`atlas-tree-item ${isSelected ? "selected" : ""}`}>
-          <div className="atlas-tree-row" draggable onDragStart={(event) => beginDrag(event, item.workspace.id)}>
+          <div className={`atlas-tree-row ${draggingId === item.workspace.id ? "dragging" : ""}`} draggable onDragStart={(event) => beginDrag(event, item.workspace.id)} onDragEnd={() => { setDraggingId(null); setDropActive(false); }} aria-grabbed={draggingId === item.workspace.id}>
             <button className="atlas-expand" type="button" onClick={() => setExpanded((current) => { const next = new Set(current); next.has(item.workspace.id) ? next.delete(item.workspace.id) : next.add(item.workspace.id); return next; })} aria-label={isOpen ? "Collapse project" : "Expand project"} aria-expanded={isOpen}>{isOpen ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}</button>
-            <button className="atlas-project-button" type="button" title={item.workspace.canonical_path} onClick={() => select(item.workspace.id)} aria-current={isSelected ? "page" : undefined}><FolderGit2 size={16}/><span><strong>{item.workspace.display_name}</strong><small>{item.checkouts.length} {text.worktrees.toLocaleLowerCase()}</small></span></button>
+            <button className="atlas-project-button" type="button" draggable onDragStart={(event) => beginDrag(event, item.workspace.id)} title={item.workspace.canonical_path} onClick={() => select(item.workspace.id)} aria-current={isSelected ? "page" : undefined}><FolderGit2 size={16}/><span><strong>{item.workspace.display_name}</strong><small>{item.checkouts.length} {text.worktrees.toLocaleLowerCase()}</small></span></button>
             <button className="atlas-pin" type="button" onClick={() => pin(item.workspace.id)} title={pins.includes(item.workspace.id) ? text.pinned : text.addRecent} disabled={pins.includes(item.workspace.id)}><Pin size={14}/></button>
           </div>
           {isOpen ? <div className="atlas-checkouts">{item.checkouts.map((checkout) => <button key={checkout.id} type="button" className={selectedCheckoutId === checkout.id ? "active" : ""} onClick={() => { select(item.workspace.id, checkout.id); }}><GitBranch size={13}/><span>{checkout.branch ?? checkout.kind}</span>{checkout.dirty ? <i aria-label={text.dirty} role="img"/> : null}</button>)}</div> : null}
@@ -138,7 +154,7 @@ export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onTo
     </aside>
     <section className="atlas-workarea">
       <header className="atlas-recent-header"><div><span>YOUR WORKBENCH</span><h2>{text.recent}</h2><p>{text.recentHint}</p></div><button className="primary-button" type="button" onClick={() => setAdding(true)}><FolderPlus size={16}/>{text.add}</button></header>
-      <section className="recent-workspace-grid" onDragOver={(event) => event.preventDefault()} onDrop={dropProject} aria-label={text.recent}>
+      <section className={`recent-workspace-grid ${dropActive ? "drop-active" : ""}`} onDragEnter={() => setDropActive(true)} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }} onDragLeave={(event) => { if (event.currentTarget === event.target) setDropActive(false); }} onDrop={dropProject} aria-label={text.recent}>
         {recent.map((item) => <RecentWorkspaceCard key={item.workspace.id} item={item} selected={selected?.workspace.id === item.workspace.id} onSelect={() => select(item.workspace.id)} onRemove={() => unpin(item.workspace.id)} onOpen={() => { const checkout = item.checkouts[0]; if (checkout) void desktopApi.createTerminal(checkout.canonical_path, `PowerShell · ${item.workspace.display_name}`).then(openTerminal).catch((reason) => onError(String(reason))); }} text={text}/>) }
         <div className="recent-drop-target" aria-label={text.drop}><Plus size={18}/><span>{text.drop}</span></div>
       </section>

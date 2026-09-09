@@ -1,4 +1,4 @@
-import { type ComponentPropsWithoutRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentPropsWithoutRef, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -11,6 +11,8 @@ import "./library-tree.css";
 type Locale = "zh-CN" | "en";
 type ReadingMode = "source" | "preview" | "split";
 type FileTreeNode = { name: string; path: string; children: FileTreeNode[]; files: NoteFileInfo[] };
+type NoteTab = { id: string; file: NoteFileInfo | null; title: string };
+const DRAFT_TAB_ID = "note:draft";
 
 function noteTree(files: NoteFileInfo[], rootLabel?: string): FileTreeNode {
   const root: FileTreeNode = { name: rootLabel ?? "", path: "", children: [], files: [] };
@@ -35,6 +37,18 @@ function noteTree(files: NoteFileInfo[], rootLabel?: string): FileTreeNode {
     node.children.forEach(sort);
   };
   sort(root);
+  // A mounted folder can expose both its virtual root and a same-named child
+  // directory (for example `Reference/Reference`). Merge that visual-only
+  // duplicate while preserving every file and descendant.
+  if (root.name) {
+    const duplicateIndex = root.children.findIndex((child) => child.name.toLocaleLowerCase() === root.name.toLocaleLowerCase());
+    if (duplicateIndex >= 0) {
+      const [duplicate] = root.children.splice(duplicateIndex, 1);
+      root.children = [...duplicate.children, ...root.children];
+      root.files = [...duplicate.files, ...root.files];
+      sort(root);
+    }
+  }
   return root;
 }
 
@@ -136,14 +150,24 @@ export function NotesLibraryV2({ onError, onToast, locale, onOpenCanvas }: { onE
   const [title, setTitle] = useState(""); const [body, setBody] = useState(""); const [query, setQuery] = useState(""); const [mode, setMode] = useState<ReadingMode>("source");
   const [mountOpen, setMountOpen] = useState(false); const [mountPath, setMountPath] = useState("D:\\DataVault\\"); const [virtualPath, setVirtualPath] = useState("Reference"); const mountPathRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false); const [reading, setReading] = useState(false); const lastSaved = useRef(""); const saveInFlight = useRef(false);
+  const [openTabs, setOpenTabs] = useState<NoteTab[]>([]); const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [navWidth, setNavWidth] = useState(() => { const value = Number(localStorage.getItem("mobius.library.nav-width")); return Number.isFinite(value) && value >= 220 && value <= 480 ? value : 285; });
+  const splitterStart = useRef<{ x: number; width: number } | null>(null);
+  useEffect(() => { localStorage.setItem("mobius.library.nav-width", String(navWidth)); }, [navWidth]);
+  useEffect(() => {
+    const move = (event: PointerEvent) => { const start = splitterStart.current; if (!start) return; setNavWidth(Math.max(220, Math.min(480, start.width + event.clientX - start.x))); };
+    const up = () => { splitterStart.current = null; document.body.style.removeProperty("cursor"); document.body.style.removeProperty("user-select"); };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+    return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+  }, []);
   const reload = useCallback(async () => { try { const [nextFiles, nextMounts, nextBoards] = await Promise.all([desktopApi.listNoteFiles(), desktopApi.listNoteMounts(), desktopApi.listBoards()]); setFiles(nextFiles); setMounts(nextMounts); setBoards(nextBoards); return nextFiles; } catch (reason) { onError(String(reason)); return []; } }, [onError]);
   useEffect(() => { void reload(); }, [reload]);
   const draftKey = `${title}\u0000${body}`;
   const select = useCallback(async (file: NoteFileInfo) => {
-    setSelected(file); setTitle(file.title); setBody(""); setMode(file.read_only ? "preview" : "source"); setReading(true);
+    setSelected(file); setActiveTabId(file.id); setOpenTabs((current) => current.some((tab) => tab.id === file.id) ? current : [...current, { id: file.id, file, title: file.title }].slice(-12)); setTitle(file.title); setBody(""); setMode(file.read_only ? "preview" : "source"); setReading(true);
     try { const raw = await desktopApi.readNoteFile(file.real_path); const next = file.read_only ? raw : editableNoteBody(raw, file.title); setBody(next); lastSaved.current = `${file.title}\u0000${next}`; } catch (reason) { onError(String(reason)); } finally { setReading(false); }
   }, [onError]);
-  const create = useCallback(() => { setSelected(null); setTitle(""); setBody(""); setMode("source"); lastSaved.current = ""; }, []);
+  const create = useCallback(() => { setSelected(null); setActiveTabId(DRAFT_TAB_ID); setOpenTabs((current) => current.some((tab) => tab.id === DRAFT_TAB_ID) ? current : [...current, { id: DRAFT_TAB_ID, file: null, title: "" }].slice(-12)); setTitle(""); setBody(""); setMode("source"); lastSaved.current = ""; }, []);
   const save = useCallback(async (quiet = false) => {
     if (!title.trim() || selected?.read_only || saveInFlight.current) return;
     const savedTitle = title.trim(); const savedBody = body; saveInFlight.current = true; setSaving(true);
@@ -152,7 +176,8 @@ export function NotesLibraryV2({ onError, onToast, locale, onOpenCanvas }: { onE
       const record = selected ? await desktopApi.updateNoteFile(selected.real_path, draft) : await desktopApi.createNote(draft);
       lastSaved.current = `${savedTitle}\u0000${savedBody}`;
       const nextFiles = await reload(); const updated = record.source_path ? nextFiles.find((file) => file.real_path === record.source_path) : undefined;
-      if (updated) setSelected(updated); if (!quiet) onToast(locale === "zh-CN" ? "笔记已保存" : "Note saved");
+      if (updated) { setSelected(updated); setActiveTabId(updated.id); setOpenTabs((current) => current.map((tab) => tab.id === DRAFT_TAB_ID || tab.file?.real_path === updated.real_path ? { id: updated.id, file: updated, title: updated.title } : tab)); }
+      if (!quiet) onToast(locale === "zh-CN" ? "笔记已保存" : "Note saved");
     } catch (reason) { onError(String(reason)); } finally { saveInFlight.current = false; setSaving(false); }
   }, [body, locale, onError, onToast, reload, selected, title]);
   useEffect(() => { if (reading || !title.trim() || selected?.read_only || draftKey === lastSaved.current || saving) return; const timer = window.setTimeout(() => void save(true), 600); return () => window.clearTimeout(timer); }, [draftKey, reading, save, saving, selected?.read_only, title]);
@@ -162,13 +187,22 @@ export function NotesLibraryV2({ onError, onToast, locale, onOpenCanvas }: { onE
   const visible = files.filter((file) => `${file.title} ${file.virtual_path}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())); const visibleBoards = boards.filter((board) => board.title.toLocaleLowerCase().includes(query.toLocaleLowerCase())); const readOnly = !!selected?.read_only;
   const editableFiles = visible.filter((file) => !file.mount_id);
   const boardParent = (board: BoardDocument) => ((board.data.scene as { parentId?: string | null } | undefined)?.parentId ?? null);
-  return <div className="notes-library-v2">
+  const closeTab = (tabId: string) => {
+    const index = openTabs.findIndex((tab) => tab.id === tabId); if (index < 0) return;
+    const next = openTabs.filter((tab) => tab.id !== tabId); setOpenTabs(next);
+    if (activeTabId !== tabId) return;
+    const replacement = next[Math.min(index, Math.max(0, next.length - 1))];
+    if (replacement?.file) void select(replacement.file); else create();
+  };
+  const startResize = (event: ReactPointerEvent<HTMLDivElement>) => { event.preventDefault(); splitterStart.current = { x: event.clientX, width: navWidth }; document.body.style.cursor = "col-resize"; document.body.style.userSelect = "none"; event.currentTarget.setPointerCapture?.(event.pointerId); };
+  const keyboardResize = (event: ReactKeyboardEvent<HTMLDivElement>) => { if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return; event.preventDefault(); setNavWidth((value) => Math.max(220, Math.min(480, value + (event.key === "ArrowRight" ? 16 : -16)))); };
+  return <div className="notes-library-v2" style={{ "--library-nav-width": `${navWidth}px` } as CSSProperties}>
     <aside className="notes-nav-v2"><label className="notes-search-v2"><Search size={16}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={text.search}/></label><div className="library-tree-v2">
       <TreeSection icon={<Layers2 size={15}/>} title={text.canvases} count={visibleBoards.length} action={onOpenCanvas ? <button className="icon-soft" type="button" onClick={() => onOpenCanvas()} title={text.newCanvas}><Plus size={14}/></button> : null}>{visibleBoards.filter((board) => boardParent(board) === null).map((board) => <BoardBranch key={board.id} board={board} boards={visibleBoards} depth={0} onOpen={(id) => onOpenCanvas?.(id)}/>)}{!visibleBoards.length ? <p>{locale === "zh-CN" ? "还没有画布" : "No canvases yet"}</p> : null}</TreeSection>
       <TreeSection icon={<FileText size={15}/>} title={locale === "zh-CN" ? "笔记" : "Notes"} count={editableFiles.length} action={<button className="icon-soft" type="button" onClick={create} title={text.newNote}><Plus size={14}/></button>}><TreeBranch node={noteTree(editableFiles)} selectedId={selected?.id} onSelect={(file) => void select(file)}/></TreeSection>
       <TreeSection icon={<FolderPlus size={15}/>} title={locale === "zh-CN" ? "挂载" : "Mounts"} count={mounts.length} action={<button className="icon-soft" type="button" onClick={() => setMountOpen(true)} title={text.mount}><Plus size={14}/></button>}>{mounts.map((mountInfo) => <MountBranch key={mountInfo.id} mountInfo={mountInfo} files={visible.filter((file) => file.mount_id === mountInfo.id)} selectedId={selected?.id} locale={locale} onSelect={(file) => void select(file)} onUnmount={() => void unmount(mountInfo)}/>)}</TreeSection>
-    </div></aside>
-    <section className={`note-editor-v2 mode-${readOnly ? "preview" : mode}`}><header><input value={title} onChange={(event) => setTitle(event.target.value)} readOnly={readOnly} placeholder={text.untitled}/><div className="note-view-switch" role="group" aria-label={text.preview}><button className={mode === "source" ? "active" : ""} disabled={readOnly} onClick={() => setMode("source")} title={text.source}><Code2 size={15}/><span>{text.source}</span></button><button className={mode === "preview" ? "active" : ""} onClick={() => setMode("preview")} title={text.preview}><Eye size={15}/><span>{text.preview}</span></button><button className={mode === "split" ? "active" : ""} disabled={readOnly} onClick={() => setMode("split")} title={text.split}><PanelRight size={15}/><span>{text.split}</span></button></div><div className="note-actions"><button className="soft-button" onClick={create}><Plus size={15}/>{text.newNote}</button><button className="primary-button" disabled={saving || readOnly || !title.trim()} onClick={() => void save()}>{saving ? <LoaderCircle className="spin" size={15}/> : <Save size={15}/>} {saving ? text.saving : text.save}</button></div></header><div className="note-content-v2">{!readOnly && mode !== "preview" ? <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder={text.noNotes}/> : null}{(readOnly || mode !== "source") ? <MarkdownPreview markdown={body} sourcePath={selected?.real_path ?? null} text={text}/> : null}</div>{selected ? <footer><span>{selected.virtual_path}</span><span>{readOnly ? text.readOnly : text.editable}</span></footer> : null}</section>
+    </div></aside><div className="notes-library-splitter" role="separator" aria-orientation="vertical" aria-label="Resize library panel" tabIndex={0} onPointerDown={startResize} onKeyDown={keyboardResize}/>
+    <section className={`note-editor-v2 mode-${readOnly ? "preview" : mode}`}><div className="note-tabs-v2" role="tablist">{openTabs.map((tab) => { const active = activeTabId === tab.id; const tabTitle = tab.file?.id === selected?.id ? (title || tab.title) : (tab.file?.title || tab.title || text.untitled); return <div className={`note-tab-v2 ${active ? "active" : ""}`} key={tab.id}><button type="button" role="tab" aria-selected={active} onClick={() => { if (tab.file) void select(tab.file); else create(); }}><FileText size={13}/><span>{tabTitle}</span></button><button className="note-tab-close-v2" type="button" aria-label={`Close ${tabTitle}`} onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}><X size={12}/></button></div>; })}<button className="note-tab-new-v2" type="button" onClick={create} title={text.newNote}><Plus size={14}/></button></div><header><input value={title} onChange={(event) => setTitle(event.target.value)} readOnly={readOnly} placeholder={text.untitled}/><div className="note-view-switch" role="group" aria-label={text.preview}><button className={mode === "source" ? "active" : ""} disabled={readOnly} onClick={() => setMode("source")} title={text.source}><Code2 size={15}/><span>{text.source}</span></button><button className={mode === "preview" ? "active" : ""} onClick={() => setMode("preview")} title={text.preview}><Eye size={15}/><span>{text.preview}</span></button><button className={mode === "split" ? "active" : ""} disabled={readOnly} onClick={() => setMode("split")} title={text.split}><PanelRight size={15}/><span>{text.split}</span></button></div><div className="note-actions"><button className="soft-button" onClick={create}><Plus size={15}/>{text.newNote}</button><button className="primary-button" disabled={saving || readOnly || !title.trim()} onClick={() => void save()}>{saving ? <LoaderCircle className="spin" size={15}/> : <Save size={15}/>} {saving ? text.saving : text.save}</button></div></header><div className="note-content-v2">{!readOnly && mode !== "preview" ? <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder={text.noNotes}/> : null}{(readOnly || mode !== "source") ? <MarkdownPreview markdown={body} sourcePath={selected?.real_path ?? null} text={text}/> : null}</div>{selected ? <footer><span>{selected.virtual_path}</span><span>{readOnly ? text.readOnly : text.editable}</span></footer> : null}</section>
     {mountOpen ? <AccessibleDialog title={text.mount} closeLabel={text.cancel} onClose={() => setMountOpen(false)} initialFocusRef={mountPathRef}><div className="mount-dialog-v2"><label className="form-label">{text.path}<div className="folder-picker-input"><input ref={mountPathRef} value={mountPath} onChange={(event) => setMountPath(event.target.value)}/><button className="soft-button" type="button" onClick={() => void chooseFolder()}><FolderOpen size={15}/>{text.choose}</button></div><small>{text.chooseHint}</small></label><label className="form-label">{text.name}<input value={virtualPath} onChange={(event) => setVirtualPath(event.target.value)}/></label><p>{text.mountHint}</p><div className="modal-actions"><button className="soft-button" onClick={() => setMountOpen(false)}>{text.cancel}</button><button className="primary-button" onClick={() => void mount()} disabled={!mountPath.trim() || !virtualPath.trim()}>{text.mounted}</button></div></div></AccessibleDialog> : null}
   </div>;
 }
