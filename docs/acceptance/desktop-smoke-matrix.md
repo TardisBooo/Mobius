@@ -74,6 +74,8 @@ mount folding/root de-duplication, forced-dark terminal contrast while the app
 is in light mode, and the custom title-bar drag listener. The test also failed
 on any page error or console error. This is fixture/UI evidence; it does not
 replace real external-Agent, PTY, or installer lifecycle gates.
+The same test passed against the rebuilt optimized release binary in
+`ui-regression-release-20260910-c` after the note-loading race was fixed.
 
 ## Coverage and release boundary
 
