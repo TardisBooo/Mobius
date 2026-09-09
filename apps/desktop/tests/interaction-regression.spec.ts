@@ -63,6 +63,7 @@ test("workspace drag, note save, mount tree and terminal contrast", async () => 
     await expect(page.locator(".notes-library-v2")).toBeVisible();
     await page.locator(".library-tree-file", { hasText: "interaction-regression-note" }).click();
     const editor = page.locator(".note-editor-v2");
+    await expect(editor.locator("textarea")).toBeEnabled();
     await editor.locator("textarea").fill("after\n\n- saved through the UI");
     await editor.getByRole("button", { name: /Save|淇濆瓨/ }).click();
     await expect(editor.locator(".note-save-state")).toHaveText(/Saved|已保存/);
