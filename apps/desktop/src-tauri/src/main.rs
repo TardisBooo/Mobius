@@ -8,7 +8,7 @@ use mydesk_core::{
     note_mounts::{list_note_files, read_note_file},
     skills::{
         ManagedSkillInstall, SkillDeployment, SkillHistoryEntry, discover_project_skills, discover_standard_skills,
-        install_skill_from_catalogue, list_managed_installations, preview_install_from_catalogue,
+        install_marketplace_skill, install_skill_from_catalogue, list_managed_installations, preview_install_from_catalogue,
         read_known_or_managed_skill_content, uninstall_skill, list_skill_history, restore_skill_history,
         write_managed_skill as write_managed_skill_file,
     },
@@ -28,6 +28,7 @@ use std::{
     sync::{Arc, OnceLock, mpsc},
     thread,
     time::Duration,
+    process::Command,
 };
 use tauri::{AppHandle, Emitter, Manager, State};
 use url::Url;
@@ -43,6 +44,21 @@ struct DesktopState {
     /// guessing from a timer or relying only on an event it could miss.
     refresh_pending: Arc<Mutex<usize>>,
     terminals: Mutex<HashMap<String, TerminalProcess>>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MarketplaceSkillRemote {
+    slug: String,
+    name: String,
+    owner: String,
+    description: String,
+    category: Option<String>,
+    repository_url: Option<String>,
+    page_url: String,
+    github_stars: Option<u64>,
+    quality_score: Option<u64>,
+    security_score: Option<u64>,
 }
 
 #[derive(Clone, Serialize)]
@@ -622,6 +638,53 @@ fn read_note_file_command(state: State<'_, DesktopState>, path: String) -> Comma
         .map_err(command_error)?;
     let known = list_note_files(&state.desk.paths, &mounts).map_err(command_error)?;
     read_note_file(Path::new(&path), &known).map_err(command_error)
+}
+
+#[tauri::command]
+fn reveal_note_source(state: State<'_, DesktopState>, path: String) -> CommandResult<()> {
+    let mounts = state
+        .desk
+        .database
+        .list_note_mounts()
+        .map_err(command_error)?;
+    let known = list_note_files(&state.desk.paths, &mounts).map_err(command_error)?;
+    let candidate = Path::new(&path).canonicalize().map_err(command_error)?;
+    if !known.iter().any(|file| {
+        Path::new(&file.real_path)
+            .canonicalize()
+            .ok()
+            .as_ref()
+            == Some(&candidate)
+    }) {
+        return Err("note source is outside configured libraries".into());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer.exe")
+            .arg(format!("/select,{}", candidate.display()))
+            .spawn()
+            .map_err(command_error)?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg("-R")
+            .arg(&candidate)
+            .spawn()
+            .map_err(command_error)?;
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let parent = candidate
+            .parent()
+            .ok_or("note source has no parent directory")?;
+        Command::new("xdg-open")
+            .arg(parent)
+            .spawn()
+            .map_err(command_error)?;
+    }
+    Ok(())
 }
 #[tauri::command]
 fn read_note_asset_command(
@@ -1361,6 +1424,58 @@ fn list_managed_skills(state: State<'_, DesktopState>) -> CommandResult<Vec<Mana
     list_managed_installations(&state.desk.paths).map_err(command_error)
 }
 #[tauri::command]
+async fn fetch_marketplace_skills(query: String) -> CommandResult<Vec<MarketplaceSkillRemote>> {
+    let query = query.trim();
+    if query.chars().count() > 128 {
+        return Err("skill marketplace query is too long".into());
+    }
+    let mut endpoint = Url::parse("https://agentskill.sh/api/skills")
+        .map_err(|error| format!("invalid marketplace endpoint: {error}"))?;
+    endpoint.query_pairs_mut().append_pair("page", "1").append_pair("limit", "36").append_pair("section", "top").append_pair("includeTotal", "false");
+    if !query.is_empty() { endpoint.query_pairs_mut().append_pair("q", query); }
+    let response = preview_http_client().get(endpoint).header(header::ACCEPT, "application/json").send().await.map_err(|error| format!("could not fetch skill marketplace: {error}"))?;
+    if !response.status().is_success() { return Err(format!("skill marketplace returned HTTP {}", response.status()).into()); }
+    let bytes = response.bytes().await.map_err(|error| format!("could not read skill marketplace: {error}"))?;
+    if bytes.len() > 2 * 1024 * 1024 { return Err("skill marketplace response is too large".into()); }
+    let payload: serde_json::Value = serde_json::from_slice(&bytes).map_err(|error| format!("skill marketplace returned invalid JSON: {error}"))?;
+    Ok(payload.get("data").and_then(|value| value.as_array()).map(|entries| entries.iter().filter_map(marketplace_skill_from_value).collect()).unwrap_or_default())
+}
+
+fn marketplace_skill_from_value(value: &serde_json::Value) -> Option<MarketplaceSkillRemote> {
+    let owner = value.get("owner").and_then(|item| item.as_str()).unwrap_or("community");
+    let slug = value.get("slug").and_then(|item| item.as_str()).map(str::to_owned).unwrap_or_else(|| format!("{owner}/{}", value.get("name").and_then(|item| item.as_str()).unwrap_or("skill")));
+    let name = value.get("name").and_then(|item| item.as_str()).map(str::to_owned).unwrap_or_else(|| slug.rsplit('/').next().unwrap_or("skill").to_string());
+    Some(MarketplaceSkillRemote {
+        page_url: format!("https://agentskill.sh/@{slug}"),
+        slug,
+        name,
+        owner: owner.to_string(),
+        description: value.get("description").or_else(|| value.get("seoSummary")).and_then(|item| item.as_str()).unwrap_or("Reusable instructions for an AI agent.").to_string(),
+        category: value.get("category").and_then(|item| item.as_str()).map(str::to_owned),
+        repository_url: value.get("repositoryUrl").and_then(|item| item.as_str()).map(str::to_owned),
+        github_stars: value.get("githubStars").and_then(|item| item.as_u64()),
+        quality_score: value.get("contentQualityScore").and_then(|item| item.as_u64()),
+        security_score: value.get("securityScore").and_then(|item| item.as_u64()),
+    })
+}
+
+#[tauri::command]
+async fn fetch_marketplace_skill(slug: String) -> CommandResult<String> {
+    let mut parts = slug.split('/');
+    let owner = parts.next().filter(|value| !value.is_empty()).ok_or("marketplace skill owner is missing")?;
+    let skill_slug = parts.next().filter(|value| !value.is_empty()).ok_or("marketplace skill slug is missing")?;
+    let safe = |value: &str| value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'));
+    if parts.next().is_some() || !safe(owner) || !safe(skill_slug) { return Err("invalid marketplace skill slug".into()); }
+    let endpoint = format!("https://agentskill.sh/api/agent/skills/{}%2F{}/install", owner, skill_slug);
+    let response = preview_http_client().get(endpoint).header(header::ACCEPT, "application/json").send().await.map_err(|error| format!("could not fetch marketplace skill: {error}"))?;
+    if !response.status().is_success() { return Err(format!("marketplace skill returned HTTP {}", response.status()).into()); }
+    let bytes = response.bytes().await.map_err(|error| format!("could not read marketplace skill: {error}"))?;
+    if bytes.len() > 3 * 1024 * 1024 { return Err("marketplace skill response is too large".into()); }
+    let payload: serde_json::Value = serde_json::from_slice(&bytes).map_err(|error| format!("marketplace skill returned invalid JSON: {error}"))?;
+    payload.get("skillMd").and_then(|value| value.as_str()).map(str::to_owned).ok_or_else(|| "marketplace did not return a SKILL.md document".into())
+}
+
+#[tauri::command]
 fn read_skill_content(
     state: State<'_, DesktopState>,
     source_path: String,
@@ -1397,6 +1512,19 @@ fn install_managed_skill(
     validate_skill_target(&state, &target)?;
     let known = registered_skill_catalogue(&state)?;
     install_skill_from_catalogue(&state.desk.paths, &source_path, &known, &target)
+        .map_err(command_error)
+}
+
+#[tauri::command]
+fn install_marketplace_skill_command(
+    state: State<'_, DesktopState>,
+    slug: String,
+    name: String,
+    content: String,
+    target: String,
+) -> CommandResult<SkillDeployment> {
+    validate_skill_target(&state, &target)?;
+    install_marketplace_skill(&state.desk.paths, &slug, &name, &content, &target)
         .map_err(command_error)
 }
 #[tauri::command]
@@ -2085,6 +2213,7 @@ fn main() {
             update_note_file_command,
             list_note_files_command,
             read_note_file_command,
+            reveal_note_source,
             read_note_asset_command,
             list_note_mounts,
             add_note_mount,
@@ -2102,10 +2231,13 @@ fn main() {
             list_skills,
             list_checkout_skills,
             list_managed_skills,
+            fetch_marketplace_skills,
+            fetch_marketplace_skill,
             read_skill_content,
             write_managed_skill,
             preview_skill,
             install_managed_skill,
+            install_marketplace_skill_command,
             uninstall_managed_skill,
             managed_skill_history,
             restore_managed_skill_history,

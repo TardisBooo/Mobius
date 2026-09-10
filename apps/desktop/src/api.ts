@@ -167,6 +167,10 @@ export const desktopApi = {
 
   async listNoteFiles(): Promise<NoteFileInfo[]> { return inTauri() ? invoke<NoteFileInfo[]>("list_note_files_command") : []; },
   async readNoteFile(path: string): Promise<string> { return invoke<string>("read_note_file_command", { path }); },
+  async revealNoteSource(path: string): Promise<void> {
+    if (!inTauri()) return;
+    await invoke("reveal_note_source", { path });
+  },
   async readNoteAsset(sourcePath: string, relativePath: string): Promise<{ bytes: Uint8Array; mimeType: string }> {
     const bytes = await invoke<ArrayBuffer | Uint8Array>("read_note_asset_command", { sourcePath, relativePath });
     const value = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
@@ -360,6 +364,26 @@ export const desktopApi = {
     return inTauri() ? invoke<ManagedSkillInstall[]>("list_managed_skills") : [];
   },
 
+  async listMarketplaceSkills(query = ""): Promise<Array<{
+    slug: string;
+    name: string;
+    owner: string;
+    description: string;
+    category?: string;
+    repositoryUrl?: string;
+    pageUrl: string;
+    githubStars?: number;
+    qualityScore?: number;
+    securityScore?: number;
+  }>> {
+    return inTauri() ? invoke("fetch_marketplace_skills", { query }) : [];
+  },
+
+  async fetchMarketplaceSkill(slug: string): Promise<string> {
+    if (inTauri()) return invoke<string>("fetch_marketplace_skill", { slug });
+    throw new Error("Marketplace installation is available in the desktop app.");
+  },
+
   async readSkillContent(sourcePath: string): Promise<string> {
     if (inTauri()) {
       return invoke<string>("read_skill_content", { sourcePath });
@@ -403,6 +427,14 @@ export const desktopApi = {
       return invoke<SkillDeployment>("install_managed_skill", { sourcePath, target });
     }
     const preview = await this.previewSkill(sourcePath, target);
+    return { ...preview, managed_id: "managed-skill:browser-preview", can_install: false, reason: "Managed copy installed in browser preview." };
+  },
+
+  async installMarketplaceSkill(slug: string, name: string, content: string, target: string): Promise<SkillDeployment> {
+    if (inTauri()) {
+      return invoke<SkillDeployment>("install_marketplace_skill_command", { slug, name, content, target });
+    }
+    const preview = await this.previewSkill(`marketplace:${slug}`, target);
     return { ...preview, managed_id: "managed-skill:browser-preview", can_install: false, reason: "Managed copy installed in browser preview." };
   },
 

@@ -26,9 +26,24 @@ import type {
 } from "./types";
 
 type Locale = "zh-CN" | "en";
+type MarketplaceSkill = {
+  slug: string;
+  name: string;
+  owner: string;
+  description: string;
+  category?: string;
+  repositoryUrl?: string;
+  pageUrl: string;
+  githubStars?: number;
+  qualityScore?: number;
+  securityScore?: number;
+};
 function words(locale: Locale) {
   const zh = locale === "zh-CN";
   return {
+    marketHint: zh ? "来自 agentskill.sh 的技能目录，可查看质量与安全信号。" : "Discover skills from agentskill.sh with quality and security signals.",
+    openMarket: zh ? "打开技能市场" : "Open marketplace",
+    remoteSource: zh ? "agentskill.sh 目录" : "agentskill.sh registry",
     zh,
     managedAvailable: zh ? "已有受管副本" : "Managed copy available",
     openManaged: zh ? "打开受管副本" : "Open managed copy",
@@ -101,6 +116,33 @@ function managedDocument(install: ManagedSkillInstall) {
   return `${install.destination.replace(/[\\/]+$/, "")}\\SKILL.md`;
 }
 
+async function fetchMarketplaceSkills(query: string): Promise<MarketplaceSkill[]> {
+  if (desktopApi.runtime === "desktop") {
+    return desktopApi.listMarketplaceSkills(query);
+  }
+  const params = new URLSearchParams({ page: "1", limit: "36", section: "top", includeTotal: "false" });
+  if (query.trim()) params.set("q", query.trim());
+  const response = await fetch(`https://agentskill.sh/api/skills?${params.toString()}`, { headers: { Accept: "application/json" } });
+  if (!response.ok) throw new Error(`agentskill.sh returned ${response.status}`);
+  const payload = await response.json() as { data?: Array<Record<string, unknown>> };
+  return (payload.data ?? []).map((item) => {
+    const owner = String(item.owner ?? item.githubOwner ?? "community");
+    const slug = String(item.slug ?? `${owner}/${String(item.name ?? "skill")}`);
+    return {
+      slug,
+      name: String(item.name ?? slug.split("/").pop() ?? "skill"),
+      owner,
+      description: String(item.description ?? item.seoSummary ?? "Reusable instructions for an AI agent."),
+      category: typeof item.category === "string" ? item.category : undefined,
+      repositoryUrl: typeof item.repositoryUrl === "string" ? item.repositoryUrl : undefined,
+      pageUrl: `https://agentskill.sh/@${slug}`,
+      githubStars: typeof item.githubStars === "number" ? item.githubStars : undefined,
+      qualityScore: typeof item.contentQualityScore === "number" ? item.contentQualityScore : undefined,
+      securityScore: typeof item.securityScore === "number" ? item.securityScore : undefined,
+    };
+  });
+}
+
 export function SkillsLibraryV2({
   workspaces,
   onError,
@@ -122,6 +164,8 @@ export function SkillsLibraryV2({
   const [checkoutId, setCheckoutId] = useState(allCheckouts[0]?.id ?? "");
   const [installTargetId, setInstallTargetId] = useState("global");
   const [items, setItems] = useState<SkillInfo[]>([]);
+  const [marketplaceItems, setMarketplaceItems] = useState<MarketplaceSkill[]>([]);
+  const [marketInstalling, setMarketInstalling] = useState<string | null>(null);
   const [managed, setManaged] = useState<ManagedSkillInstall[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
@@ -145,22 +189,26 @@ export function SkillsLibraryV2({
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [skills, installs] = await Promise.all([
-        scope === "global"
-          ? desktopApi.listSkills("global")
-          : checkout
-            ? desktopApi.listCheckoutSkills(checkout.id)
-            : [],
-        desktopApi.listManagedSkills(),
-      ]);
-      setItems(skills);
+      const installs = await desktopApi.listManagedSkills();
       setManaged(installs);
+      if (catalogueMode === "market") {
+        setMarketplaceItems(await fetchMarketplaceSkills(query));
+        setItems([]);
+      } else {
+        const skills = scope === "global"
+          ? await desktopApi.listSkills("global")
+          : checkout
+            ? await desktopApi.listCheckoutSkills(checkout.id)
+            : [];
+        setItems(skills);
+        setMarketplaceItems([]);
+      }
     } catch (reason) {
       onError(String(reason));
     } finally {
       setLoading(false);
     }
-  }, [checkout, onError, scope]);
+  }, [catalogueMode, checkout, onError, query, scope]);
   useEffect(() => {
     void reload();
   }, [reload]);
@@ -220,6 +268,28 @@ export function SkillsLibraryV2({
       onError(String(reason));
     }
   };
+  const installMarketplace = async (skill: MarketplaceSkill) => {
+    setMarketInstalling(skill.slug);
+    try {
+      const content = desktopApi.runtime === "desktop"
+        ? await desktopApi.fetchMarketplaceSkill(skill.slug)
+        : await (async () => {
+            const response = await fetch(`https://agentskill.sh/api/agent/skills/${encodeURIComponent(skill.slug)}/install`, { headers: { Accept: "application/json" } });
+            if (!response.ok) throw new Error(`agentskill.sh returned ${response.status}`);
+            const payload = await response.json() as { skillMd?: unknown };
+            if (typeof payload.skillMd !== "string") throw new Error("Marketplace did not return a SKILL.md document.");
+            return payload.skillMd;
+          })();
+      if (!content.trim()) throw new Error("Marketplace did not return a SKILL.md document.");
+      await desktopApi.installMarketplaceSkill(skill.slug, skill.name, content, target);
+      setCatalogueMode("installed");
+      onToast(text.installed);
+    } catch (reason) {
+      onError(String(reason));
+    } finally {
+      setMarketInstalling(null);
+    }
+  };
   const save = async () => {
     if (!selected) return;
     const install = managedCopy(selected);
@@ -257,7 +327,7 @@ export function SkillsLibraryV2({
         <div>
           <span>SKILL.md / LOCAL CONTROL</span>
           <h2>{text.title}</h2>
-          <p>{text.subtitle}</p>
+          <p>{catalogueMode === "market" ? text.marketHint : text.subtitle}</p>
         </div>
         <div className="skills-header-controls">
           <div className="skills-segment" aria-label={text.market}>
@@ -329,6 +399,16 @@ export function SkillsLibraryV2({
             <LoaderCircle className="spin" size={19} />
             {text.loading}
           </div>
+        ) : catalogueMode === "market" && marketplaceItems.length ? (
+          marketplaceItems.map((skill) => (
+            <article key={skill.slug} className="skill-card-v2 marketplace-card-v2">
+              <span className="skill-glyph"><Braces size={19} /></span>
+              <div className="skill-card-head"><strong>{skill.name}</strong><small>{skill.owner}{skill.category ? ` · ${skill.category}` : ""}</small></div>
+              <p className="marketplace-description-v2">{skill.description}</p>
+              <div className="marketplace-metrics-v2"><span>{text.remoteSource}</span>{skill.qualityScore !== undefined ? <span>Quality {skill.qualityScore}/100</span> : null}{skill.securityScore !== undefined ? <span>Security {skill.securityScore}/100</span> : null}</div>
+              <footer><button className="soft-button" type="button" disabled={marketInstalling === skill.slug} onClick={() => void installMarketplace(skill)}><PackagePlus size={14}/>{marketInstalling === skill.slug ? text.loading : text.install}</button><button className="soft-button" type="button" onClick={() => { void navigator.clipboard?.writeText(`/learn @${skill.slug}`); onToast(`/learn @${skill.slug}`); }}>Copy /learn</button><a className="soft-button" href={skill.pageUrl} target="_blank" rel="noreferrer">{text.openMarket}</a></footer>
+            </article>
+          ))
         ) : visible.length ? (
           visible.map((skill) => {
             const copy = managedCopy(skill);

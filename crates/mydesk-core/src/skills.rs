@@ -376,6 +376,52 @@ pub fn install_skill_from_catalogue(
     install_resolved_skill(paths, source, skill, target)
 }
 
+/// Installs a skill returned by the public agentskill.sh catalogue without
+/// treating the remote response as an arbitrary local source. The Markdown is
+/// cached under Möbius' data vault for provenance, then passed through the
+/// same staged-copy and manifest path as local skills. The cached source is
+/// never written into a Harness skill directory.
+pub fn install_marketplace_skill(
+    paths: &WorkspacePaths,
+    slug: &str,
+    name: &str,
+    content: &str,
+    target: &str,
+) -> Result<SkillDeployment> {
+    if content.is_empty() || content.len() > MAX_SKILL_CONTENT_BYTES {
+        bail!("Marketplace SKILL.md is empty or exceeds the {} MiB safety limit.", MAX_SKILL_CONTENT_BYTES / 1024 / 1024);
+    }
+    let mut parts = slug.split('/');
+    let owner = parts.next().filter(|value| !value.is_empty()).context("marketplace skill owner is missing")?;
+    let skill_slug = parts.next().filter(|value| !value.is_empty()).context("marketplace skill slug is missing")?;
+    if parts.next().is_some() || !is_safe_marketplace_segment(owner) || !is_safe_marketplace_segment(skill_slug) {
+        bail!("invalid marketplace skill slug");
+    }
+    let source_dir = paths.data_root.join("skills/marketplace").join(owner).join(skill_slug);
+    fs::create_dir_all(&source_dir).with_context(|| format!("creating marketplace cache {}", source_dir.display()))?;
+    let source = source_dir.join("SKILL.md");
+    fs::write(&source, content).with_context(|| format!("caching marketplace skill {}", slug))?;
+    let source = source.canonicalize().with_context(|| format!("resolving marketplace skill {}", slug))?;
+    let display_name = first_skill_name(content.as_bytes()).unwrap_or_else(|| {
+        if name.trim().is_empty() { skill_slug.to_string() } else { name.trim().to_string() }
+    });
+    let content_hash = hash_bytes(content.as_bytes());
+    let skill = SkillInfo {
+        id: format!("market:{}", &content_hash[..16]),
+        name: display_name,
+        source_path: source.display().to_string(),
+        source_kind: "agentskill.sh".to_string(),
+        content_hash,
+        scope: "market".to_string(),
+        managed: false,
+    };
+    install_resolved_skill(paths, source, skill, target)
+}
+
+fn is_safe_marketplace_segment(value: &str) -> bool {
+    value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+}
+
 fn install_resolved_skill(
     paths: &WorkspacePaths,
     source: PathBuf,

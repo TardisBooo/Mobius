@@ -99,6 +99,29 @@ export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onTo
     const value = query.trim().toLocaleLowerCase();
     return value ? workspaces.filter((item) => `${item.workspace.display_name} ${item.workspace.canonical_path} ${item.checkouts.map((checkout) => checkout.branch ?? checkout.kind).join(" ")}`.toLocaleLowerCase().includes(value)) : workspaces;
   }, [query, workspaces]);
+  useEffect(() => {
+    const host = document.querySelector(".atlas-project-tree");
+    if (!host) return;
+    const rows = [...host.querySelectorAll<HTMLElement>(".atlas-tree-row")];
+    rows.forEach((row, index) => {
+      const id = filtered[index]?.workspace.id;
+      if (id) row.dataset.workspaceId = id;
+    });
+    const captureDrag = (event: Event) => {
+      const dragEvent = event as globalThis.DragEvent;
+      const target = dragEvent.target as Element | null;
+      const row = target?.closest<HTMLElement>(".atlas-tree-row");
+      const id = row?.dataset.workspaceId;
+      if (!id) return;
+      dragEvent.dataTransfer?.setData("application/x-mobius-workspace", id);
+      dragEvent.dataTransfer?.setData("text/plain", id);
+      if (dragEvent.dataTransfer) dragEvent.dataTransfer.effectAllowed = "copy";
+      dragPayload.current = id;
+      setDraggingId(id);
+    };
+    host.addEventListener("dragstart", captureDrag, true);
+    return () => host.removeEventListener("dragstart", captureDrag, true);
+  }, [filtered]);
   const recent = pins.map((id) => workspaces.find((item) => item.workspace.id === id)).filter((item): item is WorkspaceView => Boolean(item));
   const selected = workspaces.find((item) => item.workspace.id === selectedId) ?? recent[0] ?? filtered[0] ?? null;
   const pin = (id: string) => setPins((current) => current.includes(id) ? current : [id, ...current]);
@@ -151,7 +174,7 @@ export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onTo
         return <section key={item.workspace.id} className={`atlas-tree-item ${isSelected ? "selected" : ""}`}>
           <div className={`atlas-tree-row ${draggingId === item.workspace.id ? "dragging" : ""}`} draggable onDragStart={(event) => beginDrag(event, item.workspace.id)} onDragEnd={() => { dragPayload.current = null; setDraggingId(null); setDropActive(false); }} aria-grabbed={draggingId === item.workspace.id} title={locale === "zh-CN" ? "拖动此项目到右侧近期工作区" : "Drag this project to Recent workspaces"}>
             <button className="atlas-expand" type="button" onClick={() => setExpanded((current) => { const next = new Set(current); next.has(item.workspace.id) ? next.delete(item.workspace.id) : next.add(item.workspace.id); return next; })} aria-label={isOpen ? "Collapse project" : "Expand project"} aria-expanded={isOpen}>{isOpen ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}</button>
-            <button className="atlas-project-button" type="button" title={item.workspace.canonical_path} onClick={() => select(item.workspace.id)} aria-current={isSelected ? "page" : undefined}><FolderGit2 size={16}/><span><strong>{item.workspace.display_name}</strong><small>{item.checkouts.length} {text.worktrees.toLocaleLowerCase()}</small></span></button>
+            <button className="atlas-project-button" type="button" draggable onDragStart={(event) => beginDrag(event, item.workspace.id)} onDragEnd={() => { dragPayload.current = null; setDraggingId(null); setDropActive(false); }} title={item.workspace.canonical_path} onClick={() => select(item.workspace.id)} aria-current={isSelected ? "page" : undefined}><FolderGit2 size={16}/><span><strong>{item.workspace.display_name}</strong><small>{item.checkouts.length} {text.worktrees.toLocaleLowerCase()}</small></span></button>
             <button className="atlas-pin" type="button" onClick={() => pin(item.workspace.id)} title={pins.includes(item.workspace.id) ? text.pinned : text.addRecent} disabled={pins.includes(item.workspace.id)}><Pin size={14}/></button>
           </div>
           {isOpen ? <div className="atlas-checkouts">{item.checkouts.map((checkout) => <button key={checkout.id} type="button" className={selectedCheckoutId === checkout.id ? "active" : ""} onClick={() => { select(item.workspace.id, checkout.id); }}><GitBranch size={13}/><span>{checkout.branch ?? checkout.kind}</span>{checkout.dirty ? <i aria-label={text.dirty} role="img"/> : null}</button>)}</div> : null}

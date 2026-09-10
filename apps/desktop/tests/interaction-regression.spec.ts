@@ -61,14 +61,29 @@ test("workspace drag, note save, mount tree and terminal contrast", async () => 
     await page.reload();
     await page.locator(".rail-item").nth(2).click();
     await expect(page.locator(".notes-library-v2")).toBeVisible();
-    await page.locator(".library-tree-file", { hasText: "interaction-regression-note" }).click();
+    // The tree renders the persisted Markdown title, not a filename slug.
+    await page.locator(".library-tree-file", { hasText: "Interaction regression note" }).click();
     const editor = page.locator(".note-editor-v2");
     await expect(editor.locator("textarea")).toBeEnabled();
     await editor.locator("textarea").fill("after\n\n- saved through the UI");
     await editor.getByRole("button", { name: /Save|淇濆瓨/ }).click();
     await expect(editor.locator(".note-save-state")).toHaveText(/Saved|已保存/);
+    await editor.locator("header input").fill("Interaction regression renamed");
+    await editor.getByRole("button", { name: /Save|淇濆瓨/ }).click();
+    await expect(page.locator(".library-tree-file", { hasText: "Interaction regression renamed" })).toBeVisible();
     const raw = await invoke<string>(page, "read_note_file_command", { path: note.source_path });
     expect(raw).toContain("saved through the UI");
+
+    // Creation is one library-level menu, while tabs retain an editor-style
+    // context menu with a safe source-folder action.
+    await page.locator(".library-create-button").click();
+    await expect(page.getByRole("menuitem", { name: /New note/ })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: /New canvas/ })).toBeVisible();
+    await page.locator(".library-create-button").click();
+    await page.locator(".note-tab-v2").first().click({ button: "right" });
+    await expect(page.locator(".note-tab-context-menu-v2")).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: /Open source folder/ })).toBeVisible();
+    await page.mouse.click(10, 10);
 
     // Mounts expose their virtual root exactly once and remain collapsible.
     await invoke(page, "add_note_mount", { path: mountRoot, virtualPath: "Reference", access: "read_only" });
@@ -97,6 +112,16 @@ test("workspace drag, note save, mount tree and terminal contrast", async () => 
       expect(themedColors.screen).toMatch(/rgb\(8, 11, 16\)|#080b10/i);
     }
     await invoke(page, "terminal_close", { id: terminal.id });
+
+    // The market is remote and read-only; installation is a real managed
+    // copy into the isolated Harness home, then appears under Installed.
+    await page.locator(".top-icon[aria-label='Manage skills']").click();
+    await expect(page.locator(".skills-library-v2")).toBeVisible();
+    await expect(page.locator(".marketplace-card-v2").first()).toBeVisible({ timeout: 30_000 });
+    const marketInstall = page.locator(".marketplace-card-v2").first().locator("button").first();
+    await marketInstall.click();
+    await expect(page.getByRole("button", { name: "Installed" })).toHaveClass(/active/, { timeout: 30_000 });
+    await expect(page.locator(".skill-card-v2").first()).toBeVisible({ timeout: 30_000 });
 
     // The custom title bar remains present and is not covered by page content.
     await expect(page.locator(".mobius-topbar[data-tauri-drag-region]")).toBeVisible();

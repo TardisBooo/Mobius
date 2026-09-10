@@ -3,7 +3,11 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
-use std::{fs, path::Path};
+use std::{
+    fs,
+    io::{BufRead, BufReader},
+    path::Path,
+};
 use walkdir::WalkDir;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -166,17 +170,37 @@ fn collect_note_root(
         output.push(NoteFileInfo {
             id: format!("note-file:{}", stable_path(entry.path())),
             mount_id: mount_id.map(str::to_string),
-            title: entry
-                .path()
-                .file_stem()
-                .map(|value| value.to_string_lossy().into_owned())
-                .unwrap_or_else(|| "Untitled".into()),
+            // The editor treats the title field as the user-facing filename.
+            // Reading the frontmatter here keeps the tree and open tabs in
+            // sync after a title edit, while the on-disk slug remains stable
+            // so links and snapshots do not silently break.
+            title: note_title(entry.path()),
             virtual_path,
             real_path: entry.path().display().to_string(),
             read_only,
             modified_at,
         });
     }
+}
+
+fn note_title(path: &Path) -> String {
+    let fallback = path
+        .file_stem()
+        .map(|value| value.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "Untitled".into());
+    let Ok(file) = fs::File::open(path) else {
+        return fallback;
+    };
+    for line in BufReader::new(file).lines().take(40).flatten() {
+        let Some(value) = line.trim().strip_prefix("title:") else {
+            continue;
+        };
+        let title = value.trim().trim_matches(['\"', '\'']).trim();
+        if !title.is_empty() {
+            return title.to_string();
+        }
+    }
+    fallback
 }
 
 fn stable_path(path: &Path) -> String {

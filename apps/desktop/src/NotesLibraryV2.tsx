@@ -12,6 +12,7 @@ type Locale = "zh-CN" | "en";
 type ReadingMode = "source" | "preview" | "split";
 type FileTreeNode = { name: string; path: string; children: FileTreeNode[]; files: NoteFileInfo[] };
 type NoteTab = { id: string; file: NoteFileInfo | null; title: string };
+type TabMenuState = { tab: NoteTab; x: number; y: number } | null;
 const DRAFT_TAB_ID = "note:draft";
 
 function noteTree(files: NoteFileInfo[], rootLabel?: string): FileTreeNode {
@@ -90,6 +91,7 @@ function editableNoteBody(raw: string, title: string) {
 function copy(locale: Locale) {
   const zh = locale === "zh-CN";
   return {
+    openSourceFolder: zh ? "\u6253\u5f00\u6e90\u6587\u4ef6\u5939" : "Open source folder", closeTab: zh ? "\u5173\u95ed\u6807\u7b7e" : "Close tab", createMenu: zh ? "\u65b0\u5efa" : "New",
     library: zh ? "资料库" : "Library", newNote: zh ? "新建笔记" : "New note", newCanvas: zh ? "新建画布" : "New canvas", canvases: zh ? "画布" : "Canvases", save: zh ? "保存" : "Save", saving: zh ? "保存中" : "Saving",
     mount: zh ? "挂载目录" : "Mount folder", readOnly: zh ? "只读挂载" : "Read-only mount", source: zh ? "源码" : "Source", preview: zh ? "预览" : "Preview", split: zh ? "分屏" : "Split",
     search: zh ? "搜索笔记和挂载文件" : "Search notes and mounted files", noNotes: zh ? "新建一篇随笔，或把一个目录作为只读资料库挂入。" : "Write a note, or mount a folder as a read-only library.",
@@ -142,10 +144,64 @@ export function NotesLibraryV2({ onError, onToast, locale, onOpenCanvas }: { onE
   const [title, setTitle] = useState(""); const [body, setBody] = useState(""); const [query, setQuery] = useState(""); const [mode, setMode] = useState<ReadingMode>("source");
   const [mountOpen, setMountOpen] = useState(false); const [mountPath, setMountPath] = useState("D:\\DataVault\\"); const [virtualPath, setVirtualPath] = useState("Reference"); const mountPathRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false); const [reading, setReading] = useState(false); const [saveState, setSaveState] = useState<"idle" | "dirty" | "saved" | "error">("idle"); const lastSaved = useRef(""); const saveInFlight = useRef(false); const titleValueRef = useRef(""); const bodyValueRef = useRef("");
-  const [openTabs, setOpenTabs] = useState<NoteTab[]>([]); const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [openTabs, setOpenTabs] = useState<NoteTab[]>([]); const [activeTabId, setActiveTabId] = useState<string | null>(null); const [tabMenu, setTabMenu] = useState<TabMenuState>(null); const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [navWidth, setNavWidth] = useState(() => { const value = Number(localStorage.getItem("mobius.library.nav-width")); return Number.isFinite(value) && value >= 220 && value <= 480 ? value : 285; });
   const splitterStart = useRef<{ x: number; width: number } | null>(null);
   useEffect(() => { localStorage.setItem("mobius.library.nav-width", String(navWidth)); }, [navWidth]);
+  useEffect(() => {
+    if (!tabMenu) return;
+    const close = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (!target?.closest(".note-tab-context-menu-v2")) setTabMenu(null);
+    };
+    window.addEventListener("pointerdown", close);
+    return () => window.removeEventListener("pointerdown", close);
+  }, [tabMenu]);
+  useEffect(() => {
+    const host = document.querySelector(".note-tabs-v2");
+    if (!host) return;
+    const openContextMenu = (event: Event) => {
+      event.preventDefault();
+      const target = event.target as Element | null;
+      const tabElement = target?.closest(".note-tab-v2");
+      if (!tabElement) return;
+      const tabs = [...host.querySelectorAll(".note-tab-v2")];
+      const tab = openTabs[tabs.indexOf(tabElement)];
+      if (!tab) return;
+      const pointer = event as MouseEvent;
+      setTabMenu({ tab, x: pointer.clientX, y: pointer.clientY });
+    };
+    host.addEventListener("contextmenu", openContextMenu);
+    return () => host.removeEventListener("contextmenu", openContextMenu);
+  }, [openTabs]);
+  useEffect(() => {
+    if (!tabMenu) return;
+    const menu = document.createElement("div");
+    menu.className = "note-tab-context-menu-v2";
+    menu.setAttribute("role", "menu");
+    menu.style.left = `${Math.max(8, tabMenu.x)}px`;
+    menu.style.top = `${Math.max(8, tabMenu.y)}px`;
+    const source = document.createElement("button");
+    source.type = "button";
+    source.setAttribute("role", "menuitem");
+    source.textContent = text.openSourceFolder;
+    source.disabled = !tabMenu.tab.file;
+    source.addEventListener("click", () => {
+      const file = tabMenu.tab.file;
+      setTabMenu(null);
+      if (file) void desktopApi.revealNoteSource(file.real_path).catch((reason) => onError(String(reason)));
+    });
+    const close = document.createElement("button");
+    close.type = "button";
+    close.setAttribute("role", "menuitem");
+    close.textContent = text.closeTab;
+    close.addEventListener("click", () => { closeTab(tabMenu.tab.id); setTabMenu(null); });
+    menu.append(source, close);
+    document.body.append(menu);
+    const dismiss = (event: PointerEvent) => { if (!menu.contains(event.target as Node)) setTabMenu(null); };
+    window.addEventListener("pointerdown", dismiss);
+    return () => { window.removeEventListener("pointerdown", dismiss); menu.remove(); };
+  }, [onError, tabMenu, text]);
   useEffect(() => {
     const move = (event: PointerEvent) => { const start = splitterStart.current; if (!start) return; setNavWidth(Math.max(220, Math.min(480, start.width + event.clientX - start.x))); };
     const up = () => { splitterStart.current = null; document.body.style.removeProperty("cursor"); document.body.style.removeProperty("user-select"); };
@@ -192,7 +248,7 @@ export function NotesLibraryV2({ onError, onToast, locale, onOpenCanvas }: { onE
   const startResize = (event: ReactPointerEvent<HTMLDivElement>) => { event.preventDefault(); splitterStart.current = { x: event.clientX, width: navWidth }; document.body.style.cursor = "col-resize"; document.body.style.userSelect = "none"; event.currentTarget.setPointerCapture?.(event.pointerId); };
   const keyboardResize = (event: ReactKeyboardEvent<HTMLDivElement>) => { if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return; event.preventDefault(); setNavWidth((value) => Math.max(220, Math.min(480, value + (event.key === "ArrowRight" ? 16 : -16)))); };
   return <div className="notes-library-v2" style={{ "--library-nav-width": `${navWidth}px` } as CSSProperties}>
-    <aside className="notes-nav-v2"><label className="notes-search-v2"><Search size={16}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={text.search}/></label><div className="library-tree-v2">
+    <aside className="notes-nav-v2"><header className="library-nav-header"><div><span>LOCAL LIBRARY</span><strong>{text.library}</strong></div><div className="library-create-wrap"><button className="primary-button library-create-button" type="button" aria-haspopup="menu" aria-expanded={createMenuOpen} onClick={() => setCreateMenuOpen((value) => !value)}><Plus size={14}/>{text.createMenu}</button>{createMenuOpen ? <div className="library-create-menu" role="menu"><button type="button" role="menuitem" onClick={() => { setCreateMenuOpen(false); create(); }}><FileText size={15}/><span><strong>{text.newNote}</strong><small>Markdown note</small></span></button>{onOpenCanvas ? <button type="button" role="menuitem" onClick={() => { setCreateMenuOpen(false); onOpenCanvas(); }}><Layers2 size={15}/><span><strong>{text.newCanvas}</strong><small>Infinite canvas</small></span></button> : null}</div> : null}</div></header><label className="notes-search-v2"><Search size={16}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={text.search}/></label><div className="library-tree-v2">
       <TreeSection icon={<Layers2 size={15}/>} title={text.canvases} count={visibleBoards.length} action={onOpenCanvas ? <button className="icon-soft" type="button" onClick={() => onOpenCanvas()} title={text.newCanvas}><Plus size={14}/></button> : null}>{visibleBoards.filter((board) => boardParent(board) === null).map((board) => <BoardBranch key={board.id} board={board} boards={visibleBoards} depth={0} onOpen={(id) => onOpenCanvas?.(id)}/>)}{!visibleBoards.length ? <p>{locale === "zh-CN" ? "还没有画布" : "No canvases yet"}</p> : null}</TreeSection>
       <TreeSection icon={<FileText size={15}/>} title={locale === "zh-CN" ? "笔记" : "Notes"} count={editableFiles.length} action={<button className="icon-soft" type="button" onClick={create} title={text.newNote}><Plus size={14}/></button>}><TreeBranch node={noteTree(editableFiles)} selectedId={selected?.id} onSelect={(file) => void select(file)}/></TreeSection>
       <TreeSection icon={<FolderPlus size={15}/>} title={locale === "zh-CN" ? "挂载" : "Mounts"} count={mounts.length} action={<button className="icon-soft" type="button" onClick={() => setMountOpen(true)} title={text.mount}><Plus size={14}/></button>}>{mounts.map((mountInfo) => <MountBranch key={mountInfo.id} mountInfo={mountInfo} files={visible.filter((file) => file.mount_id === mountInfo.id)} selectedId={selected?.id} locale={locale} onSelect={(file) => void select(file)} onUnmount={() => void unmount(mountInfo)}/>)}</TreeSection>

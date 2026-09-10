@@ -68,3 +68,164 @@
 .note-save-state.error {
   color: var(--m-danger);
 }
+
+/* Native drag can start over any part of a project row, including its
+   semantic button. The explicit button rule avoids WebView implementations
+   that otherwise swallow dragstart on nested controls. */
+.atlas-tree-row,
+.atlas-tree-row > .atlas-project-button {
+  -webkit-user-drag: element;
+  user-select: none;
+}
+
+.recent-workspace-grid {
+  align-items: stretch;
+}
+
+.recent-drop-target {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 112px;
+}
+
+/* Canvas and note creation share the single library-level New menu. Mounts
+   keep their own plus because mounting is a different, destructive-scope
+   operation and should stay explicit. */
+.library-tree-v2 > .library-tree-section:nth-child(1) > header > .icon-soft,
+.library-tree-v2 > .library-tree-section:nth-child(2) > header > .icon-soft {
+  display: none;
+}
+
+/* Creation is intentionally owned by the library-level New menu. Keep the
+   editor's copy-to-note action, but remove duplicate new-note affordances. */
+.note-tab-new-v2,
+.note-actions > .soft-button:has(svg) {
+  display: none;
+}
+
+.library-nav-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.library-nav-header > div:first-child span {
+  display: block;
+  color: var(--m-muted);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: .1em;
+}
+
+.library-nav-header > div:first-child strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--m-text);
+  font-size: 16px;
+}
+
+.library-create-wrap {
+  position: relative;
+}
+
+.library-create-button {
+  min-height: 30px;
+  padding: 0 9px;
+  font-size: 10px;
+}
+
+.library-create-menu {
+  position: absolute;
+  z-index: 35;
+  inset: calc(100% + 7px) 0 auto auto;
+  display: grid;
+  min-width: 190px;
+  padding: 5px;
+  border: 1px solid var(--m-line);
+  border-radius: 10px;
+  background: var(--m-raised);
+  box-shadow: var(--m-lift);
+}
+
+.library-create-menu button,
+.note-tab-context-menu-v2 button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 9px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--m-text);
+  text-align: start;
+  font-size: 10px;
+}
+
+.library-create-menu button:hover,
+.note-tab-context-menu-v2 button:hover {
+  background: var(--m-hover);
+}
+
+.library-create-menu button > span {
+  display: grid;
+  gap: 2px;
+}
+
+.library-create-menu small {
+  color: var(--m-muted);
+  font-size: 9px;
+}
+
+.note-tab-context-menu-v2 {
+  position: fixed;
+  z-index: 100;
+  display: grid;
+  min-width: 165px;
+  padding: 5px;
+  border: 1px solid var(--m-line);
+  border-radius: 9px;
+  background: var(--m-raised);
+  box-shadow: var(--m-lift);
+}
+
+.note-tab-context-menu-v2 button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.marketplace-card-v2 {
+  grid-template-rows: auto auto auto auto;
+}
+
+.marketplace-description-v2 {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--m-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.marketplace-metrics-v2 {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  color: var(--m-muted);
+  font-size: 9px;
+}
+
+.marketplace-metrics-v2 span {
+  padding: 3px 5px;
+  border: 1px solid var(--m-line);
+  border-radius: 5px;
+}
+
+.marketplace-card-v2 footer {
+  align-items: center;
+}
+
+.marketplace-card-v2 footer a {
+  text-decoration: none;
+}
