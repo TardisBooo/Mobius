@@ -25,11 +25,11 @@ Agent CLI 各自记得自己的会话，却不会提供一张以项目为中心�
 
 [![动态预览：工作区、Agent 交接图与多媒体画布。点击播放完整有声视频。](apps/website/public/product/product-teaser.gif)](http://8.137.87.76/mobius/?lang=zh#demo)
 
-**[▶ 播放完整 96 秒有声视频](http://8.137.87.76/mobius/?lang=zh#demo)** · [直接打开 MP4](http://8.137.87.76/mobius/media/mobius-product-film.mp4)
+**[▶ 播放完整 76 秒有声视频](http://8.137.87.76/mobius/?lang=zh#demo)** · [直接打开 MP4](http://8.137.87.76/mobius/media/mobius-product-film.mp4)
 
 上方是 GIF 动态预览，完整播放器在产品页中打开；仓库 MP4 链接不等于 GitHub 内嵌播放器。
 
-96 秒英文日间模式真实界面演示。项目和对话为虚构数据，Agent 输出为脚本演示，不作为真实 Agent 验收证据；不包含个人会话。参见[素材授权说明](licenses/MEDIA-CREDITS.md)。
+76 秒英文动效演示。真实日间模式截图从完整上下文推近到功能特写。项目和对话使用虚构演示数据，Agent 输出为脚本演示，不作为真实 Agent 验收证据；不包含个人会话。参见[素材授权说明](licenses/MEDIA-CREDITS.md)。
 
 ## 核心功能
 

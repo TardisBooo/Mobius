@@ -12,9 +12,7 @@ All conversations, paths, project names and verification claims inside the demo 
 | Flower video | https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4 | CC0 local-video playback demonstration |
 | House Vibez — Lily J | https://assets.mixkit.co/music/745/745.mp3 | Mixkit Stock Music Free License, embedded in film only |
 | Fast small sweep transition | https://assets.mixkit.co/active_storage/sfx/166/166-preview.mp3 | Mixkit Sound Effects Free License |
-| Quick switch click | https://assets.mixkit.co/active_storage/sfx/2582/2582-preview.mp3 | Mixkit Sound Effects Free License |
-| Mechanical typewriter single hit | https://assets.mixkit.co/active_storage/sfx/1382/1382-preview.mp3 | Mixkit Sound Effects Free License, embedded Foley |
-| Typewriter soft hit | https://assets.mixkit.co/active_storage/sfx/1366/1366-preview.mp3 | Mixkit Sound Effects Free License, embedded Foley |
+| Air zoom vacuum | https://assets.mixkit.co/active_storage/sfx/2608/2608-preview.mp3 | Mixkit Sound Effects Free License |
 | Cinematic whoosh deep impact | https://assets.mixkit.co/active_storage/sfx/1143/1143-preview.mp3 | Mixkit Sound Effects Free License |
 
-Video motion source: https://github.com/Vincentwei1021/video-shotcraft, Copyright 2026 Wei Yihao, Apache-2.0 (included as licenses/video-shotcraft.txt). Letterpress and accumulated camera/cursor motion are adapted with changed timing, coordinates and branding, not its fictional UI. Audio attribution traced through its assets/audio/ATTRIBUTION.md. Raw music is not committed as a standalone redistribution; finished soundtrack is part of the video. Product/source license does not override third-party asset licenses.
+Video motion source: https://github.com/Vincentwei1021/video-shotcraft, Copyright 2026 Wei Yihao, Apache-2.0 (included as licenses/video-shotcraft.txt). Source-coordinate camera framing and the Ink Press approach–hold–return rhythm are adapted with changed timing, coordinates and Möbius branding; the template's fictional UI is not used. Audio attribution was traced through its `assets/audio/ATTRIBUTION.md`. Raw music is not committed as a standalone redistribution; the finished soundtrack is part of the video. Product/source licensing does not override third-party asset licenses.

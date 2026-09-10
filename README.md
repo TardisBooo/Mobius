@@ -32,11 +32,11 @@ Agent CLIs remember their own sessions. They do not give you one project-shaped 
 
 [![Animated preview: workspace, agent handoff graph and multimedia canvas. Click for the full film with sound.](apps/website/public/product/product-teaser.gif)](http://8.137.87.76/mobius/?lang=en#demo)
 
-**[▶ Play the complete 96-second film with sound](http://8.137.87.76/mobius/?lang=en#demo)** · [Direct MP4](http://8.137.87.76/mobius/media/mobius-product-film.mp4)
+**[▶ Play the complete 76-second film with sound](http://8.137.87.76/mobius/?lang=en#demo)** · [Direct MP4](http://8.137.87.76/mobius/media/mobius-product-film.mp4)
 
 The preview above is an animated GIF. The full video player opens on the product site; a repository MP4 link is not an inline GitHub player.
 
-A 96-second English tour of the actual light-mode UI, with fictional projects and conversations. Agent output is scripted; this film is not native-agent acceptance evidence. No personal sessions are shown. See the [media credits](licenses/MEDIA-CREDITS.md).
+A 76-second English motion-led tour. Real light-mode screenshots move from complete context into focused feature close-ups. Projects and conversations use fictional demo data; agent output is scripted. This film is not native-agent acceptance evidence, and no personal sessions are shown. See the [media credits](licenses/MEDIA-CREDITS.md).
 
 ## Core workflows
 

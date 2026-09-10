@@ -21,3 +21,8 @@
   .hero { display:block; min-height:0; padding-top:60px; padding-bottom:28px; }
   .hero-art { position:relative; top:auto; right:auto; width:100%; height:clamp(240px,60vw,450px); margin-top:28px; }
 }
+
+.film-chapters{display:grid;grid-template-columns:repeat(6,1fr);gap:0;margin:38px 0 0;padding:0;border-block:1px solid #425048;list-style:none}
+.film-chapters li{display:grid;gap:8px;padding:17px 14px;border-right:1px solid #425048;font-size:10px}
+.film-chapters li:last-child{border-right:0}.film-chapters b{color:#83b99a;font-size:9px}.film-chapters span{color:#d9e3dc}
+@media(max-width:900px){.film-chapters{grid-template-columns:repeat(3,1fr)}.film-chapters li:nth-child(3){border-right:0}.film-chapters li:nth-child(-n+3){border-bottom:1px solid #425048}}
