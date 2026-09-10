@@ -57,10 +57,15 @@ test("workspace drag, note save, mount tree and terminal contrast", async () => 
     }
     await expect(project).toBeVisible();
 
-    // Exercise the same pointer gesture as a user: drag the row onto the
-    // target, not only its child placeholder.
-    await project.locator("xpath=..").dragTo(page.locator(".recent-drop-target"));
+    // Check the project-name hit area, not just the outer row. CDP verifies
+    // frontend behavior only: native Windows drag still requires a manual/OS
+    // pointer check and the window-drag-config regression test.
+    await project.locator("strong").dragTo(page.locator(".recent-drop-target"));
     await expect(page.locator(".recent-workspace-card", { hasText: "drag-demo" })).toBeVisible();
+    await project.locator("strong").dragTo(page.locator(".recent-drop-target"));
+    await expect(page.locator(".recent-workspace-card", { hasText: "drag-demo" })).toHaveCount(1);
+    await page.reload();
+    await expect(page.locator(".recent-workspace-card", { hasText: "drag-demo" })).toHaveCount(1);
 
     // A private note is editable and has an explicit saved state after the
     // native update command completes.

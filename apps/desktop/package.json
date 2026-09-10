@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "build:desktop": "tauri build --debug --no-bundle",
     "check": "tsc --noEmit",
+    "test:window-drag": "node --test tests/window-drag-config.test.mjs",
     "test:smoke": "playwright test --config playwright.smoke.config.ts"
   },
   "dependencies": {
