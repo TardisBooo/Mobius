@@ -6,7 +6,7 @@
 
 面向同时在同一项目中使用 Codex、Claude Code、Pi 与 Grok 的 Windows 本地工作台。采用 **Rust 核心、Tauri 2 桌面外壳、React/TypeScript 界面与 SQLite 本地索引**。
 
-[English](README.md) · [在线产品页](http://8.137.87.76/mobius/?lang=zh) · [播放产品视频](http://8.137.87.76/mobius/?lang=zh#demo) · [下载](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.9) · [真实验收记录](docs/acceptance/real-desktop-20260908.md) · [MIT License](LICENSE)
+[English](README.md) · [在线产品页](http://8.137.87.76/mobius/?lang=zh) · [播放产品视频](http://8.137.87.76/mobius/?lang=zh#demo) · [下载](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.10) · [真实验收记录](docs/acceptance/real-desktop-20260908.md) · [MIT License](LICENSE)
 
 > 当前为开发预览版。兼容性按 Harness 逐项验证并附证据发布。莫比乌斯不提供模型账号、订阅或 API 额度。
 
@@ -51,7 +51,7 @@ Agent CLI 各自记得自己的会话，却不会提供一张以项目为中心�
 
 - **精准引用：已支持。** 已知 session ID 和消息范围时，直接定位对应证据。
 - **关键词／全文检索：已支持。** Mome 使用本地 SQLite FTS/BM25 分块索引，在已索引来源中优先排序当前项目／worktree，每次最多返回三个可引用会话，输出预算上限为 1,200 token。
-- **语义／向量与混合检索：v0.3.9 尚未提供。** 当前未接入 embedding 模型或向量后端，这是后续能力，不是可在设置中开启的现成功能；Mome 会明确显示当前仅为词法检索。
+- **语义／向量与混合检索：v0.3.10 尚未提供。** 当前未接入 embedding 模型或向量后端，这是后续能力，不是可在设置中开启的现成功能；Mome 会明确显示当前仅为词法检索。
 
 默认不搜索其他会话，也不自动注入历史。本地检索不调用模型；将选中的片段发给 Agent 后，会占用上下文 token。
 
@@ -95,7 +95,7 @@ Agent CLI 各自记得自己的会话，却不会提供一张以项目为中心�
 
 ## 安装
 
-从 [GitHub Releases](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.9) 下载 v0.3.9 Windows 预览版安装包或便携 EXE，并核对 SHA-256 和已知限制。构建尚未签名，可能触发 SmartScreen。
+从 [GitHub Releases](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.10) 下载 v0.3.10 Windows 预览版安装包或便携 EXE，并核对 SHA-256 和已知限制。构建尚未签名，可能触发 SmartScreen。
 
 ### 从源码构建
 
