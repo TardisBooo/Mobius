@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Braces,
   Check,
@@ -177,6 +177,7 @@ export function SkillsLibraryV2({
   const [uninstalling, setUninstalling] = useState<ManagedSkillInstall | null>(
     null,
   );
+  const reloadRequest = useRef(0);
   const checkout = allCheckouts.find((item) => item.id === checkoutId) ?? null;
   const targetCheckout = installTargetId.startsWith("project:")
     ? (allCheckouts.find(
@@ -187,12 +188,16 @@ export function SkillsLibraryV2({
     ? `project:${targetCheckout.canonical_path}`
     : "global";
   const reload = useCallback(async () => {
+    const requestId = ++reloadRequest.current;
     setLoading(true);
     try {
       const installs = await desktopApi.listManagedSkills();
+      if (requestId !== reloadRequest.current) return;
       setManaged(installs);
       if (catalogueMode === "market") {
-        setMarketplaceItems(await fetchMarketplaceSkills(query));
+        const marketplace = await fetchMarketplaceSkills(query);
+        if (requestId !== reloadRequest.current) return;
+        setMarketplaceItems(marketplace);
         setItems([]);
       } else {
         const skills = scope === "global"
@@ -200,13 +205,14 @@ export function SkillsLibraryV2({
           : checkout
             ? await desktopApi.listCheckoutSkills(checkout.id)
             : [];
+        if (requestId !== reloadRequest.current) return;
         setItems(skills);
         setMarketplaceItems([]);
       }
     } catch (reason) {
-      onError(String(reason));
+      if (requestId === reloadRequest.current) onError(String(reason));
     } finally {
-      setLoading(false);
+      if (requestId === reloadRequest.current) setLoading(false);
     }
   }, [catalogueMode, checkout, onError, query, scope]);
   useEffect(() => {
@@ -316,11 +322,14 @@ export function SkillsLibraryV2({
       onError(String(reason));
     }
   };
-  const visible = items.filter((skill) =>
-    (catalogueMode === "market" || Boolean(managedCopy(skill) || managedFromSource(skill))) && `${skill.name} ${skill.source_kind} ${skill.scope}`
-      .toLocaleLowerCase()
-      .includes(query.toLocaleLowerCase()),
-  );
+  // The Installed view is also the local catalogue: Harness skills already
+  // present under the global/project roots must remain visible even when
+  // Möbius has not created a managed copy for them yet. Filtering them out
+  // made a successful native scan look like an empty directory and prevented
+  // users from opening a source and choosing “Create editable copy”.
+  const visible = items.filter((skill) => `${skill.name} ${skill.source_kind} ${skill.scope}`
+    .toLocaleLowerCase()
+    .includes(query.toLocaleLowerCase()));
   return (
     <div className="skills-library-v2">
       <header className="skills-header-v2">

@@ -99,29 +99,6 @@ export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onTo
     const value = query.trim().toLocaleLowerCase();
     return value ? workspaces.filter((item) => `${item.workspace.display_name} ${item.workspace.canonical_path} ${item.checkouts.map((checkout) => checkout.branch ?? checkout.kind).join(" ")}`.toLocaleLowerCase().includes(value)) : workspaces;
   }, [query, workspaces]);
-  useEffect(() => {
-    const host = document.querySelector(".atlas-project-tree");
-    if (!host) return;
-    const rows = [...host.querySelectorAll<HTMLElement>(".atlas-tree-row")];
-    rows.forEach((row, index) => {
-      const id = filtered[index]?.workspace.id;
-      if (id) row.dataset.workspaceId = id;
-    });
-    const captureDrag = (event: Event) => {
-      const dragEvent = event as globalThis.DragEvent;
-      const target = dragEvent.target as Element | null;
-      const row = target?.closest<HTMLElement>(".atlas-tree-row");
-      const id = row?.dataset.workspaceId;
-      if (!id) return;
-      dragEvent.dataTransfer?.setData("application/x-mobius-workspace", id);
-      dragEvent.dataTransfer?.setData("text/plain", id);
-      if (dragEvent.dataTransfer) dragEvent.dataTransfer.effectAllowed = "copy";
-      dragPayload.current = id;
-      setDraggingId(id);
-    };
-    host.addEventListener("dragstart", captureDrag, true);
-    return () => host.removeEventListener("dragstart", captureDrag, true);
-  }, [filtered]);
   const recent = pins.map((id) => workspaces.find((item) => item.workspace.id === id)).filter((item): item is WorkspaceView => Boolean(item));
   const selected = workspaces.find((item) => item.workspace.id === selectedId) ?? recent[0] ?? filtered[0] ?? null;
   const pin = (id: string) => setPins((current) => current.includes(id) ? current : [id, ...current]);
@@ -135,19 +112,27 @@ export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onTo
     setExpanded((current) => new Set(current).add(id));
   };
   const beginDrag = (event: DragEvent<HTMLElement>, id: string) => {
-    // WebView drag events are not consistently propagated when the source is
-    // a nested button. Keep a plain-text fallback so the drop target also
-    // works with OS/browser drag implementations.
-    event.dataTransfer.setData("application/x-mobius-workspace", id);
-    event.dataTransfer.setData("text/plain", id);
-    event.dataTransfer.effectAllowed = "copy";
+    // Keep the payload on the row itself. Nested interactive controls are
+    // explicitly non-draggable below; otherwise WebView2 can start a second
+    // drag source and the drop event arrives without the workspace id.
+    event.dataTransfer?.setData("application/x-mobius-workspace", id);
+    event.dataTransfer?.setData("text/plain", id);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy";
     dragPayload.current = id;
     setDraggingId(id);
+  };
+  const endDrag = () => {
+    setDraggingId(null);
+    setDropActive(false);
+    // WebView2 can dispatch dragend before drop. Keep the ref briefly so the
+    // drop handler still has a deterministic fallback when DataTransfer is
+    // empty, then release it for a later external drag.
+    window.setTimeout(() => { dragPayload.current = null; }, 250);
   };
   const dropProject = (event: DragEvent<HTMLElement>) => {
     event.preventDefault();
     setDropActive(false);
-    const id = event.dataTransfer.getData("application/x-mobius-workspace") || event.dataTransfer.getData("text/plain") || dragPayload.current || draggingId;
+    const id = event.dataTransfer?.getData("application/x-mobius-workspace") || event.dataTransfer?.getData("text/plain") || dragPayload.current || draggingId;
     dragPayload.current = null;
     setDraggingId(null);
     if (id && workspaces.some((item) => item.workspace.id === id)) pin(id);
@@ -172,9 +157,9 @@ export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onTo
         const isOpen = expanded.has(item.workspace.id);
         const isSelected = selected?.workspace.id === item.workspace.id;
         return <section key={item.workspace.id} className={`atlas-tree-item ${isSelected ? "selected" : ""}`}>
-          <div className={`atlas-tree-row ${draggingId === item.workspace.id ? "dragging" : ""}`} draggable onDragStart={(event) => beginDrag(event, item.workspace.id)} onDragEnd={() => { dragPayload.current = null; setDraggingId(null); setDropActive(false); }} aria-grabbed={draggingId === item.workspace.id} title={locale === "zh-CN" ? "拖动此项目到右侧近期工作区" : "Drag this project to Recent workspaces"}>
+          <div className={`atlas-tree-row ${draggingId === item.workspace.id ? "dragging" : ""}`} data-workspace-id={item.workspace.id} draggable onDragStart={(event) => beginDrag(event, item.workspace.id)} onDragEnd={endDrag} aria-grabbed={draggingId === item.workspace.id} title={locale === "zh-CN" ? "拖动此项目到右侧近期工作区" : "Drag this project to Recent workspaces"}>
             <button className="atlas-expand" type="button" onClick={() => setExpanded((current) => { const next = new Set(current); next.has(item.workspace.id) ? next.delete(item.workspace.id) : next.add(item.workspace.id); return next; })} aria-label={isOpen ? "Collapse project" : "Expand project"} aria-expanded={isOpen}>{isOpen ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}</button>
-            <button className="atlas-project-button" type="button" draggable onDragStart={(event) => beginDrag(event, item.workspace.id)} onDragEnd={() => { dragPayload.current = null; setDraggingId(null); setDropActive(false); }} title={item.workspace.canonical_path} onClick={() => select(item.workspace.id)} aria-current={isSelected ? "page" : undefined}><FolderGit2 size={16}/><span><strong>{item.workspace.display_name}</strong><small>{item.checkouts.length} {text.worktrees.toLocaleLowerCase()}</small></span></button>
+            <button className="atlas-project-button" type="button" draggable={false} title={item.workspace.canonical_path} onClick={() => select(item.workspace.id)} aria-current={isSelected ? "page" : undefined}><FolderGit2 size={16}/><span><strong>{item.workspace.display_name}</strong><small>{item.checkouts.length} {text.worktrees.toLocaleLowerCase()}</small></span></button>
             <button className="atlas-pin" type="button" onClick={() => pin(item.workspace.id)} title={pins.includes(item.workspace.id) ? text.pinned : text.addRecent} disabled={pins.includes(item.workspace.id)}><Pin size={14}/></button>
           </div>
           {isOpen ? <div className="atlas-checkouts">{item.checkouts.map((checkout) => <button key={checkout.id} type="button" className={selectedCheckoutId === checkout.id ? "active" : ""} onClick={() => { select(item.workspace.id, checkout.id); }}><GitBranch size={13}/><span>{checkout.branch ?? checkout.kind}</span>{checkout.dirty ? <i aria-label={text.dirty} role="img"/> : null}</button>)}</div> : null}
@@ -183,7 +168,7 @@ export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onTo
     </aside>
     <section className="atlas-workarea">
       <header className="atlas-recent-header"><div><span>YOUR WORKBENCH</span><h2>{text.recent}</h2><p>{text.recentHint}</p></div><button className="primary-button" type="button" onClick={() => setAdding(true)}><FolderPlus size={16}/>{text.add}</button></header>
-      <section className={`recent-workspace-grid ${dropActive ? "drop-active" : ""}`} onDragEnter={(event) => { if (dragPayload.current || draggingId || event.dataTransfer.types.length === 0 || event.dataTransfer.types.includes("application/x-mobius-workspace") || event.dataTransfer.types.includes("text/plain")) setDropActive(true); }} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setDropActive(true); }} onDragLeave={(event) => { const nextTarget = event.relatedTarget as Node | null; if (!nextTarget || !event.currentTarget.contains(nextTarget)) setDropActive(false); }} onDrop={dropProject} aria-label={text.recent}>
+      <section className={`recent-workspace-grid ${dropActive ? "drop-active" : ""}`} onDragEnter={(event) => { const types = [...event.dataTransfer.types]; if (dragPayload.current || draggingId || types.length === 0 || types.includes("application/x-mobius-workspace") || types.includes("text/plain")) setDropActive(true); }} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setDropActive(true); }} onDragLeave={(event) => { const nextTarget = event.relatedTarget as Node | null; if (!nextTarget || !event.currentTarget.contains(nextTarget)) setDropActive(false); }} onDrop={dropProject} aria-label={text.recent}>
         {recent.map((item) => <RecentWorkspaceCard key={item.workspace.id} item={item} selected={selected?.workspace.id === item.workspace.id} onSelect={() => select(item.workspace.id)} onRemove={() => unpin(item.workspace.id)} onOpen={() => { const checkout = item.checkouts[0]; if (checkout) void desktopApi.createTerminal(checkout.canonical_path, `PowerShell · ${item.workspace.display_name}`).then(openTerminal).catch((reason) => onError(String(reason))); }} text={text}/>) }
         <div className="recent-drop-target" aria-label={text.drop}><Plus size={18}/><span>{text.drop}</span></div>
       </section>

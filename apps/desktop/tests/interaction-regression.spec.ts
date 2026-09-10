@@ -1,4 +1,6 @@
 import { chromium, expect, test, type Browser, type Page } from "@playwright/test";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 type TauriInternals = { invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown> };
 
@@ -23,6 +25,12 @@ test("workspace drag, note save, mount tree and terminal contrast", async () => 
   const workspace = process.env.MOBIUS_INTERACTION_WORKSPACE;
   const mountRoot = process.env.MOBIUS_INTERACTION_MOUNT;
   if (!workspace || !mountRoot) throw new Error("interaction fixture paths are required");
+  const codexHome = process.env.MOBIUS_CODEX_HOME;
+  const verificationRoot = process.env.MOBIUS_TEST_ROOT;
+  if (!codexHome || !verificationRoot || !codexHome.toLocaleLowerCase().startsWith(verificationRoot.toLocaleLowerCase())) throw new Error("isolated Codex home is required");
+  const globalSkill = join(codexHome, "skills", "interaction-global-skill", "SKILL.md");
+  mkdirSync(dirname(globalSkill), { recursive: true });
+  writeFileSync(globalSkill, "name: interaction-global-skill\n\ndescription: Isolated global skill discovery fixture.\n", "utf8");
   const browser = await chromium.connectOverCDP(endpoint);
   const page = await appPage(browser);
   const errors: string[] = [];
@@ -113,15 +121,22 @@ test("workspace drag, note save, mount tree and terminal contrast", async () => 
     }
     await invoke(page, "terminal_close", { id: terminal.id });
 
-    // The market is remote and read-only; installation is a real managed
-    // copy into the isolated Harness home, then appears under Installed.
+    // A global SKILL.md already present in the isolated Codex home must be
+    // visible in Installed / Global before any managed copy exists.
     await page.locator(".top-icon[aria-label='Manage skills']").click();
-    await expect(page.locator(".skills-library-v2")).toBeVisible();
-    await expect(page.locator(".marketplace-card-v2").first()).toBeVisible({ timeout: 30_000 });
-    const marketInstall = page.locator(".marketplace-card-v2").first().locator("button").first();
-    await marketInstall.click();
-    await expect(page.getByRole("button", { name: "Installed" })).toHaveClass(/active/, { timeout: 30_000 });
-    await expect(page.locator(".skill-card-v2").first()).toBeVisible({ timeout: 30_000 });
+    const skills = page.locator(".skills-library-v2");
+    await expect(skills).toBeVisible();
+    await skills.getByRole("button", { name: "Installed" }).click();
+    await skills.locator(".skills-segment").nth(1).getByRole("button", { name: "Global" }).click();
+    await skills.locator(".skills-search-v2 input").fill("interaction-global-skill");
+    await expect(skills.locator(".skill-card-v2", { hasText: "interaction-global-skill" })).toHaveCount(1);
+
+    // The market is remote and read-only. Installation is covered by the full
+    // acceptance flow; this smoke confirms that switching away from the local
+    // catalogue renders the remote list.
+    await skills.getByRole("button", { name: "Skill market" }).click();
+    await skills.locator(".skills-search-v2 input").fill("");
+    await expect(skills.locator(".marketplace-card-v2").first()).toBeVisible({ timeout: 30_000 });
 
     // The custom title bar remains present and is not covered by page content.
     await expect(page.locator(".mobius-topbar[data-tauri-drag-region]")).toBeVisible();
