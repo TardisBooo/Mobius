@@ -2536,7 +2536,7 @@ dependencies = [
 
 [[package]]
 name = "mobius-desktop"
-version = "0.3.10"
+version = "0.3.11"
 dependencies = [
  "chrono",
  "mydesk-core",
@@ -2580,7 +2580,7 @@ dependencies = [
 
 [[package]]
 name = "mydesk-cli"
-version = "0.3.10"
+version = "0.3.11"
 dependencies = [
  "anyhow",
  "clap",
@@ -2594,7 +2594,7 @@ dependencies = [
 
 [[package]]
 name = "mydesk-core"
-version = "0.3.10"
+version = "0.3.11"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2615,7 +2615,7 @@ dependencies = [
 
 [[package]]
 name = "mydesk-daemon"
-version = "0.3.10"
+version = "0.3.11"
 dependencies = [
  "anyhow",
  "mydesk-core",
@@ -2628,7 +2628,7 @@ dependencies = [
 
 [[package]]
 name = "mydesk-mcp"
-version = "0.3.10"
+version = "0.3.11"
 dependencies = [
  "anyhow",
  "mydesk-core",
