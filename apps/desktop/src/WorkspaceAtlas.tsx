@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { Archive, ArrowRight, Braces, ChevronDown, ChevronRight, CirclePlay, File, Folder, FolderGit2, FolderOpen, FolderPlus, GitBranch, GripVertical, LoaderCircle, PanelRight, Pin, Plus, Search, TerminalSquare, Workflow, X } from "lucide-react";
 import { AccessibleDialog } from "./AccessibleDialog";
+import { ContextMenu } from "./ContextMenu";
 import { desktopApi } from "./api";
 import type { Checkout, DirectoryEntry, RelayGraph, SessionSearchHit, SkillInfo, TerminalInfo, WorkspaceView } from "./types";
 
@@ -27,6 +28,8 @@ function words(locale: Locale) {
     pinned: zh ? "已添加" : "Pinned",
     addRecent: zh ? "加入近期" : "Add to recent",
     removeRecent: zh ? "从近期移除" : "Remove from recent",
+    selectProject: zh ? "打开项目" : "Open project",
+    openSessions: zh ? "查看项目会话" : "Open project sessions",
     drop: zh ? "拖到这里加入近期工作区" : "Drop a project here to add it",
     noWorkspace: zh ? "尚未登记工作区。" : "No workspaces are registered yet.",
     noSessions: zh ? "这个工程还没有可显示的会话。" : "No sessions are associated with this project yet.",
@@ -67,6 +70,7 @@ export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onTo
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedCheckoutId, setSelectedCheckoutId] = useState<string | null>(null);
+  const [workspaceMenu, setWorkspaceMenu] = useState<{ x: number; y: number; workspaceId: string } | null>(null);
   const [adding, setAdding] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropActive, setDropActive] = useState(false);
@@ -157,7 +161,7 @@ export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onTo
         const isOpen = expanded.has(item.workspace.id);
         const isSelected = selected?.workspace.id === item.workspace.id;
         return <section key={item.workspace.id} className={`atlas-tree-item ${isSelected ? "selected" : ""}`}>
-          <div className={`atlas-tree-row ${draggingId === item.workspace.id ? "dragging" : ""}`} data-workspace-id={item.workspace.id} draggable onDragStart={(event) => beginDrag(event, item.workspace.id)} onDragEnd={endDrag} aria-grabbed={draggingId === item.workspace.id} title={locale === "zh-CN" ? "拖动此项目到右侧近期工作区" : "Drag this project to Recent workspaces"}>
+          <div className={`atlas-tree-row ${draggingId === item.workspace.id ? "dragging" : ""}`} data-workspace-id={item.workspace.id} draggable onContextMenu={(event) => { event.preventDefault(); setWorkspaceMenu({ x: event.clientX, y: event.clientY, workspaceId: item.workspace.id }); }} onDragStart={(event) => beginDrag(event, item.workspace.id)} onDragEnd={endDrag} aria-grabbed={draggingId === item.workspace.id} title={locale === "zh-CN" ? "拖动此项目到右侧近期工作区" : "Drag this project to Recent workspaces"}>
             <button className="atlas-expand" type="button" draggable={false} onClick={() => setExpanded((current) => { const next = new Set(current); next.has(item.workspace.id) ? next.delete(item.workspace.id) : next.add(item.workspace.id); return next; })} aria-label={isOpen ? "Collapse project" : "Expand project"} aria-expanded={isOpen}>{isOpen ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}</button>
             <button className="atlas-project-button" type="button" draggable title={item.workspace.canonical_path} onDragStart={(event) => { event.stopPropagation(); beginDrag(event, item.workspace.id); }} onDragEnd={(event) => { event.stopPropagation(); endDrag(); }} onClick={() => select(item.workspace.id)} aria-current={isSelected ? "page" : undefined}><FolderGit2 size={16}/><span><strong>{item.workspace.display_name}</strong><small>{item.checkouts.length} {text.worktrees.toLocaleLowerCase()}</small></span></button>
             <button className="atlas-pin" type="button" draggable={false} onClick={() => pin(item.workspace.id)} title={pins.includes(item.workspace.id) ? text.pinned : text.addRecent} disabled={pins.includes(item.workspace.id)}><Pin size={14}/></button>
@@ -169,18 +173,24 @@ export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onTo
     <section className="atlas-workarea">
       <header className="atlas-recent-header"><div><span>YOUR WORKBENCH</span><h2>{text.recent}</h2><p>{text.recentHint}</p></div><button className="primary-button" type="button" onClick={() => setAdding(true)}><FolderPlus size={16}/>{text.add}</button></header>
       <section className={`recent-workspace-grid ${dropActive ? "drop-active" : ""}`} onDragEnter={(event) => { const types = [...event.dataTransfer.types]; if (dragPayload.current || draggingId || types.length === 0 || types.includes("application/x-mobius-workspace") || types.includes("text/plain")) setDropActive(true); }} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setDropActive(true); }} onDragLeave={(event) => { const nextTarget = event.relatedTarget as Node | null; if (!nextTarget || !event.currentTarget.contains(nextTarget)) setDropActive(false); }} onDrop={dropProject} aria-label={text.recent}>
-        {recent.map((item) => <RecentWorkspaceCard key={item.workspace.id} item={item} selected={selected?.workspace.id === item.workspace.id} onSelect={() => select(item.workspace.id)} onRemove={() => unpin(item.workspace.id)} onOpen={() => { const checkout = item.checkouts[0]; if (checkout) void desktopApi.createTerminal(checkout.canonical_path, `PowerShell · ${item.workspace.display_name}`).then(openTerminal).catch((reason) => onError(String(reason))); }} text={text}/>) }
+        {recent.map((item) => <RecentWorkspaceCard key={item.workspace.id} item={item} selected={selected?.workspace.id === item.workspace.id} onSelect={() => select(item.workspace.id)} onRemove={() => unpin(item.workspace.id)} onOpen={() => { const checkout = item.checkouts[0]; if (checkout) void desktopApi.createTerminal(checkout.canonical_path, `PowerShell · ${item.workspace.display_name}`).then(openTerminal).catch((reason) => onError(String(reason))); }} onContextMenu={(event) => { event.preventDefault(); setWorkspaceMenu({ x: event.clientX, y: event.clientY, workspaceId: item.workspace.id }); }} text={text}/>) }
         <div className="recent-drop-target" aria-label={text.drop}><Plus size={18}/><span>{text.drop}</span></div>
       </section>
       {selected ? <WorkspaceInspector item={selected} initialCheckoutId={selectedCheckoutId} openTerminal={openTerminal} onError={onError} onOpenSessions={onOpenSessions} locale={locale}/> : <div className="atlas-empty"><FolderGit2 size={26}/><strong>{text.noWorkspace}</strong><span>{text.addHint}</span></div>}
     </section>
     {adding ? <AccessibleDialog title={text.add} closeLabel={text.cancel} onClose={() => setAdding(false)} initialFocusRef={addPathRef}><p className="modal-help">{text.addHint}</p><label className="form-label">{text.manualPath}<span className="folder-picker-input"><input ref={addPathRef} value={path} onChange={(event) => setPath(event.target.value)} placeholder="E:\\Workspaces\\Example"/><button className="soft-button" type="button" onClick={() => void chooseWorkspaceDirectory()}><FolderOpen size={15}/>{locale === "zh-CN" ? "选择目录" : "Choose folder"}</button></span></label><div className="modal-actions"><button className="soft-button" onClick={() => setAdding(false)}>{text.cancel}</button><button className="primary-button" onClick={() => void create()}>{text.register}</button></div></AccessibleDialog> : null}
+    {workspaceMenu ? (() => { const item = workspaces.find((candidate) => candidate.workspace.id === workspaceMenu.workspaceId); if (!item) return null; const checkout = item.checkouts[0]; return <ContextMenu x={workspaceMenu.x} y={workspaceMenu.y} onClose={() => setWorkspaceMenu(null)} items={[
+      { id: "select-project", label: text.selectProject, icon: <FolderOpen size={14}/>, onSelect: () => select(item.workspace.id) },
+      { id: "open-terminal", label: text.open, icon: <TerminalSquare size={14}/>, disabled: !checkout, onSelect: () => { if (checkout) void desktopApi.createTerminal(checkout.canonical_path, `PowerShell · ${item.workspace.display_name}`).then(openTerminal).catch((reason) => onError(String(reason))); } },
+      { id: "recent", label: pins.includes(item.workspace.id) ? text.removeRecent : text.addRecent, icon: <Pin size={14}/>, onSelect: () => pins.includes(item.workspace.id) ? unpin(item.workspace.id) : pin(item.workspace.id) },
+      { id: "sessions", label: text.openSessions, icon: <PanelRight size={14}/>, onSelect: () => onOpenSessions({ workspaceId: item.workspace.id, checkoutId: null }) },
+    ]}/>; })() : null}
   </div>;
 }
 
-function RecentWorkspaceCard({ item, selected, onSelect, onRemove, onOpen, text }: { item: WorkspaceView; selected: boolean; onSelect: () => void; onRemove: () => void; onOpen: () => void; text: ReturnType<typeof words> }) {
+function RecentWorkspaceCard({ item, selected, onSelect, onRemove, onOpen, onContextMenu, text }: { item: WorkspaceView; selected: boolean; onSelect: () => void; onRemove: () => void; onOpen: () => void; onContextMenu: (event: React.MouseEvent<HTMLElement>) => void; text: ReturnType<typeof words> }) {
   const dirty = item.checkouts.filter((checkout) => checkout.dirty).length;
-  return <article className={`recent-workspace-card ${selected ? "selected" : ""}`} onClick={onSelect} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect(); } }} tabIndex={0} aria-current={selected ? "true" : undefined}>
+  return <article className={`recent-workspace-card ${selected ? "selected" : ""}`} onContextMenu={onContextMenu} onClick={onSelect} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect(); } }} tabIndex={0} aria-current={selected ? "true" : undefined}>
     <header><span className="recent-symbol"><FolderGit2 size={20}/></span><div><strong>{item.workspace.display_name}</strong><code>{item.workspace.canonical_path}</code></div><button className="icon-soft recent-remove" type="button" onClick={(event) => { event.stopPropagation(); onRemove(); }} title={text.removeRecent}><X size={14}/></button></header>
     <div className="recent-card-meta"><span><b>{item.checkouts.length}</b> {text.worktrees.toLocaleLowerCase()}</span><span><b>{dirty}</b> {text.dirty}</span></div>
     <footer><button className="soft-button" type="button" onClick={(event) => { event.stopPropagation(); onOpen(); }}><TerminalSquare size={15}/>{text.open}</button><GripVertical size={15}/></footer>

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { desktopApi } from "./api";
 import { AccessibleDialog } from "./AccessibleDialog";
+import { ContextMenu } from "./ContextMenu";
 import "./skills-target.css";
 import type {
   ManagedSkillInstall,
@@ -177,6 +178,7 @@ export function SkillsLibraryV2({
   const [uninstalling, setUninstalling] = useState<ManagedSkillInstall | null>(
     null,
   );
+  const [skillMenu, setSkillMenu] = useState<{ x: number; y: number; skill: SkillInfo } | null>(null);
   const reloadRequest = useRef(0);
   const checkout = allCheckouts.find((item) => item.id === checkoutId) ?? null;
   const targetCheckout = installTargetId.startsWith("project:")
@@ -426,6 +428,7 @@ export function SkillsLibraryV2({
               <article
                 key={`${skill.id}-${skill.source_path}`}
                 className="skill-card-v2"
+                onContextMenu={(event) => { event.preventDefault(); setSkillMenu({ x: event.clientX, y: event.clientY, skill }); }}
               >
                 <span className="skill-glyph">
                   <Braces size={19} />
@@ -466,6 +469,12 @@ export function SkillsLibraryV2({
           </div>
         )}
       </section>
+      {skillMenu ? (() => { const copy = managedCopy(skillMenu.skill); return <ContextMenu x={skillMenu.x} y={skillMenu.y} onClose={() => setSkillMenu(null)} items={[
+        { id: "view-skill", label: text.view, icon: <Eye size={14}/>, onSelect: () => void select(skillMenu.skill) },
+        { id: "edit-skill", label: text.edit, icon: <FilePenLine size={14}/>, disabled: !copy, onSelect: () => { void select(skillMenu.skill).then(() => setEditing(true)); } },
+        { id: "preview-install", label: text.install, icon: <PackagePlus size={14}/>, onSelect: () => void previewInstall(skillMenu.skill) },
+        { id: "uninstall-skill", label: text.uninstall, icon: <Trash2 size={14}/>, danger: true, disabled: !copy, onSelect: () => { if (copy) setUninstalling(copy); } },
+      ]}/>; })() : null}
       {selected ? (
         <SkillDrawer
           skill={selected}
