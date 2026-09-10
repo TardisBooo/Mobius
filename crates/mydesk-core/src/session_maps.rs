@@ -295,6 +295,10 @@ fn component_count(value: &str) -> usize {
 }
 
 fn strip_prefix_case_insensitive(path: &Path, prefix: &Path) -> Option<Vec<PathBuf>> {
+    // canonicalize() returns verbatim Windows paths. Migration catalogues
+    // commonly contain ordinary drive/UNC paths; compare equivalent forms.
+    let path = without_verbatim_prefix(path);
+    let prefix = without_verbatim_prefix(prefix);
     let path_components = path.components().collect::<Vec<_>>();
     let prefix_components = prefix.components().collect::<Vec<_>>();
     if prefix_components.len() > path_components.len() {
@@ -317,6 +321,17 @@ fn strip_prefix_case_insensitive(path: &Path, prefix: &Path) -> Option<Vec<PathB
             .map(|component| PathBuf::from(component.as_os_str()))
             .collect(),
     )
+}
+
+fn without_verbatim_prefix(path: &Path) -> PathBuf {
+    let text = path.to_string_lossy();
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        PathBuf::from(format!(r"\\{rest}"))
+    } else if let Some(rest) = text.strip_prefix(r"\\?\") {
+        PathBuf::from(rest)
+    } else {
+        path.to_path_buf()
+    }
 }
 
 #[cfg(test)]

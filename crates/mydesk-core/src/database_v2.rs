@@ -397,6 +397,7 @@ impl Database {
                 capabilities_json, source_path, source_available, started_at, updated_at, metadata_json
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
             ON CONFLICT(id) DO UPDATE SET
+                provider_session_id = excluded.provider_session_id,
                 checkout_id = excluded.checkout_id,
                 title = excluded.title,
                 state = excluded.state,
@@ -461,6 +462,30 @@ impl Database {
             .context("reading session")
     }
 
+    pub fn session_id_for_source(&self, source: &str) -> Result<Option<String>> {
+        Ok(self.connection()?.query_row(
+            "SELECT id FROM sessions WHERE source_path = ?1 ORDER BY id LIMIT 1",
+            [source], |row| row.get(0),
+        ).optional()?)
+    }
+
+    pub fn sessions_for_source_audit(&self) -> Result<Vec<Session>> {
+        let connection = self.connection()?;
+        let mut statement = connection.prepare(
+            "SELECT id, provider, provider_session_id, checkout_id, title, state,
+             capabilities_json, source_path, source_available, started_at, updated_at,
+             metadata_json FROM sessions")?;
+        Ok(statement.query_map([], session_from_row)?.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    pub fn update_session_source(&self, session: &Session) -> Result<()> {
+        self.connection()?.execute(
+            "UPDATE sessions SET source_path = ?2, source_available = ?3, metadata_json = ?4, capabilities_json = ?5 WHERE id = ?1",
+            params![session.id, session.source_path, session.source_available, serde_json::to_string(&session.metadata)?, serde_json::to_string(&session.capabilities)?],
+        )?;
+        Ok(())
+    }
+
     pub fn get_provider_session(
         &self,
         provider: &str,
@@ -470,7 +495,7 @@ impl Database {
         let mut statement = connection.prepare(
             r#"SELECT id, provider, provider_session_id, checkout_id, title, state,
                       capabilities_json, source_path, source_available, started_at, updated_at,
-                      metadata_json FROM sessions WHERE provider = ?1 AND provider_session_id = ?2
+                      metadata_json FROM sessions WHERE provider = ?1 AND provider_session_id = ?2 AND source_available = 1
                       ORDER BY updated_at DESC, source_path ASC LIMIT 2"#,
         )?;
         let matches = statement
@@ -512,7 +537,7 @@ impl Database {
         let connection = self.connection()?;
         let stored: Option<String> = connection
             .query_row(
-                "SELECT json_extract(metadata_json, '$.source_version') FROM sessions WHERE source_path = ?1 LIMIT 1",
+                "SELECT COALESCE(json_extract(metadata_json, '$.source_version'), '') FROM sessions WHERE source_path = ?1 LIMIT 1",
                 [source_path],
                 |row| row.get(0),
             )

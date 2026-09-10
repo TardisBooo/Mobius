@@ -1743,6 +1743,9 @@ fn resume_session(
     if !session.source_available {
         return Err("native session source is unavailable; it cannot be resumed".into());
     }
+    if !Path::new(&session.source_path).is_file() {
+        return Err("Native session source moved or disappeared. Refresh session sources before resuming; cached history alone cannot verify a native launch.".into());
+    }
     // The database row id is never a Harness resume argument. Continue only
     // with an adapter-verified native id for the original Agent.
     let native_session_id = session
@@ -1807,6 +1810,13 @@ fn resume_session(
     })?;
     let resume_argument = if provider == mydesk_core::AgentKind::Pi { session.source_path.as_str() } else { native_session_id };
     let mut command = native_resume_command(provider.clone(), &executable, resume_argument)?;
+    if provider == mydesk_core::AgentKind::Codex {
+        let source = Path::new(&session.source_path);
+        let home = mydesk_core::providers::verified_codex_resume_home(source, native_session_id).map_err(command_error)?;
+        // Scope the override to this command. Do not change the user's global
+        // CODEX_HOME or provider configuration, and restore the shell afterward.
+        command = format!("$mobiusResumeHome=$env:CODEX_HOME; try {{ $env:CODEX_HOME={}; {command} }} finally {{ $env:CODEX_HOME=$mobiusResumeHome; Remove-Variable mobiusResumeHome -ErrorAction SilentlyContinue }}", ps_quote(&terminal_process_path(&home).to_string_lossy()));
+    }
     if provider == mydesk_core::AgentKind::Grok {
         let source = Path::new(&session.source_path);
         let sessions_root = source.ancestors().nth(3).filter(|path| path.file_name().is_some_and(|name| name == "sessions"))

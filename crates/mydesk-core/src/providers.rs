@@ -104,7 +104,7 @@ impl SessionAdapterRegistry {
         vec![
             SessionAdapter {
                 provider: AgentKind::Codex,
-                version: "codex-json-v2",
+                version: "codex-json-v3-verified-resume",
                 coverage: "partial",
                 native_resume: true,
             },
@@ -183,6 +183,43 @@ impl<'a> ProviderIndexer<'a> {
             .map(|report| SessionMapCatalog::from_entries(report.entries))
             .unwrap_or_default();
         let roots = load_approved_session_sources(self.paths)?.roots;
+        // Repair only our catalogue, never historical transcripts. Keep row IDs
+        // stable so notes, exact references and relay edges survive relocation.
+        for mut session in self.database.sessions_for_source_audit()? {
+            let original_path = session.source_path.clone();
+            let original = Path::new(&original_path);
+            let relocated = (!original.is_file())
+                .then(|| mappings.resolve_forward(original)).flatten()
+                .filter(|path| path.is_file());
+            if let Some(path) = relocated {
+                // Only follow explicit catalogue mappings and a matching native
+                // identity. Legacy Codex rows may contain the parent's alias.
+                if let Ok(parsed) = parse_session(&path, session.provider.clone()) {
+                    let legacy_alias = session.provider == AgentKind::Codex
+                        && codex_source_identity(&path).is_ok_and(|identity|
+                            identity.legacy_session_id.as_deref() == Some(&session.provider_session_id));
+                    if parsed.provider_session_id == session.provider_session_id || legacy_alias {
+                        let target = path.canonicalize()?.display().to_string();
+                        // Never merge two existing row identities: either may
+                        // own relay edges. Retain the stale row for inspection.
+                        if self.database.session_id_for_source(&target)?.is_none_or(|id| id == session.id) {
+                            session.source_path = target;
+                            session.metadata["source_version"] = Value::Null;
+                        }
+                    }
+                }
+            }
+            let available = Path::new(&session.source_path).is_file();
+            if available != session.source_available || session.source_path != original.to_string_lossy() {
+                session.source_available = available;
+                session.metadata["source_version"] = Value::Null;
+                if !available {
+                    session.capabilities.retain(|capability| *capability != SessionCapability::NativeResume);
+                    session.metadata["native_resume"] = json!(false);
+                }
+                self.database.update_session_source(&session)?;
+            }
+        }
         let providers = [
             AgentKind::Codex,
             AgentKind::Claude,
@@ -234,7 +271,12 @@ impl<'a> ProviderIndexer<'a> {
         report: &mut ProviderIndexProviderReport,
         errors: &mut Vec<String>,
     ) -> Result<()> {
-        let root_path = Path::new(&root.path);
+        let relocated_root = mappings.resolve_forward(Path::new(&root.path));
+        let root_path = if Path::new(&root.path).is_dir() {
+            Path::new(&root.path)
+        } else {
+            relocated_root.as_deref().unwrap_or(Path::new(&root.path))
+        };
         let mut root_report = ProviderIndexRootReport {
             root: root.path.clone(),
             provider: root.agent.clone(),
@@ -404,14 +446,14 @@ impl<'a> ProviderIndexer<'a> {
             .unwrap_or_else(|| format!("{} · {}", provider, parsed.provider_session_id));
         // A native id is intentionally not sufficient for internal identity:
         // multiple source folders can legitimately contain the same session.
-        let session_id = format!(
+        let session_id = self.database.session_id_for_source(&fingerprint.source_path)?.unwrap_or_else(|| format!(
             "session:{}:{}:{}",
             provider,
             stable_fragment(&fingerprint.source_path),
             parsed.provider_session_id
-        );
+        ));
         let mut capabilities = vec![SessionCapability::Inspect];
-        if adapter.native_resume && parsed.native_session_id.is_some() {
+        if adapter.native_resume && parsed.native_session_id.is_some() && !parsed.is_subagent {
             capabilities.push(SessionCapability::NativeResume);
         }
         let native_resume = capabilities.contains(&SessionCapability::NativeResume);
@@ -468,6 +510,10 @@ impl<'a> ProviderIndexer<'a> {
                 "adapter_coverage": adapter.coverage,
                 "native_session_id": parsed.native_session_id,
                 "native_resume": native_resume,
+                "parent_session_id": parsed.parent_session_id,
+                "native_resume_reason": if parsed.is_subagent {
+                    Some("Codex child agent: inspect this history; resume the parent explicitly in Codex to continue the agent tree.")
+                } else { None },
             }),
         };
         let messages = parsed
@@ -509,6 +555,69 @@ enum IndexOutcome {
     Unchanged,
 }
 
+#[derive(Debug)]
+pub struct CodexSourceIdentity {
+    pub id: String,
+    pub cwd: Option<String>,
+    pub legacy_session_id: Option<String>,
+    pub model_provider: Option<String>,
+    pub is_subagent: bool,
+    pub parent_session_id: Option<String>,
+}
+
+/// Read the authoritative header, never a filename guess or an inherited
+/// event ID. Bounded and read-only; suitable for every native launch preflight.
+pub fn codex_source_identity(path: &Path) -> Result<CodexSourceIdentity> {
+    let reader = BufReader::new(fs::File::open(path)?.take(LARGE_HEAD_BYTES));
+    for line in reader.lines() {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let value: Value = serde_json::from_str(&line)
+            .map_err(|_| anyhow::anyhow!("Codex first source record is malformed; refusing inherited-header fallback"))?;
+        anyhow::ensure!(value.get("type").and_then(Value::as_str) == Some("session_meta"),
+            "Codex first source record is not an authoritative session header");
+        let payload = value.get("payload").unwrap_or(&value);
+        let id = first_string(payload, &["id", "session_id", "sessionId"])
+            .filter(|id| looks_like_native_session_id(id))
+            .ok_or_else(|| anyhow::anyhow!("Codex source header has no valid native identity"))?;
+        return Ok(CodexSourceIdentity {
+            id: id.to_owned(),
+            cwd: first_string(payload, &["cwd"]).map(str::to_owned),
+            legacy_session_id: first_string(payload, &["session_id", "sessionId"]).map(str::to_owned),
+            model_provider: first_string(payload, &["model_provider"]).map(str::to_owned),
+            is_subagent: payload.pointer("/source/subagent").is_some()
+                || payload.get("source").and_then(Value::as_str).is_some_and(|source| source.starts_with("subagent")),
+            parent_session_id: payload.pointer("/source/subagent/thread_spawn/parent_thread_id")
+                .and_then(Value::as_str).map(str::to_owned),
+        });
+    }
+    anyhow::bail!("Codex source has no authoritative session header; refresh or inspect its source")
+}
+
+/// Resolve the Codex home from a canonical source tree, not the launching
+/// shell's inherited environment. Archives outside a native tree fail closed.
+pub fn codex_home_for_source(path: &Path) -> Result<PathBuf> {
+    let canonical = path.canonicalize()?;
+    for ancestor in canonical.ancestors().skip(1) {
+        if ancestor.file_name().is_some_and(|name| name == "sessions" || name == "archived_sessions") {
+            return ancestor.parent().map(Path::to_path_buf)
+                .ok_or_else(|| anyhow::anyhow!("Codex source home is missing"));
+        }
+    }
+    anyhow::bail!("Codex source is outside a native sessions directory; inspect only")
+}
+
+pub fn verified_codex_resume_home(path: &Path, expected_id: &str) -> Result<PathBuf> {
+    let identity = codex_source_identity(path)?;
+    anyhow::ensure!(identity.id == expected_id,
+        "Codex source identity differs from the cached index. Refresh sessions; refusing to open a different thread.");
+    anyhow::ensure!(!identity.is_subagent,
+        "This is a Codex child-agent history, not an independently resumable CLI conversation. Resume its parent explicitly in Codex; this source remains inspectable.");
+    codex_home_for_source(path)
+}
+
 fn approved_canonical_root(root: &Path) -> Result<PathBuf> {
     let metadata = fs::symlink_metadata(root)?;
     if metadata.file_type().is_symlink() {
@@ -538,6 +647,8 @@ fn aggregate_coverage(roots: &[ProviderIndexRootReport]) -> String {
 struct ParsedSession {
     provider_session_id: String,
     native_session_id: Option<String>,
+    is_subagent: bool,
+    parent_session_id: Option<String>,
     cwd: Option<String>,
     started_at: Option<String>,
     updated_at: Option<String>,
@@ -563,6 +674,16 @@ fn parse_session(path: &Path, provider: AgentKind) -> Result<ParsedSession> {
         provider_session_id: stable_provider_session_id(path, &provider),
         ..ParsedSession::default()
     };
+    // Forked Codex files can contain both their own header and inherited
+    // parent headers. The first header's `id` is authoritative, not session_id.
+    let codex_identity = (provider == AgentKind::Codex)
+        .then(|| codex_source_identity(path).ok()).flatten();
+    if let Some(identity) = &codex_identity {
+        parsed.native_session_id = Some(identity.id.clone());
+        parsed.cwd = identity.cwd.clone();
+        parsed.is_subagent = identity.is_subagent;
+        parsed.parent_session_id = identity.parent_session_id.clone();
+    }
     if extension == "jsonl" {
         parse_jsonl(path, &provider, &mut parsed)?;
     } else {
@@ -573,6 +694,10 @@ fn parse_session(path: &Path, provider: AgentKind) -> Result<ParsedSession> {
         let value: Value = serde_json::from_reader(BufReader::new(fs::File::open(path)?))?;
         absorb_metadata(&value, &mut parsed);
         collect_messages(&value, 1, &provider, &mut parsed.messages);
+    }
+    if provider == AgentKind::Codex {
+        // Headerless legacy content remains inspectable, never resumable.
+        parsed.native_session_id = codex_identity.map(|identity| identity.id);
     }
     if provider == AgentKind::Grok && (parsed.cwd.is_none() || parsed.native_session_id.is_none()) {
         absorb_grok_companion_metadata(path, &mut parsed);
@@ -1018,6 +1143,129 @@ mod tests {
             artifacts_root: root.join("artifacts"),
             catalog_root: root.join("catalog"),
         }
+    }
+
+    #[test]
+    fn codex_fork_uses_first_own_id_not_parent_alias_or_inherited_header() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("sessions/2026/09/11/child.jsonl");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let raw = format!("{}\n{}\n{}\n",
+            json!({"type":"session_meta","payload":{"id":"child-id","session_id":"parent-id","forked_from_id":"parent-id","cwd":temp.path()}}),
+            json!({"type":"session_meta","payload":{"id":"parent-id","cwd":"other-directory"}}),
+            json!({"type":"response_item","payload":{"type":"message","role":"user","content":"keep the exact trajectory"}}));
+        fs::write(&path, &raw).unwrap();
+        let parsed = parse_session(&path, AgentKind::Codex).unwrap();
+        assert_eq!(parsed.native_session_id.as_deref(), Some("child-id"));
+        assert_eq!(parsed.cwd.as_deref(), temp.path().to_str());
+        assert_eq!(codex_home_for_source(&path).unwrap(), temp.path().canonicalize().unwrap());
+        assert!(verified_codex_resume_home(&path, "child-id").is_ok());
+        assert!(verified_codex_resume_home(&path, "parent-id").is_err());
+        assert!(verified_codex_resume_home(&temp.path().join("missing.jsonl"), "child-id").is_err());
+        assert_eq!(fs::read_to_string(&path).unwrap(), raw);
+        let outside = temp.path().join("archive.jsonl");
+        fs::write(&outside, raw).unwrap();
+        assert!(codex_home_for_source(&outside).is_err());
+    }
+
+    #[test]
+    fn codex_corrupt_first_header_cannot_resume_an_inherited_parent() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("sessions/corrupt.jsonl");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, format!("{{broken\n{}\n",
+            json!({"type":"session_meta","payload":{"id":"parent-id"}}))).unwrap();
+        assert!(codex_source_identity(&path).is_err());
+        assert!(verified_codex_resume_home(&path, "parent-id").is_err());
+    }
+
+    #[test]
+    fn codex_child_agent_is_inspectable_but_not_independently_resumable() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = test_paths(temp.path());
+        let database = Database::open(&paths).unwrap();
+        let path = temp.path().join("sessions/child.jsonl");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, format!("{}\n{}\n",
+            json!({"type":"session_meta","payload":{"id":"child-id","session_id":"parent-id",
+                "source":{"subagent":{"thread_spawn":{"parent_thread_id":"parent-id"}}}}}),
+            json!({"role":"user","content":"child history"}))).unwrap();
+        ProviderIndexer::new(&database, &paths).index_file(&path.canonicalize().unwrap(),
+            AgentKind::Codex, &SessionMapCatalog::default()).unwrap();
+        let session = database.sessions_for_source_audit().unwrap().remove(0);
+        assert_eq!(session.provider_session_id, "child-id");
+        assert!(session.capabilities.contains(&SessionCapability::Inspect));
+        assert!(!session.capabilities.contains(&SessionCapability::NativeResume));
+        assert_eq!(session.metadata["parent_session_id"], "parent-id");
+        assert!(verified_codex_resume_home(&path, "child-id").is_err());
+    }
+
+    #[test]
+    fn codex_reindex_corrects_identity_preserves_row_and_marks_missing_source() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = test_paths(temp.path());
+        let database = Database::open(&paths).unwrap();
+        let source = temp.path().join("source.jsonl");
+        fs::write(&source, format!("{}\n{}\n",
+            json!({"type":"session_meta","payload":{"id":"child-id","session_id":"parent-id"}}),
+            json!({"role":"user","content":"test message"}))).unwrap();
+        let mut legacy = Session {
+            id: "stable-row-id".into(), provider: AgentKind::Codex,
+            provider_session_id: "parent-id".into(), checkout_id: None,
+            title: "legacy".into(), state: SessionState::Indexed,
+            capabilities: vec![SessionCapability::NativeResume],
+            source_path: source.canonicalize().unwrap().display().to_string(),
+            source_available: true, started_at: None, updated_at: Utc::now().to_rfc3339(),
+            metadata: json!({"adapter":"codex-json-v2"}),
+        };
+        database.upsert_session(&legacy).unwrap();
+        let indexer = ProviderIndexer::new(&database, &paths);
+        indexer.index_file(&source.canonicalize().unwrap(), AgentKind::Codex, &SessionMapCatalog::default()).unwrap();
+        let corrected = database.get_session("stable-row-id").unwrap().unwrap();
+        assert_eq!(corrected.provider_session_id, "child-id");
+        assert_eq!(corrected.metadata["native_session_id"], "child-id");
+        assert_eq!(database.sessions_for_source_audit().unwrap().len(), 1);
+        legacy = corrected;
+        legacy.source_path = temp.path().join("missing.jsonl").display().to_string();
+        database.update_session_source(&legacy).unwrap();
+        indexer.index_approved_roots().unwrap();
+        assert!(!database.get_session("stable-row-id").unwrap().unwrap().source_available);
+    }
+
+    #[test]
+    fn mapped_source_and_approved_root_relocate_without_changing_history_or_row_id() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = test_paths(temp.path());
+        let database = Database::open(&paths).unwrap();
+        let old = temp.path().join("old/sessions");
+        let new = temp.path().join("new/sessions");
+        fs::create_dir_all(&old).unwrap();
+        let source = old.join("fork.jsonl");
+        let raw = format!("{}\n{}\n",
+            json!({"type":"session_meta","payload":{"id":"fork-id","session_id":"parent-id"}}),
+            json!({"role":"user","content":"migration test"}));
+        fs::write(&source, &raw).unwrap();
+        save_approved_session_sources(&paths, vec![SessionSourceRoot {
+            agent: AgentKind::Codex, path: old.display().to_string(), exists: true,
+            mode: "read-only".into(), provenance: "test".into(),
+        }]).unwrap();
+        let indexer = ProviderIndexer::new(&database, &paths);
+        indexer.index_approved_roots().unwrap();
+        let before = database.sessions_for_source_audit().unwrap().remove(0);
+        fs::create_dir_all(new.parent().unwrap()).unwrap();
+        fs::rename(&old, &new).unwrap();
+        fs::create_dir_all(paths.session_maps_dir()).unwrap();
+        fs::write(paths.session_maps_dir().join("move.csv"),
+            format!("old_path,new_path\n{},{}\n", old.display(), new.display())).unwrap();
+        let report = indexer.index_approved_roots().unwrap();
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert_eq!(report.indexed, 1);
+        let after = database.get_session(&before.id).unwrap().unwrap();
+        assert!(after.source_available);
+        assert_eq!(Path::new(&after.source_path), new.join("fork.jsonl").canonicalize().unwrap());
+        assert_eq!(after.provider_session_id, "fork-id");
+        assert_eq!(fs::read_to_string(new.join("fork.jsonl")).unwrap(), raw);
+        assert_eq!(indexer.index_approved_roots().unwrap().unchanged, 1);
     }
 
     #[test]

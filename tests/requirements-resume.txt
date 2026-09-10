@@ -1,0 +1,3 @@
+# Windows terminal acceptance; Python 3.11+ (verified with 3.12.4).
+pywinpty==2.0.10
+pyte==0.8.2

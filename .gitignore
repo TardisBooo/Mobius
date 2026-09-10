@@ -2,6 +2,10 @@
 /target/
 **/*.rs.bk
 
+# Python acceptance helpers
+__pycache__/
+*.pyc
+
 # Frontend / Tauri
 apps/desktop/node_modules/
 apps/desktop/dist/

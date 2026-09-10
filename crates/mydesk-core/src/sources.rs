@@ -66,7 +66,19 @@ pub fn load_approved_session_sources(paths: &WorkspacePaths) -> Result<ApprovedS
     let mut manifest: ApprovedSessionSources = serde_json::from_slice(&bytes)
         .with_context(|| format!("parsing approved source manifest {}", path.display()))?;
     manifest.version = approved_source_manifest_version();
-    manifest.roots = normalize_approved_roots(manifest.roots)?;
+    // A previously approved root can disappear after a move. Loading the
+    // manifest must still succeed so the indexer can apply SessionMaps and
+    // invalidate stale sources. New/manual approvals remain strict.
+    let mut roots = Vec::new();
+    for mut root in manifest.roots {
+        if Path::new(&root.path).is_dir() {
+            roots.extend(normalize_approved_roots(vec![root])?);
+        } else {
+            root.exists = false;
+            roots.push(root);
+        }
+    }
+    manifest.roots = roots;
     Ok(manifest)
 }
 
