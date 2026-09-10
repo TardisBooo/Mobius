@@ -195,6 +195,99 @@
   opacity: .45;
 }
 
+.mobius-context-menu {
+  position: fixed;
+  z-index: 1000;
+  display: grid;
+  min-width: 196px;
+  max-width: min(320px, calc(100vw - 16px));
+  max-height: min(420px, calc(100vh - 16px));
+  overflow: auto;
+  padding: 5px;
+  border: 1px solid var(--m-line);
+  border-radius: 10px;
+  background: var(--m-raised);
+  box-shadow: var(--m-lift);
+}
+
+.mobius-context-menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--m-text);
+  text-align: start;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.mobius-context-menu button:hover,
+.mobius-context-menu button:focus-visible {
+  outline: none;
+  background: var(--m-hover);
+}
+
+.mobius-context-menu button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.mobius-context-menu button.danger {
+  color: var(--m-danger, #e06b73);
+}
+
+.mobius-context-menu-icon {
+  display: inline-flex;
+  width: 16px;
+  color: var(--m-muted);
+}
+
+.mobius-context-menu kbd {
+  margin-inline-start: auto;
+  color: var(--m-muted);
+  font-size: 9px;
+}
+
+.library-tree-file[draggable="true"],
+.library-tree-folder[draggable="true"],
+.library-board-row[draggable="true"] {
+  cursor: grab;
+}
+
+.library-tree-file.is-dragging,
+.library-tree-folder.is-dragging,
+.library-board-row.is-dragging {
+  opacity: .55;
+}
+
+.library-tree-folder.drop-target,
+.library-tree-node.drop-target,
+.library-tree-section.drop-target,
+.library-board-row.drop-target {
+  outline: 1px solid var(--m-accent);
+  outline-offset: -1px;
+  background: color-mix(in srgb, var(--m-accent) 14%, transparent);
+}
+
+.library-trash-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  padding: 4px 8px;
+  color: var(--m-muted);
+  font-size: 10px;
+}
+
+.library-trash-item button {
+  margin-inline-start: auto;
+}
+
 .marketplace-card-v2 {
   grid-template-rows: auto auto auto auto;
 }

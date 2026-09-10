@@ -83,6 +83,14 @@ export interface BoardDocument {
   updated_at: string;
 }
 
+export interface TrashItem {
+  id: string;
+  kind: ContextKind;
+  title: string;
+  original_path: string;
+  deleted_at: string;
+}
+
 export interface CanvasAssetInfo { id: string; file_name: string; mime_type: string; size: number; }
 
 /**

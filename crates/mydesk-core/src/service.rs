@@ -2,7 +2,7 @@ use crate::vault::Vault;
 use crate::{
     AgentKind, BoardDocument, Checkout, ContextKind, ContextRecord, Database, HealthStatus,
     NoteDraft, ProviderIndexReport, ProviderIndexer, SearchRequest, WikiDraft, WikiQueueItem,
-    WorkspaceInspection, WorkspacePaths, WorkspaceStatus, inspect_workspace, mentions,
+    TrashItem, WorkspaceInspection, WorkspacePaths, WorkspaceStatus, inspect_workspace, mentions,
     sources::{self, SessionIndexReport},
 };
 use anyhow::Result;
@@ -263,6 +263,59 @@ impl MyDesk {
         Ok(record)
     }
 
+    pub fn move_note(&self, path: &Path, destination: &str) -> Result<(String, String)> {
+        let (old_path, new_path) = self.vault.move_note(path, destination)?;
+        let slug = old_path
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| anyhow::anyhow!("note has no stable filename"))?;
+        self.database
+            .update_context_source_path(&format!("note:{slug}"), &new_path.display().to_string())?;
+        Ok((old_path.display().to_string(), new_path.display().to_string()))
+    }
+
+    pub fn trash_note(&self, path: &Path) -> Result<TrashItem> {
+        let item = self.vault.trash_note(path)?;
+        let slug = Path::new(&item.original_path)
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| anyhow::anyhow!("note has no stable filename"))?;
+        self.database.soft_delete_context(&format!("note:{slug}"))?;
+        Ok(item)
+    }
+
+    pub fn trash_board(&self, board_id: &str) -> Result<TrashItem> {
+        let item = self.vault.trash_board(board_id)?;
+        self.database.soft_delete_context(&format!("board:{board_id}"))?;
+        Ok(item)
+    }
+
+    pub fn list_trash(&self) -> Result<Vec<TrashItem>> {
+        self.vault.list_trash()
+    }
+
+    pub fn restore_trash(&self, id: &str) -> Result<TrashItem> {
+        let item = self.vault.list_trash()?.into_iter().find(|entry| entry.id == id).ok_or_else(|| anyhow::anyhow!("trash item not found"))?;
+        let restored = self.vault.restore_trash(id)?;
+        if let Some(context_id) = trash_context_id(&item) {
+            self.database.restore_context(&context_id)?;
+        }
+        Ok(restored)
+    }
+
+    pub fn purge_trash(&self, id: &str) -> Result<bool> {
+        let item = self.vault.list_trash()?.into_iter().find(|entry| entry.id == id);
+        let purged = self.vault.purge_trash(id)?;
+        if purged {
+            if let Some(item) = item {
+                if let Some(context_id) = trash_context_id(&item) {
+                    self.database.purge_context(&context_id)?;
+                }
+            }
+        }
+        Ok(purged)
+    }
+
     pub fn create_or_update_wiki(&self, draft: WikiDraft) -> Result<ContextRecord> {
         let (slug, path, snapshot) = self.vault.write_wiki(&draft)?;
         let now = chrono::Utc::now().to_rfc3339();
@@ -379,6 +432,15 @@ impl MyDesk {
     }
 }
 
+fn trash_context_id(item: &TrashItem) -> Option<String> {
+    let name = Path::new(&item.original_path).file_name()?.to_str()?;
+    match item.kind {
+        ContextKind::Note => Some(format!("note:{}", Path::new(name).file_stem()?.to_str()?)),
+        ContextKind::Board => Some(format!("board:{}", name.strip_suffix(".board.json")?)),
+        _ => None,
+    }
+}
+
 fn checkout_for_cwd(checkouts: &[Checkout], canonical_cwd: &Path) -> Option<String> {
     // A session may start in a subdirectory. Bind only to the deepest checked
     // out root that actually contains it; never infer a parent from a path
@@ -408,8 +470,46 @@ fn summarize(body: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::MyDesk;
-    use crate::{AgentKind, SessionQuery, SessionSourceRoot, WorkspacePaths};
-    use std::fs;
+    use crate::{AgentKind, NoteDraft, SearchRequest, SessionQuery, SessionSourceRoot, WorkspacePaths};
+    use std::{fs, path::Path};
+
+    #[test]
+    fn note_lifecycle_moves_and_recovers_search_context() -> anyhow::Result<()> {
+        let temporary = tempfile::tempdir()?;
+        let paths = WorkspacePaths {
+            workspace_root: temporary.path().join("workspace-root"),
+            data_root: temporary.path().join("data"),
+            artifacts_root: temporary.path().join("artifacts"),
+            catalog_root: temporary.path().join("catalog"),
+        };
+        let desk = MyDesk::open(paths)?;
+        let record = desk.create_or_update_note(NoteDraft {
+            title: "Lifecycle note".into(),
+            body: "recoverable search marker".into(),
+            project_slug: None,
+            tags: vec![],
+            source_ids: vec![],
+        })?;
+        let source = Path::new(record.source_path.as_deref().expect("note source"));
+        let (_, moved) = desk.move_note(source, "archive/notes")?;
+        assert!(!source.exists());
+        assert!(Path::new(&moved).exists());
+        assert_eq!(desk.database.get_context(&record.id)?.unwrap().source_path.as_deref(), Some(moved.as_str()));
+
+        let trash = desk.trash_note(Path::new(&moved))?;
+        assert!(!Path::new(&moved).exists());
+        assert!(desk.database.get_context(&record.id)?.is_none());
+        assert!(desk.search(&SearchRequest { query: "recoverable".into(), ..SearchRequest::default() })?.is_empty());
+
+        desk.restore_trash(&trash.id)?;
+        assert!(Path::new(&moved).exists());
+        assert!(desk.database.get_context(&record.id)?.is_some());
+        assert!(!desk.search(&SearchRequest { query: "recoverable".into(), ..SearchRequest::default() })?.is_empty());
+        let second_trash = desk.trash_note(Path::new(&moved))?;
+        assert!(desk.purge_trash(&second_trash.id)?);
+        assert!(desk.database.get_context(&record.id)?.is_none());
+        Ok(())
+    }
 
     #[test]
     fn aggregates_an_indexed_existing_cwd_into_workspace_and_checkout() -> anyhow::Result<()> {

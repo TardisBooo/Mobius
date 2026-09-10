@@ -46,6 +46,18 @@ export function TerminalPage({ workspaces, requestedTerminal, onConsumed, onErro
       if (text) await desktopApi.writeTerminal(terminalId, text);
     } catch (error) { onError(String(error)); }
   }, [onError]);
+  const copySelectionOrPaste = useCallback(async (terminalId: string | null) => {
+    const terminal = terminalRef.current;
+    const selection = terminal?.getSelection() ?? "";
+    if (selection) {
+      try {
+        await navigator.clipboard.writeText(selection);
+        terminal?.clearSelection();
+      } catch (error) { onError(String(error)); }
+      return;
+    }
+    await pasteIntoTerminal(terminalId);
+  }, [onError, pasteIntoTerminal]);
 
   useEffect(() => {
     void desktopApi.listTerminals().then((items) => {
@@ -169,7 +181,17 @@ export function TerminalPage({ workspaces, requestedTerminal, onConsumed, onErro
     // xterm's browser paste handling is inconsistent in desktop WebViews.
     // Route Ctrl/Cmd+V through the system clipboard explicitly.
     terminal.attachCustomKeyEventHandler((event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === "c" && terminal.getSelection()) {
+        event.preventDefault();
+        void copySelectionOrPaste(activeId);
+        return false;
+      }
       if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === "v") {
+        event.preventDefault();
+        void pasteIntoTerminal(activeId);
+        return false;
+      }
+      if (event.shiftKey && event.key === "Insert") {
         event.preventDefault();
         void pasteIntoTerminal(activeId);
         return false;
@@ -188,7 +210,7 @@ export function TerminalPage({ workspaces, requestedTerminal, onConsumed, onErro
       terminalRef.current = null;
       terminal.dispose();
     };
-  }, [activeId, onError, pasteIntoTerminal]);
+  }, [activeId, copySelectionOrPaste, onError, pasteIntoTerminal]);
 
   const create = async () => {
     const checkout = workspaces.flatMap((workspace) => workspace.checkouts)[0];
@@ -222,7 +244,7 @@ export function TerminalPage({ workspaces, requestedTerminal, onConsumed, onErro
       <button className="terminal-context-action" type="button" onClick={() => setReferenceOpen(true)} title="Copy an explicit session reference"><AtSign size={16}/>{t("Context")}</button>
       {focusMode ? <button className="terminal-exit-focus" type="button" onClick={onExitFocus}><Minimize2 size={15}/>Exit focus · Esc</button> : null}
     </div>
-    {activeId ? <div className="terminal-stage" ref={host} onContextMenu={(event) => { event.preventDefault(); void pasteIntoTerminal(activeId); }} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }} onDrop={(event) => { event.preventDefault(); const paths = droppedPaths(event.dataTransfer); if (paths.length) { void desktopApi.writeTerminal(activeId, paths.map(shellQuotePath).join(" ")).catch((error) => onError(String(error))); terminalRef.current?.focus(); } }}/>: <div className="empty-state"><TerminalSquare size={38}/><strong>{t("No terminal")}</strong><button className="primary-button" onClick={() => void create()}><Plus size={16}/>{t("New PowerShell")}</button></div>}
+    {activeId ? <div className="terminal-stage" ref={host} onContextMenu={(event) => { event.preventDefault(); void copySelectionOrPaste(activeId); }} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }} onDrop={(event) => { event.preventDefault(); const paths = droppedPaths(event.dataTransfer); if (paths.length) { void desktopApi.writeTerminal(activeId, paths.map(shellQuotePath).join(" ")).catch((error) => onError(String(error))); terminalRef.current?.focus(); } }}/>: <div className="empty-state"><TerminalSquare size={38}/><strong>{t("No terminal")}</strong><button className="primary-button" onClick={() => void create()}><Plus size={16}/>{t("New PowerShell")}</button></div>}
     {referenceOpen ? <SessionReferencePicker onClose={() => setReferenceOpen(false)} onError={onError}/> : null}
   </section>;
 }

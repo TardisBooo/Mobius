@@ -108,7 +108,7 @@ impl Database {
         }
         let mut connection = self.connection()?;
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        transaction.execute_batch(include_str!("../../../.research/contracts/schema-v2.sql"))?;
+        transaction.execute_batch(include_str!("schema-v2.sql"))?;
         transaction.execute(
             "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?1, ?2)",
             params![V2_SCHEMA_VERSION, Utc::now().to_rfc3339()],

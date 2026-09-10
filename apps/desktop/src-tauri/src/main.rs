@@ -2,7 +2,7 @@ mod harness_launch;
 use mydesk_core::{
     AgentSummary, BoardDocument, ContextRecord, HealthStatus, McpApprovalGrant, McpApprovalRequest,
     McpApprovalStore, Message, MomeRecallRequest, MomeRecallResponse, MyDesk, NoteDraft,
-    NoteFileInfo, ProjectSummary, ProviderIndexReport, SearchRequest, SessionQuery,
+    NoteFileInfo, ProjectSummary, ProviderIndexReport, SearchRequest, SessionQuery, TrashItem,
     SessionSearchHit, SessionSourceRoot, SkillInfo, WikiDraft, WikiQueueItem, Workspace,
     WorkspaceInspection, WorkspaceStatus, HandoffDraft, RelayGraph, RelayMode,
     note_mounts::{list_note_files, read_note_file},
@@ -759,6 +759,39 @@ fn remove_note_mount(state: State<'_, DesktopState>, id: String) -> CommandResul
         .database
         .remove_note_mount(&id)
         .map_err(command_error)
+}
+
+#[tauri::command]
+fn trash_note(state: State<'_, DesktopState>, path: String) -> CommandResult<TrashItem> {
+    state.desk.trash_note(Path::new(&path)).map_err(command_error)
+}
+
+#[tauri::command]
+fn move_note(state: State<'_, DesktopState>, path: String, destination: String) -> CommandResult<(String, String)> {
+    state
+        .desk
+        .move_note(Path::new(&path), &destination)
+        .map_err(command_error)
+}
+
+#[tauri::command]
+fn trash_board(state: State<'_, DesktopState>, board_id: String) -> CommandResult<TrashItem> {
+    state.desk.trash_board(&board_id).map_err(command_error)
+}
+
+#[tauri::command]
+fn list_trash(state: State<'_, DesktopState>) -> CommandResult<Vec<TrashItem>> {
+    state.desk.list_trash().map_err(command_error)
+}
+
+#[tauri::command]
+fn restore_trash(state: State<'_, DesktopState>, id: String) -> CommandResult<TrashItem> {
+    state.desk.restore_trash(&id).map_err(command_error)
+}
+
+#[tauri::command]
+fn purge_trash(state: State<'_, DesktopState>, id: String) -> CommandResult<bool> {
+    state.desk.purge_trash(&id).map_err(command_error)
 }
 
 #[tauri::command]
@@ -2218,6 +2251,12 @@ fn main() {
             list_note_mounts,
             add_note_mount,
             remove_note_mount,
+            move_note,
+            trash_note,
+            trash_board,
+            list_trash,
+            restore_trash,
+            purge_trash,
             save_board,
             list_boards,
             import_canvas_asset,

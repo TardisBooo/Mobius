@@ -226,6 +226,60 @@ impl Database {
         Ok(())
     }
 
+    pub fn update_context_source_path(&self, id: &str, source_path: &str) -> Result<bool> {
+        let changed = self.connection()?.execute(
+            "UPDATE contexts SET source_path = ?2, updated_at = ?3 WHERE id = ?1 AND deleted_at IS NULL",
+            params![id, source_path, chrono::Utc::now().to_rfc3339()],
+        )?;
+        Ok(changed == 1)
+    }
+
+    pub fn soft_delete_context(&self, id: &str) -> Result<bool> {
+        let mut connection = self.connection()?;
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let changed = transaction.execute(
+            "UPDATE contexts SET deleted_at = COALESCE(deleted_at, ?2) WHERE id = ?1",
+            params![id, chrono::Utc::now().to_rfc3339()],
+        )?;
+        transaction.execute("DELETE FROM context_fts WHERE context_id = ?1", [id])?;
+        transaction.commit()?;
+        Ok(changed == 1)
+    }
+
+    pub fn restore_context(&self, id: &str) -> Result<bool> {
+        let mut connection = self.connection()?;
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let changed = transaction.execute(
+            "UPDATE contexts SET deleted_at = NULL WHERE id = ?1",
+            [id],
+        )?;
+        if changed == 1 {
+            let record = transaction.query_row(
+                r#"SELECT id, kind, agent, project_slug, title, body, summary, source_path,
+                          created_at, updated_at, metadata_json
+                   FROM contexts WHERE id = ?1"#,
+                [id],
+                read_raw_context,
+            )?;
+            transaction.execute("DELETE FROM context_fts WHERE context_id = ?1", [id])?;
+            transaction.execute(
+                "INSERT INTO context_fts (context_id, title, body, summary) VALUES (?1, ?2, ?3, ?4)",
+                params![record.0, record.4, record.5, record.6],
+            )?;
+        }
+        transaction.commit()?;
+        Ok(changed == 1)
+    }
+
+    pub fn purge_context(&self, id: &str) -> Result<bool> {
+        let mut connection = self.connection()?;
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let changed = transaction.execute("DELETE FROM context_fts WHERE context_id = ?1", [id])?;
+        let deleted = transaction.execute("DELETE FROM contexts WHERE id = ?1", [id])?;
+        transaction.commit()?;
+        Ok(changed > 0 || deleted > 0)
+    }
+
     pub fn source_is_current(&self, fingerprint: &SourceFingerprint) -> Result<bool> {
         let connection = self.connection()?;
         let metadata: Option<String> = connection

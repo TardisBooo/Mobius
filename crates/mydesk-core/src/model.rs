@@ -241,6 +241,15 @@ pub struct BoardDocument {
     pub updated_at: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct TrashItem {
+    pub id: String,
+    pub kind: ContextKind,
+    pub title: String,
+    pub original_path: String,
+    pub deleted_at: String,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SkillInfo {
     pub id: String,

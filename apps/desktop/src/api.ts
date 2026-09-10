@@ -42,6 +42,7 @@ import type {
   DirectoryEntry,
   WorkspaceView,
   WikiDraft,
+  TrashItem,
   WikiQueueItem
 } from "./types";
 
@@ -183,6 +184,12 @@ export const desktopApi = {
   async listNoteMounts(): Promise<MountInfo[]> { return inTauri() ? invoke<MountInfo[]>("list_note_mounts") : []; },
   async addNoteMount(path: string, virtualPath: string, access: "read_only" | "read_write"): Promise<MountInfo> { return invoke<MountInfo>("add_note_mount", { path, virtualPath, access }); },
   async removeNoteMount(id: string): Promise<boolean> { return invoke<boolean>("remove_note_mount", { id }); },
+  async moveNote(path: string, destination: string): Promise<[string, string]> { return invoke<[string, string]>("move_note", { path, destination }); },
+  async trashNote(path: string): Promise<TrashItem> { return invoke<TrashItem>("trash_note", { path }); },
+  async trashBoard(boardId: string): Promise<TrashItem> { return invoke<TrashItem>("trash_board", { boardId }); },
+  async listTrash(): Promise<TrashItem[]> { return inTauri() ? invoke<TrashItem[]>("list_trash") : []; },
+  async restoreTrash(id: string): Promise<TrashItem> { return invoke<TrashItem>("restore_trash", { id }); },
+  async purgeTrash(id: string): Promise<boolean> { return invoke<boolean>("purge_trash", { id }); },
 
   async health(): Promise<HealthStatus> {
     return inTauri() ? invoke<HealthStatus>("health") : clone(demoHealth);

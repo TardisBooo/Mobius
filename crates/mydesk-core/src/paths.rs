@@ -54,6 +54,7 @@ impl WorkspacePaths {
             "vault/sources",
             "vault/boards",
             "vault/boards/assets",
+            "vault/trash",
             "vault/history",
             "skills/manifests",
             "migrations",
@@ -103,6 +104,10 @@ impl WorkspacePaths {
 
     pub fn history_dir(&self) -> PathBuf {
         self.data_root.join("vault/history")
+    }
+
+    pub fn trash_dir(&self) -> PathBuf {
+        self.data_root.join("vault/trash")
     }
 
     pub fn runtime_dir(&self) -> PathBuf {
