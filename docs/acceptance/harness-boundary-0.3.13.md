@@ -62,7 +62,8 @@ official npm distribution files byte-for-byte. No custom harness patch is used.
 - Interactive TUI continuation in the credential-free isolated profile is
   not accepted: it stops at first-run login. No production credentials were
   copied to bypass that gate. The historical default-picker limitation above
-  was observed on 0.153.4; its status on 0.154.0 remains unverified.
+  was observed on 0.153.4. The later 0.154.0 discovery check below isolates
+  provider filtering; successful continuation is a separate gate.
 
 Reproduce the external PowerShell check with:
 
@@ -75,3 +76,31 @@ to avoid conflict with an already-open user instance. This follow-up changes
 only verification and documentation; the accepted 0.3.13 application binary
 remains unchanged. Previously loaded processes require a normal restart before
 they use the newly installed official version.
+
+## Official 0.154.0 external picker diagnosis
+
+A subsequent real ConPTY test launched official Codex from external PowerShell
+using the existing home and project directory. It only inspected the picker;
+it did not select or resume a session, submit a prompt, or edit configuration.
+
+| Runtime options | Result |
+| --- | --- |
+| Current configured provider, project filter | Empty |
+| Historical provider via official `-c`, all directories | Populated |
+| Historical provider via official `-c`, same project filter | Exactly one main CLI session |
+| Same project and historical provider, search by native ID | Expected main session found |
+
+Read-only state inspection found one main CLI session and 60 child sessions
+under the affected project, all marked with the historical provider. The
+current provider name differs. The last two tests demonstrate that cwd spelling
+is not the blocking factor for this case on 0.154.0. The earlier Windows-path
+explanation must not be presented as the proven current cause.
+
+The official per-process `-c model_provider=<historical-provider> resume`
+option makes the history discoverable without changing the installed harness
+or persistent configuration. It also changes the process's provider selection,
+so this diagnostic is not a recommendation to execute model work with different
+routing or credentials. MÖBIUS exact-ID resume bypasses picker discovery; it
+cannot change what an independently launched official picker filters. Plain
+external `/resume` under the current provider remains unresolved within the
+constraint against modifying harness configuration or historical metadata.
