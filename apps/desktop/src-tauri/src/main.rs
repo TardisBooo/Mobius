@@ -1651,7 +1651,13 @@ fn start_agent_handoff(
     let executable = resolve_program_on_path(executable_name, system_path_entries())
         .ok_or_else(|| format!("Cannot start {provider}: executable was not found on PATH"))?;
     let launch = harness_launch::resolve(&agent, &executable)?;
-    if !Path::new(&cwd).is_dir() { return Err("handoff working directory is unavailable".into()); }
+    let handoff_cwd = Path::new(&cwd)
+        .canonicalize()
+        .map_err(|_| "handoff working directory is unavailable".to_string())?;
+    if !handoff_cwd.is_dir() {
+        return Err("handoff working directory is unavailable".into());
+    }
+    let handoff_process_cwd = terminal_process_path(&handoff_cwd);
     let mut packet = if let Some(id) = trajectory_id.as_deref() {
         state.desk.trajectory_launch_context(id, source_session_id.as_deref().ok_or("trajectory source is missing")?).map_err(command_error)?
     } else { packet };
@@ -1689,8 +1695,9 @@ fn start_agent_handoff(
         packet
     };
     let encoded_packet = base64_utf8(&launch_prompt);
+    let harness_cwd = harness_working_root_argument(&agent, &handoff_process_cwd);
     let command = format!(
-        "{}{setup}$mobiusPacket=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{}')); {} $mobiusPacket",
+        "{}{setup}$mobiusPacket=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{}')); {}{harness_cwd} $mobiusPacket",
         launch.setup,
         encoded_packet,
         launch.command,
@@ -1809,7 +1816,9 @@ fn resume_session(
         )
     })?;
     let resume_argument = if provider == mydesk_core::AgentKind::Pi { session.source_path.as_str() } else { native_session_id };
-    let mut command = native_resume_command(provider.clone(), &executable, resume_argument)?;
+    let resume_cwd = terminal_process_path(&cwd);
+    let mut command =
+        native_resume_command(provider.clone(), &executable, resume_argument, &resume_cwd)?;
     if provider == mydesk_core::AgentKind::Codex {
         let source = Path::new(&session.source_path);
         let home = mydesk_core::providers::verified_codex_resume_home(source, native_session_id).map_err(command_error)?;
@@ -1850,13 +1859,15 @@ fn native_resume_command(
     agent: mydesk_core::AgentKind,
     executable: &Path,
     native_session_id: &str,
+    cwd: &Path,
 ) -> CommandResult<String> {
     let launch = harness_launch::resolve(&agent, executable)?;
     let executable = launch.command;
     let native_session_id = ps_quote(native_session_id);
+    let working_root = harness_working_root_argument(&agent, cwd);
     match agent {
         mydesk_core::AgentKind::Codex => Ok(format!(
-            "{}{executable} -c check_for_update_on_startup=false --disable recommended_plugins resume {native_session_id}", launch.setup
+            "{}{executable} -c check_for_update_on_startup=false --disable recommended_plugins{working_root} resume {native_session_id}", launch.setup
         )),
         mydesk_core::AgentKind::Claude => {
             Ok(format!("{}{executable} --resume {native_session_id}", launch.setup))
@@ -1866,6 +1877,14 @@ fn native_resume_command(
         }
         mydesk_core::AgentKind::Grok => Ok(format!("{}{executable} --resume {native_session_id}", launch.setup)),
         _ => Err("native resume is not verified for this provider".into()),
+    }
+}
+
+fn harness_working_root_argument(agent: &mydesk_core::AgentKind, cwd: &Path) -> String {
+    if *agent == mydesk_core::AgentKind::Codex {
+        format!(" -C {}", ps_quote(&terminal_process_path(cwd).to_string_lossy()))
+    } else {
+        String::new()
     }
 }
 
@@ -2360,16 +2379,41 @@ mod terminal_tests {
             mydesk_core::AgentKind::Codex,
             &executable,
             "resume'identifier",
+            Path::new(r"\\?\E:\Workspaces\Example"),
         )
         .expect("Codex is a verified native resume provider");
         assert!(command.starts_with("& 'C:\\isolated npm\\bin\\codex.cmd'"));
         assert!(command.contains("resume 'resume''identifier'"));
         assert!(command.contains("--disable recommended_plugins"));
-        let pi_command = native_resume_command(mydesk_core::AgentKind::Pi, &PathBuf::from("pi.exe"), "known-id").unwrap();
+        assert!(command.contains("-C 'E:\\Workspaces\\Example'"));
+        assert_eq!(
+            harness_working_root_argument(
+                &mydesk_core::AgentKind::Codex,
+                Path::new(r"\\?\E:\Workspaces\Example"),
+            ),
+            " -C 'E:\\Workspaces\\Example'"
+        );
+        assert!(harness_working_root_argument(
+            &mydesk_core::AgentKind::Claude,
+            Path::new(r"E:\Workspaces\Example"),
+        ).is_empty());
+        let pi_command = native_resume_command(
+            mydesk_core::AgentKind::Pi,
+            &PathBuf::from("pi.exe"),
+            "known-id",
+            Path::new(r"E:\Workspaces\Example"),
+        )
+        .unwrap();
         assert!(pi_command.contains("--session 'known-id'"));
         assert!(!pi_command.contains("--resume"));
         assert!(
-            native_resume_command(mydesk_core::AgentKind::Unknown, &executable, "not-used").is_err(),
+            native_resume_command(
+                mydesk_core::AgentKind::Unknown,
+                &executable,
+                "not-used",
+                Path::new(r"E:\Workspaces\Example"),
+            )
+            .is_err(),
             "unverified providers cannot gain a PTY resume path"
         );
     }

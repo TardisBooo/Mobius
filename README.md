@@ -58,7 +58,7 @@ A 76-second English motion-led tour. Real light-mode screenshots move from compl
 
 - **Precise references — available:** use a known session ID and message range to retrieve the exact evidence.
 - **Keyword/full-text recall — available:** Mome uses a local SQLite FTS/BM25 chunk index, prioritizes the current project/worktree among indexed sources, and returns at most three citable sessions within a 1,200-token output budget.
-- **Semantic/vector or hybrid search — not available in v0.3.12:** no embedding model or vector backend is integrated. This is a future capability, not a hidden setting you can enable today. Mome explicitly reports lexical-only retrieval.
+- **Semantic/vector or hybrid search — not available in v0.3.13:** no embedding model or vector backend is integrated. This is a future capability, not a hidden setting you can enable today. Mome explicitly reports lexical-only retrieval.
 
 Nothing searches other sessions or injects history by default. Local retrieval itself does not call a model; sending selected excerpts to an agent consumes context tokens.
 
@@ -111,9 +111,9 @@ The source stays read-only. Repeated handoffs form a relay graph so a later agen
 
 ## Install
 
-Download the [v0.3.12 Windows preview](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.12): installer or portable EXE. Check the included SHA-256 sums and known limitations. Development builds may be unsigned and trigger SmartScreen.
+Download the [v0.3.13 Windows preview](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.13): installer or portable EXE. Check the included SHA-256 sums and known limitations. Development builds may be unsigned and trigger SmartScreen.
 
-See the [0.3.12 session recovery acceptance](docs/acceptance/session-resume-0.3.12.md). The external Codex compatibility patch is separate: the MÖBIUS installer does not replace your Codex installation.
+See the [0.3.13 harness-boundary acceptance](docs/acceptance/harness-boundary-0.3.13.md). MÖBIUS uses each installed harness only through its documented command-line interface; it does not patch or replace Codex, Claude Code, Pi, or Grok.
 
 ### Build from source
 

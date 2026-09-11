@@ -53,24 +53,20 @@ list filtering. Provider restoration depends on the client: an exact ID alone
 does not guarantee that the currently configured provider is retained.
 Do not relabel historical
 provider metadata or rewrite transcripts just to make a picker list nonempty.
-Möbius now uses this exact-ID, source-owned-home route and refuses stale identity.
-The external Windows client was verified separately against a compatibility
-patch in the Codex source tree. Its default picker preserves project scope while
-including historical providers; its Windows cwd predicate normalizes verbatim
-drive/UNC spellings. The compatibility patch explicitly retains the current
-local provider on resume without editing global configuration or credentials.
+Möbius uses this exact-ID, source-owned-home route and refuses stale identity.
+For Codex it also passes the selected project through the official `-C` option
+using an ordinary Windows drive or UNC spelling. It does not patch the Codex
+binary or launcher and does not rewrite Codex history, state, provider settings,
+credentials or project trust.
 
-**External default-picker acceptance: PASS.** The original 0.153.4 client
-reproduced the empty Cwd/Active list. The compatibility client passed the same
-real ConPTY test and typed `/resume` with an isolated copy. After switching the
-backed-up launcher, fresh external PowerShell tests against the production home
-restored an unoccupied real historical thread through both entrypoints and
-verified the exact continuation ID and preservation of existing source bytes.
-
-The currently running original thread is now visible but correctly rejects a
-second active writer. It was not forcibly closed or taken over. Close the old
-Codex process normally before resuming that same thread elsewhere. See the
-[external-client acceptance and rollback boundary](external-codex-resume.md).
+**External default-picker acceptance with official Codex 0.153.4: KNOWN LIMIT.**
+The real PowerShell `/resume` test reproduces an empty Cwd/Active list when an
+existing Codex state row uses a verbatim cwd spelling or a historical model
+provider differs from the current configuration. The source transcript can
+still contain the ordinary path. This behavior is inside the official picker's
+own state query and cannot be changed from Möbius without crossing the ownership
+boundary above. Use the exact native ID through Möbius or `codex resume <id>`.
+Close an active writer normally before resuming the same thread elsewhere.
 
 ## Reproduce
 

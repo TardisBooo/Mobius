@@ -92,8 +92,8 @@ def main():
             assert Path(resumed['cwd']).resolve() == workspace.resolve()
             if args.test_provider:
                 assert resumed['modelProvider'] == 'resume_test_provider', 'Do not silently switch runtime routing to the historical provider'
-                # The repaired Windows picker does not constrain historical
-                # provider labels; cwd still scopes the list to the project.
+                # An explicit empty provider list asks the documented app-server
+                # interface for all providers; cwd still scopes the list.
                 listed = rpc('thread/list', {'cwd': header['cwd'],
                     'modelProviders': [], 'sourceKinds': ['cli'],
                     'archived': False, 'useStateDbOnly': True, 'limit': 100})

@@ -1,4 +1,2 @@
 *.sh text eol=lf
 *.conf text eol=lf
-# Unified-diff context includes single-space blank lines.
-*.patch text eol=lf -whitespace

@@ -34,6 +34,9 @@ try {
   assert(recordLine, 'Recording CLI must actually run, not just echo its launch command');
   const recorded = JSON.parse(recordLine.trim());
   assert.equal(recorded.args.at(-1), parent.provider_session_id, 'Exact native ID must reach the CLI');
+  const cdIndex = recorded.args.indexOf('-C');
+  assert.notEqual(cdIndex, -1, 'Official Codex working-root option must be explicit');
+  assert.equal(path.resolve(recorded.args[cdIndex + 1]), path.join(root, 'workspace'), 'Official Codex must receive the ordinary project path');
   assert.equal(path.resolve(recorded.home), path.join(root, 'native-home'), 'Source-owned home must reach the CLI');
   await invoke('terminal_close', {id: terminal.id});
   const source = path.join(root, 'native-home/sessions/2026/09/11/parent.jsonl');
