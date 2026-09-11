@@ -43,3 +43,35 @@ owned by Codex; MÖBIUS cannot change its result without editing the harness or
 its state/configuration. Existing affected sessions remain recoverable through
 the official exact-ID command exposed by MÖBIUS. A session with an active writer
 must be closed normally before another process resumes it.
+
+## Official 0.154.0 revalidation (2026-09-11)
+
+After restoring the official launcher, Codex was updated using
+`npm install -g @openai/codex@0.154.0 --registry=https://registry.npmjs.org`.
+The installed launcher, native executable and code-mode host match their
+official npm distribution files byte-for-byte. No custom harness patch is used.
+
+- Packaged MÖBIUS 0.3.13: PASS with a separate WebView2 user-data directory.
+  Real IPC and PowerShell deliver the exact native ID, ordinary `-C` directory
+  and source-owned home to the recording CLI. Child sessions, missing sources,
+  malformed headers and changed identities are rejected.
+- Official Codex 0.154.0 through external PowerShell: PASS for app-server
+  history read, exact-ID resume and requested cwd using an isolated copy of a
+  real transcript. Original bytes remain unchanged; no model turn is sent.
+- The documented CLI shape `-C <directory> resume <id>` is accepted by 0.154.0.
+- Interactive TUI continuation in the credential-free isolated profile is
+  not accepted: it stops at first-run login. No production credentials were
+  copied to bypass that gate. The historical default-picker limitation above
+  was observed on 0.153.4; its status on 0.154.0 remains unverified.
+
+Reproduce the external PowerShell check with:
+
+```powershell
+python tests/codex_native_resume.py --powershell --codex <official-codex.cmd> --source <source.jsonl> --sandbox <new-verification-directory>
+```
+
+The packaged IPC test uses `WEBVIEW2_USER_DATA_FOLDER=<isolated-root>/webview`
+to avoid conflict with an already-open user instance. This follow-up changes
+only verification and documentation; the accepted 0.3.13 application binary
+remains unchanged. Previously loaded processes require a normal restart before
+they use the newly installed official version.

@@ -19,6 +19,8 @@ def main():
     parser.add_argument('--codex', required=True)
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--sandbox', type=Path, required=True)
+    parser.add_argument('--powershell', action='store_true',
+                        help='Launch the installed CLI through external PowerShell')
     parser.add_argument('--test-provider', action='store_true', help='Exercise a provider switch with a non-networking test endpoint')
     args = parser.parse_args()
     original_bytes = args.source.read_bytes()
@@ -43,7 +45,12 @@ def main():
             '-c', 'model_providers.resume_test_provider.name="Resume test"',
             '-c', 'model_providers.resume_test_provider.base_url="http://127.0.0.1:9/v1"',
             '-c', 'model_providers.resume_test_provider.wire_api="responses"']
-    command += ['app-server']
+    command += ['-C', str(workspace.resolve()), 'app-server']
+    if args.powershell:
+        shell = shutil.which('powershell.exe')
+        assert shell, 'External PowerShell is required'
+        invocation = '& ' + ' '.join("'" + value.replace("'", "''") + "'" for value in command)
+        command = [shell, '-NoLogo', '-NoProfile', '-Command', invocation]
     proc = subprocess.Popen(command, env=env,
         cwd=workspace, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
