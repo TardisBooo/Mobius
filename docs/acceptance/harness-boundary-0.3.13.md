@@ -104,3 +104,28 @@ routing or credentials. MÖBIUS exact-ID resume bypasses picker discovery; it
 cannot change what an independently launched official picker filters. Plain
 external `/resume` under the current provider remains unresolved within the
 constraint against modifying harness configuration or historical metadata.
+
+## Resolution after authorized custom-provider rollback
+
+The user subsequently authorized removal of the Codex Grok/router integration.
+The pre-integration configuration backup identified the original model and
+built-in provider. The rollback restored that model and removed the custom
+provider/catalogue, router transport override and Grok Prewalk presets, while
+preserving unrelated project settings and hooks. Dedicated router configs and
+its startup entry were moved to a recoverable private archive. No harness
+source, binary, authentication file, history JSONL or SQLite record was edited.
+
+Revalidation with the unchanged official Codex 0.154.0:
+
+- External PowerShell `codex resume` in the project: default Cwd/Active list
+  contains the expected main session, without any provider override.
+- Starting Codex and typing `/resume`: the same default list is populated.
+- Packaged MÖBIUS with real PowerShell and installed official Codex: same list.
+- Selecting the currently active session externally and invoking MÖBIUS'
+  `resume_session` handler: both reach the official active-writer protection.
+
+The empty-list issue is resolved after restoring the original provider.
+Continuing the still-open conversation requires its existing process to exit
+normally; no takeover or model turn was performed. Already-running clients can
+retain their previous configuration and must be restarted. The legacy router
+has no startup entry; its running process is retained until old clients exit.
