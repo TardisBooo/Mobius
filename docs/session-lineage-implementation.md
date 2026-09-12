@@ -49,6 +49,16 @@ No release is accepted merely because tests using fixtures pass.
 - Native Windows Computer Use was unavailable (native pipe absent after the
   documented recovery attempts). Do not equate WebView testing with physical
   native desktop/installer acceptance.
+- `verify-native-codex-lifecycle.cjs --submit-test-turn`: installed official
+  Codex CLI 0.154.0 created a real fixed-response test turn, read its thread and
+  resumed the same native thread after the server process was restarted. It
+  used existing native authentication without copying credentials, an isolated
+  project and read-only permissions. No harness configuration or historical
+  session was edited. This is app-server lifecycle evidence, not external TUI
+  `/resume`, cross-harness handoff or memory-content acceptance.
+  Protocol reference: [official app-server documentation](https://learn.chatgpt.com/docs/app-server#start-or-resume-a-thread).
+  The installed API required `read-only` sandbox spelling; an empty thread did
+  not yet have a persisted rollout. Both findings are reflected in the test.
 
 ## Remaining release gates
 
@@ -72,3 +82,7 @@ trees under `E:\Workspaces\_verification\mobius-lineage-20260912-run01` (failed
 old-constraint seed) and `run02` (isolated WebView evidence) are retained for
 review, not accepted deliverables or approved deletion targets. Durable accepted
 outputs belong in `D:\AcceptedArtifacts\Mobius`; no new release has been accepted.
+Native test trees `E:\Workspaces\_verification\mobius-native-codex-20260912-run01`
+and `run02` retain the rejected-schema and empty-thread probes; `run03` retains
+the passing live native test report. All three are retained for review. The
+single new test conversation was written by Codex itself and is not deleted.
