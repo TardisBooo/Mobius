@@ -1,7 +1,8 @@
 param(
   [Parameter(Mandatory=$true)][string]$FixtureRoot,
   [Parameter(Mandatory=$true)][string]$Executable,
-  [int]$Port = 9337
+  [int]$Port = 9337,
+  [switch]$Visible
 )
 $ErrorActionPreference = 'Stop'
 $fixturePath = (Resolve-Path -LiteralPath $FixtureRoot).Path
@@ -20,5 +21,6 @@ $env:PI_CODING_AGENT_DIR = Join-Path $fixturePath 'harness\pi'
 $env:GROK_HOME = Join-Path $fixturePath 'harness\grok'
 $env:WEBVIEW2_USER_DATA_FOLDER = Join-Path $fixturePath 'webview'
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-address=127.0.0.1 --remote-debugging-port=$Port"
-$child = Start-Process -FilePath $binaryPath -WorkingDirectory $env:MOBIUS_WORKSPACE -WindowStyle Hidden -PassThru
+$windowStyle = if ($Visible) { 'Normal' } else { 'Hidden' }
+$child = Start-Process -FilePath $binaryPath -WorkingDirectory $env:MOBIUS_WORKSPACE -WindowStyle $windowStyle -PassThru
 [pscustomobject]@{ ProcessId=$child.Id; Executable=$binaryPath; Fixture=$fixturePath; Port=$Port } | ConvertTo-Json

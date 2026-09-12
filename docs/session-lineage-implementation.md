@@ -1,5 +1,17 @@
 # Session lineage implementation
 
+## Interactive guide
+
+Open `docs/mobius-guide.html` for the desktop, CLI and MCP walkthrough, clickable
+ancestor/merge examples, exact command shapes and current acceptance boundaries.
+It is a self-contained offline document; demonstration buttons never call a
+backend. The delivered copy is stored at
+`D:\AcceptedArtifacts\Mobius\guides\mobius-guide-20260912.html`.
+`node tests/acceptance/verify-guide.cjs <isolated-output-directory>` checks graph
+selection, keyboard tabs, copy feedback, JSON examples and mobile overflow.
+`start-lineage-desktop.ps1 -Visible` opens the isolated development UI for review;
+it does not select or migrate the production vault.
+
 ## Contract
 
 Handoffs carry a graph of native session references, not a transcript snapshot,

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Möbius 桌面、CLI 与 MCP 使用说明：session 图谱、交接、搜索和显式授权。">
+<title>Möbius · 使用与交接指南</title>
+<style>
+:root{color-scheme:light;--bg:#f4f6f5;--paper:#fff;--text:#17232b;--muted:#566772;--line:#ccd7d8;--accent:#087fa4;--tint:#e5f3f6;--green:#21634b;--warning:#79511a;--code:#12242c;--code-text:#e6f1f3}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:90px}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.7 "Segoe UI","Microsoft YaHei UI",system-ui,sans-serif}button,a,input{font:inherit}button{cursor:pointer}a{color:var(--accent);text-underline-offset:4px}button:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-offset:4px}button:active{transform:scale(.96)}[hidden]{display:none!important}
+.wrap{max-width:1180px;margin:auto;padding:0 28px}header{border-bottom:1px solid var(--line);background:var(--paper)}.top{display:flex;align-items:center;justify-content:space-between;gap:20px;min-height:80px}.brand{font-size:23px;font-weight:800;letter-spacing:.06em;color:var(--text);text-decoration:none}.brand b{font-size:36px;vertical-align:-3px;color:var(--accent);margin-right:12px}.top nav{display:flex;flex-wrap:wrap;gap:20px;font-size:14px}.eyebrow{font:12px/1.4 ui-monospace,monospace;letter-spacing:.16em;color:var(--accent);font-weight:700}.hero{padding:66px 0 40px;max-width:830px}h1{font-size:clamp(32px,4.8vw,56px);line-height:1.2;letter-spacing:-.045em;margin:16px 0 24px}h2{font-size:28px;line-height:1.35;margin:12px 0 16px;letter-spacing:-.025em}h3{font-size:19px;margin:0 0 10px}p{margin:0 0 14px}.lead{font-size:20px;color:var(--muted)}.badge{display:inline-block;padding:4px 10px;border-radius:6px;background:var(--tint);color:var(--accent);font-size:12px;font-weight:700}.notice{border-left:3px solid var(--accent);padding:16px 20px;background:var(--tint);margin:22px 0;color:var(--text)}.notice.warn{border-color:var(--warning);background:#faf0df}.small,small{font-size:13px;color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.card{background:var(--paper);border:1px solid var(--line);padding:24px;border-radius:14px}.card .num{display:block;font:13px ui-monospace,monospace;color:var(--accent);margin-bottom:16px}.card p{color:var(--muted);margin-bottom:0}section{margin:52px 0}.section-head{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap;margin-bottom:22px}.section-head p{max-width:520px;color:var(--muted)}.button{border:1px solid var(--line);background:var(--paper);color:var(--text);border-radius:8px;padding:9px 15px;min-height:44px;transition:background-color .15s,color .15s}.button:hover{background:var(--tint)}.button[aria-pressed=true],.button.primary{background:var(--accent);border-color:var(--accent);color:white}.button:disabled{opacity:.5;cursor:not-allowed}.actions{display:flex;gap:10px;flex-wrap:wrap}.tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:26px}.tab{border:0;border-bottom:3px solid transparent;background:none;padding:14px 20px;color:var(--muted);min-height:48px}.tab[aria-selected=true]{border-color:var(--accent);color:var(--accent);font-weight:700}.panel{animation:none}.steps{counter-reset:step;padding:0;list-style:none}.steps>li{position:relative;padding:0 0 26px 54px;counter-increment:step}.steps>li:before{content:counter(step);position:absolute;left:0;top:0;width:34px;height:34px;border:1px solid var(--line);border-radius:50%;text-align:center;background:var(--paper);color:var(--accent);font-weight:700}.steps strong{display:block;margin-bottom:5px}.steps p{color:var(--muted)}code{font:13px/1.65 "Cascadia Code",Consolas,monospace;overflow-wrap:anywhere}p code,li>code{background:var(--tint);padding:2px 5px;border-radius:3px}pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;tab-size:2}.codebox{background:var(--code);color:var(--code-text);border-radius:12px;margin:14px 0 20px;overflow:hidden}.codebar{display:flex;align-items:center;justify-content:space-between;gap:15px;border-bottom:1px solid #37505b;padding:8px 16px;font:12px ui-monospace,monospace}.copy{background:transparent;color:var(--code-text);border:1px solid #78909a;border-radius:5px;min-width:68px;min-height:36px;font-size:12px}.copy:hover{background:#294450}.codebox pre{padding:20px}.two{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:24px}.graph-shell{border:1px solid var(--line);border-radius:16px;background:var(--paper);overflow:hidden}.graph-scroll{overflow-x:auto;background-image:radial-gradient(#b9cbd0 .8px,transparent .8px);background-size:18px 18px}.graph{position:relative;min-width:780px;height:350px}.edges{position:absolute;inset:0;width:100%;height:350px;pointer-events:none}.edge{stroke:#9aafb4;stroke-width:2;fill:none}.edge.lit{stroke:var(--accent);stroke-width:3}.node{position:absolute;width:24%;border:1px solid #9db2b9;border-radius:12px;background:var(--paper);color:var(--text);padding:16px;text-align:left;box-shadow:0 2px 5px #132a3510;transition:border-color .15s,background-color .15s}.node.active{border:2px solid var(--accent);background:var(--tint)}.node.selected{box-shadow:0 0 0 3px #087fa428}.node span{display:block;color:var(--muted);font:11px/1.5 ui-monospace,monospace}.node strong{display:block;font-size:15px;margin:7px 0}.node small{font-size:11px}.node[data-node=a]{left:3%;top:116px}.node[data-node=b]{left:38%;top:32px}.node[data-node=c]{left:38%;top:215px}.node[data-node=d]{left:73%;top:116px}.graph-bottom{display:flex;gap:20px;align-items:center;justify-content:space-between;padding:18px 22px;border-top:1px solid var(--line);flex-wrap:wrap}.selection{font-weight:650;color:var(--accent)}.details{background:var(--paper);padding:24px;border:1px solid var(--line);border-radius:14px}.details dl{display:grid;grid-template-columns:90px 1fr;gap:8px;font-size:14px}.details dt{color:var(--muted)}.details dd{margin:0;overflow-wrap:anywhere}.preview{max-height:330px;overflow:auto}.table-scroll{overflow:auto}table{width:100%;border-collapse:collapse;background:var(--paper);font-size:14px}th,td{padding:14px 16px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}th{font-weight:650;background:var(--tint)}td:first-child{font-weight:650}.status-flow{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}.status-flow span{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:8px 12px;font:12px ui-monospace,monospace}.status-flow span+span:before{content:'→';color:var(--accent);margin-right:12px}details{padding:18px 0;border-bottom:1px solid var(--line)}summary{cursor:pointer;font-weight:650}details p{padding-top:12px;color:var(--muted)}footer{border-top:1px solid var(--line);padding:28px 0 50px;color:var(--muted);font-size:13px}.footer-links{display:flex;gap:20px;flex-wrap:wrap}.live-status{min-height:26px;color:var(--accent);font-size:13px}.skip{position:absolute;top:-100px}.skip:focus{top:10px;left:10px;background:white;padding:10px;z-index:10}
+@media(max-width:760px){.wrap{padding:0 18px}.hero{padding:36px 0 20px}.top{align-items:flex-start;padding:14px 0;gap:8px;flex-direction:column}.top nav{gap:15px}.grid,.two{grid-template-columns:1fr}.card{padding:20px}.tabs{overflow:auto}.tab{white-space:nowrap;padding:12px 14px}.section-head{gap:4px}section{margin:36px 0}.steps>li{padding-left:44px}.graph-bottom{padding:16px}.lead{font-size:18px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}button:active{transform:none}}
+@media print{header nav,.copy,.actions,.tabs,.skip{display:none}.panel[hidden]{display:block!important}.wrap{max-width:none;padding:0}section{break-inside:avoid}.codebox{background:#f0f0f0;color:#111}.codebar{color:#111}.node{box-shadow:none}body{font-size:12px}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">跳至正文</a>
+<header><div class="wrap top"><a class="brand" href="#main"><b aria-hidden="true">∞</b>MÖBIUS</a><nav aria-label="章节"><a href="#lineage">交接图谱</a><a href="#workflows">使用指南</a><a href="#cases">示范案例</a><a href="#limits">当前边界</a></nav></div></header>
+<main id="main" class="wrap">
+<div class="hero"><div class="eyebrow">FIELD GUIDE / DESKTOP · CLI · MCP</div><h1>换一个 Agent，<br>不用丢掉走过的路。</h1><p class="lead">Möbius 把分散的会话、项目资料和交接关系放回同一个工作台。你决定从哪里继续，模型自己决定读哪些历史。</p><span class="badge">开发预览指南 · 2026-09-12</span></div>
+<div class="grid"><article class="card"><span class="num">01 / DESKTOP</span><h3>人来组织工作</h3><p>查看项目与会话、搜索记录、维护文档与画布，在图谱中选中要交接的 session。</p></article><article class="card"><span class="num">02 / CLI</span><h3>命令明确可查</h3><p>从终端索引来源、检索、导出祖先图谱；将准备交接与授权启动分开。</p></article><article class="card"><span class="num">03 / MCP + PLUGIN</span><h3>模型显式调用</h3><p>让支持 MCP 的客户端查询图谱和来源。读取正文与启动交接需要额外的限定授权。</p></article></div>
+<div class="notice"><strong>交接的是引用，不是总结。</strong><br>只告诉模型记忆经过了哪些 session、原始记录在哪里；不自动总结、压缩或复制整份日志，也不要求模型把所有历史读完。图谱存在，不代表模型已经读过。</div>
+
+<section id="lineage"><div class="section-head"><div><div class="eyebrow">01 / TRY THE MODEL</div><h2>一条项目目录，多条会话路径。</h2></div><p>点击节点，查看它真正继承的历史。下面是虚构教学数据，不是桌面截图；页面操作不会调用后端。</p></div>
+<div class="graph-shell"><div class="graph-scroll"><div class="graph" aria-label="交接示意图，点击节点显示祖先">
+<svg class="edges" viewBox="0 0 1000 350" preserveAspectRatio="none" aria-hidden="true"><path data-edge="ab" class="edge" d="M270 170 C325 170 325 90 380 90"/><path data-edge="ac" class="edge" d="M270 170 C325 170 325 270 380 270"/><path data-edge="bd" class="edge" d="M620 90 C675 90 675 170 730 170"/><path data-edge="cd" class="edge" d="M620 270 C675 270 675 170 730 170"/></svg>
+<button class="node" data-node="a" aria-pressed="false"><span>A · CODEX · 09:00</span><strong>确定重试机制</strong><small>原始设计会话</small></button>
+<button class="node" data-node="b" aria-pressed="false"><span>B · CLAUDE · 10:20</span><strong>实现有限次数重试</strong><small>继承 A · 实现分支</small></button>
+<button class="node" data-node="c" aria-pressed="false"><span>C · PI · 10:45</span><strong>验证故障恢复</strong><small>继承 A · 验证分支</small></button>
+<button class="node" data-node="d" aria-pressed="false"><span>D · CODEX · 11:30</span><strong>合并实现与验证</strong><small>显式继承 B + C</small></button>
+</div></div><div class="graph-bottom"><div><span id="selection" class="selection" aria-live="polite"></span><div id="selection-note" class="small"></div></div><button id="merge" class="button">演示：选择 B + C 交接</button></div></div>
+<div class="two" style="margin-top:20px"><div class="details"><h3 id="detail-title">节点信息</h3><dl id="detail-fields"></dl><p class="small">会话标题和最后一条内容帮助你辨认节点。桌面展示的是已索引片段，可能并非原始文件的完整或最新内容。自定义显示名称仅保存在 Möbius，不改原始 session。</p></div><div><div class="codebox" style="margin-top:0"><div class="codebar"><span>引用包结构示意 / 非完整 API 响应</span><button class="copy" data-copy="graph-json">复制</button></div><pre class="preview"><code id="graph-json"></code></pre></div><p class="small">真实清单还包含图谱 ID、时间、来源状态和已授权的文件引用。这里省略真实文件路径；demo-* 仅用于教学，不可直接发送给后端。</p></div></div>
+</section>
+
+<section id="workflows"><div class="eyebrow">02 / CHOOSE YOUR ENTRY POINT</div><h2>从你习惯的入口开始。</h2><div class="tabs" role="tablist" aria-label="使用入口"><button id="tab-desktop" class="tab" role="tab" aria-selected="true" aria-controls="desktop" tabindex="0">桌面工作台</button><button id="tab-cli" class="tab" role="tab" aria-selected="false" aria-controls="cli" tabindex="-1">CLI 命令行</button><button id="tab-mcp" class="tab" role="tab" aria-selected="false" aria-controls="mcp" tabindex="-1">MCP / 插件</button></div>
+<div id="desktop" class="panel" role="tabpanel" aria-labelledby="tab-desktop">
+<ol class="steps"><li><strong>先找到你的项目与会话</strong><p>在工作台选择或添加工程；在会话库的 Sources / 来源中确认原始 session 目录。来源应指向对应 Harness 的记录目录，而不是随便一个代码目录。缺失或未授权的来源需要先处理。</p></li><li><strong>用内容定位，再看身份</strong><p>搜索会话，核对 Harness、原生 ID、时间和工作目录。两个同名会话不一定是同一段工作；不同 worktree 的记录也不应该混为一条历史。</p></li><li><strong>继续原会话，还是交给另一条新会话？</strong><p><b>Resume original / 继续原会话</b>使用该 Harness 的原生恢复方式。<b>交接</b>则在选定工作目录启动新的目标会话，并携带图谱引用；即使目标 Harness 相同，交接也不等于恢复原会话。</p></li><li><strong>检查祖先图谱，再确认交接</strong><p>项目 → Handoff graph / 交接图。单击查看信息与祖先，双击查看会话；拖动节点只改变视图布局，不修改关系。Shift + 单击或列表复选框选择多个源，审核目标 Harness、worktree 和引用图谱后确认。</p></li><li><strong>把工作资料留在工作台</strong><p>资料库中使用笔记记录文档、用自由画布组织材料。挂载的原始资料保持只读；笔记和画布是工作资料，不会因为放在同一目录就自动进入交接祖先图谱。</p></li></ol>
+<div class="notice warn">本次打开的是隔离演示库。它适合检查新界面和图谱交互，虚构 session 不能作为真实原生恢复验收。正式资料库未因这次展示被迁移。</div>
+</div>
+<div id="cli" class="panel" role="tabpanel" aria-labelledby="tab-cli" hidden>
+<h3>1. 编译独立工具，选定自己的数据仓库</h3><p>需要 Git 和可编译本项目的 Rust 工具链。以下是 PowerShell 示例；先编译，再设置路径。仓库尚未发布稳定二进制。</p>
+<div class="codebox"><div class="codebar"><span>PowerShell / 源码构建</span><button class="copy" data-copy="cli-build">复制</button></div><pre><code id="cli-build">git clone https://github.com/TardisBooo/mobius-connect.git
+Set-Location mobius-connect
+cargo build --release --locked
+$mc = (Resolve-Path .\target\release\mobius-connect.exe).Path
+$vault = 'D:\DataVault\MobiusDemo'
+&amp; $mc --data-root $vault init
+&amp; $mc --data-root $vault doctor</code></pre></div>
+<p class="small">后面的命令都在同一 PowerShell 中执行，复用 $mc 与 $vault。不要把演示 vault 和正式 vault 混用。若需要与桌面共享图谱，必须明确指向桌面实际使用的数据仓库；相同项目路径不会自动共享索引。</p>
+<h3>2. 授权来源，索引并搜索</h3><div class="codebox"><div class="codebar"><span>PowerShell / 请替换来源目录</span><button class="copy" data-copy="cli-index">复制</button></div><pre><code id="cli-index"># 改为你实际的 Codex sessions 目录
+$source = 'D:\YourCodexHome\sessions'
+&amp; $mc --data-root $vault sources add codex $source
+&amp; $mc --data-root $vault sources refresh
+&amp; $mc --data-root $vault sessions list --limit 20
+&amp; $mc --data-root $vault sessions search 'retry' --limit 10</code></pre></div><p>从返回结果复制内部 <code>session.id</code>。CLI 的 <code>sessions show/read</code> 与 <code>graph show</code> 接受该 ID，不要用文件名、标题或仅原生 UUID 替代。</p>
+<h3>3. 查看祖先，按需读取原文</h3><div class="codebox"><div class="codebar"><span>PowerShell / 显式查询</span><button class="copy" data-copy="cli-graph">复制</button></div><pre><code id="cli-graph">$sid = '从 sessions list 复制的 session.id'
+&amp; $mc --data-root $vault sessions show $sid
+&amp; $mc --data-root $vault graph show $sid
+&amp; $mc --data-root $vault graph export --format mermaid $sid
+&amp; $mc --data-root $vault memory reference $sid
+&amp; $mc --data-root $vault sessions read $sid --offset 0 --bytes 4096</code></pre></div><p class="small">导出打印到 stdout；支持 JSON、Mermaid 和静态 HTML 引用列表。read 的单位是字节，每次 1–16384 字节；未对齐的 UTF-8 片段可能以 hex 返回，按响应的 encoding 解读。直接 CLI 读取是用户显式操作，MCP 读取则另外要求授权 token。</p>
+<h3>4. 准备 → 人工授权 → 启动 → 检查状态</h3><div class="codebox"><div class="codebar"><span>PowerShell / 启动会创建新会话</span><button class="copy" data-copy="cli-handoff">复制</button></div><pre><code id="cli-handoff">$project = 'E:\Workspaces\demo\app'
+$prepared = &amp; $mc --data-root $vault handoff prepare --harness codex --cwd $project $sid | ConvertFrom-Json
+$prepared.graph | ConvertTo-Json -Depth 20
+$hid = $prepared.handoff.id
+
+# 在你自己的交互终端运行，查看范围后输入 APPROVE
+&amp; $mc --data-root $vault approvals handoff $hid
+
+# 从授权结果取出 token；不要发到公开日志或截图中
+$token = Read-Host '输入刚才收到的授权 token'
+&amp; $mc --data-root $vault handoff commit $hid --approval-token $token
+&amp; $mc --data-root $vault sources refresh
+&amp; $mc --data-root $vault handoff status $hid</code></pre></div><div class="notice warn">这是一条开发预览流程，不代表全部 Harness 已验收。原生启动当前仅支持 Windows；需要目标 CLI 可用且已由用户配置好认证。一次授权绑定一个不可变交接，默认 5 分钟有效且只能使用一次。unknown 状态不要盲目重试。</div>
+</div>
+<div id="mcp" class="panel" role="tabpanel" aria-labelledby="tab-mcp" hidden>
+<h3>1. 先由用户初始化，再连接客户端</h3><p>完成 CLI 的 init、来源授权和索引。随后在支持 stdio MCP 的客户端中注册服务。下面是常见配置形状，各客户端的配置入口以其实际支持为准；本页面不替你安装或修改配置。</p>
+<div class="codebox"><div class="codebar"><span>客户端配置示例 / 路径需替换</span><button class="copy" data-copy="mcp-config">复制</button></div><pre><code id="mcp-config">{
+  "mcpServers": {
+    "mobius": {
+      "command": "E:\\Workspaces\\Mobius\\repos\\mobius-connect\\target\\release\\mobius-connect.exe",
+      "args": ["--data-root", "D:\\DataVault\\MobiusDemo", "mcp", "serve"]
+    }
+  }
+}</code></pre></div><p class="small">该服务通过标准输入输出通信，不开放 HTTP 端口。不要把 PowerShell 提示符或普通日志写入 MCP stdout。CLI 和 MCP 使用同一个 vault 才能看到同一份图谱和授权。</p>
+<h3>2. 从图谱开始，不默认倾倒所有正文</h3><div class="table-scroll"><table><thead><tr><th>工具</th><th>用途</th><th>调用边界</th></tr></thead><tbody><tr><td>list_sessions / get_index_health</td><td>列出元数据、检查索引</td><td>不返回会话正文</td></tr><tr><td>get_lineage / resolve_session</td><td>祖先图谱、已授权原始来源</td><td>不会自动读原文</td></tr><tr><td>build_memory_reference</td><td>向当前调用方返回图谱引用</td><td>不启动、不隐式注入</td></tr><tr><td>search_sessions / read_session_range</td><td>检索片段、读取指定字节范围</td><td>需要限定查询或范围的人工授权</td></tr><tr><td>prepare_handoff</td><td>固化图谱与目标，返回审批请求</td><td>会写 Möbius 目录，不启动 Harness</td></tr><tr><td>commit_handoff / get_handoff_status</td><td>授权后启动、查询执行状态</td><td>commit 需要单次 token；状态不是模型理解证明</td></tr></tbody></table></div>
+<div class="codebox"><div class="codebar"><span>JSON-RPC / 客户端完成 initialize 后的工具调用</span><button class="copy" data-copy="mcp-graph">复制</button></div><pre><code id="mcp-graph">{
+  "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+  "params": {
+    "name": "get_lineage",
+    "arguments": { "session_ids": ["替换为真实内部 session.id"] }
+  }
+}</code></pre></div>
+<h3>3. 读取正文，需要独立且精确的授权</h3><p>例如允许模型读取一个 Codex session 的前 4096 字节：用户保存下面的请求为 <code>range-approval.json</code>，在自己的交互终端执行 <code>&amp; $mc --data-root $vault approvals review .\range-approval.json</code>，审阅后输入 APPROVE。MCP 没有发放 token 的工具。</p>
+<div class="two"><div class="codebox"><div class="codebar"><span>range-approval.json</span><button class="copy" data-copy="mcp-approval">复制</button></div><pre><code id="mcp-approval">{
+  "operations": ["read_session_range"],
+  "query": "bytes:0:4096",
+  "provider": "codex",
+  "session_id": "替换为真实内部 session.id",
+  "providers": [],
+  "max_chars": 8192,
+  "expires_in_seconds": 300,
+  "single_use": true
+}</code></pre></div><div class="codebox"><div class="codebar"><span>随后调用 / 参数示例</span><button class="copy" data-copy="mcp-read">复制</button></div><pre><code id="mcp-read">{
+  "name": "read_session_range",
+  "arguments": {
+    "session_id": "同一个真实内部 session.id",
+    "offset": 0,
+    "bytes": 4096,
+    "approval_token": "用户刚授予的 token"
+  }
+}</code></pre></div></div><p class="small">max_chars 为 hex 最坏情况预留 2 × bytes。读取别的范围、别的 session，或发起交接，都需要对应的新授权；不是“一次允许，永久读全库”。</p>
+<h3>4. 显式插件：把操作习惯交给模型</h3><p>可选插件位于独立仓库的 <code>plugins/mobius-connect</code>。宿主加载后，显式调用 <code>$mobius-memory</code>：例如“检查我选中会话的祖先，先列出缺失来源，再由我决定是否读取”。它禁用隐式调用、没有注入钩子，不能替你同意授权。<b>插件清单已校验，真实宿主加载仍待验收。</b></p>
+</div>
+<div id="copy-status" class="live-status" role="status" aria-live="polite"></div>
+</section>
+
+<section id="cases"><div class="eyebrow">03 / TWO REALISTIC WORKFLOWS</div><h2>把步骤放进真实工作里。</h2><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr))"><article class="card"><span class="num">CASE A / 单条实现链</span><h3>设计讨论交给实现 Agent</h3><p>你在 Codex 的 A 中确定重试策略，希望 Claude 接手。桌面选 A → 审核目标目录与引用图谱 → 确认交接。新会话 B 识别后建立 A → B。B 可以按需读 A 的原始记录，而不是只收到一段 Möbius 生成的摘要。</p><p class="small" style="margin-top:14px">开发能力示范；不同 Harness 的端到端恢复仍须分别验收。</p><button class="button" style="margin-top:18px" data-case="b">查看 A → B 的继承</button></article><article class="card"><span class="num">CASE B / 分支汇合</span><h3>实现与验证，合到下一次交接</h3><p>Claude 的 B 写实现，Pi 的 C 查故障恢复。选择 B 和 C 作为源：交接图只含 A、B、C，公共祖先 A 去重，不包含同项目的其他对话。目标 D 真正出现并被识别后，才能形成 B → D、C → D。</p><button class="button" style="margin-top:18px" data-case="merge">查看合并引用包</button></article></div><div class="codebox"><div class="codebar"><span>PowerShell / 多源交接准备</span><button class="copy" data-copy="case-merge">复制</button></div><pre><code id="case-merge">$sidB = 'B 的真实内部 session.id'
+$sidC = 'C 的真实内部 session.id'
+&amp; $mc --data-root $vault handoff prepare --harness codex --cwd $project $sidB $sidC
+# 检查返回图谱后，再按前面的人工授权 → commit → status 流程继续。</code></pre></div>
+<h3>状态如何解读？</h3><div class="status-flow"><span>prepared</span><span>starting</span><span>awaiting_identity</span><span>bound</span></div><p class="small">已准备 → 正在启动 → 等待识别目标 → 已绑定目标 session。bound 也不代表模型读取或理解了全部历史。failed / cancelled / unknown 需要检查原因；不要靠反复点击制造重复会话。桌面与独立 CLI 的状态展示并非完全一致，上面是独立工具的生命周期。</p>
+</section>
+
+<section id="limits"><div class="eyebrow">04 / KNOW THE BOUNDARY</div><h2>知道它做了什么，也知道没做什么。</h2><div class="table-scroll"><table><thead><tr><th>能力</th><th>当前状态</th></tr></thead><tbody><tr><td>祖先回溯、多源合并、来源权限、节点别名</td><td>核心测试及桌面 WebView 回归通过；演示数据与真实 Harness 验收分开统计。</td></tr><tr><td>大 session 引用</td><td>约 1.22 GB 的真实源日志生成 758 字节图谱；该次未复制日志，也未要求全文读取。这不是通用性能保证。</td></tr><tr><td>搜索</td><td>桌面提供会话检索及相关记忆入口；独立 CLI/MCP 当前仅暴露 lexical 检索，不能当作已完成的语义检索 API。</td></tr><tr><td>官方 Codex 恢复</td><td>真实新建对话在 app-server 重启后恢复通过；不能替代外部 TUI /resume、跨 Harness 交接验收。</td></tr><tr><td>CLI/MCP 与插件</td><td>独立构建与基础协议/权限测试通过，插件结构通过校验；插件宿主加载及真实启动闭环仍待验收。</td></tr><tr><td>发布状态</td><td>开发预览，未发布稳定新版。Pi/Grok 真实交接恢复、目标身份确认加强和安装包生命周期仍在待办中。</td></tr></tbody></table></div>
+<details><summary>为什么同一目录里的另一个会话没有被继承？</summary><p>目录用于组织项目，不用于推断交接关系。只有明确记录的 session 边属于祖先路径。需要结合另一段工作时，显式选择多源交接，而不是默认把整个项目历史塞进去。</p></details>
+<details><summary>找不到原始来源，或准备交接失败怎么办？</summary><p>先检查 Sources 的授权目录、文件是否仍存在、session ID 是否来自同一个 vault，以及目标 checkout 是否已注册。图谱中的缺失来源会明确标出；不要通过修改 Harness 的历史 JSONL 来“修复”路径。</p></details>
+<details><summary>图谱能让模型自动知道全部过去吗？</summary><p>不能。它提供路标和来源。模型是否读取、读取多少、如何使用，由模型及其 Harness 决定。原始历史里的命令也只是历史数据，不是新的执行授权。</p></details>
+</section>
+</main><footer><div class="wrap"><p>指南对齐：桌面开发分支 feat/session-lineage-references · 共享核心 6f2765a · mobius-connect 67e02fd。示意图为教学案例，不包含个人会话或凭据。</p><div class="footer-links"><a href="https://github.com/TardisBooo/Mobius/tree/feat/session-lineage-references" target="_blank" rel="noopener noreferrer">桌面源码 ↗</a><a href="https://github.com/TardisBooo/mobius-connect" target="_blank" rel="noopener noreferrer">CLI / MCP 源码 ↗</a><a href="https://github.com/TardisBooo/Mobius/blob/feat/session-lineage-references/docs/session-lineage-implementation.md" target="_blank" rel="noopener noreferrer">开发验收记录 ↗</a></div></div></footer>
+<script>
+const data={a:{title:'确定重试机制',harness:'Codex',time:'2026-09-12 09:00',last:'最多重试三次，并保留失败原因。',parents:[]},b:{title:'实现有限次数重试',harness:'Claude',time:'2026-09-12 10:20',last:'重试上限已实现，准备验证边界条件。',parents:['a']},c:{title:'验证故障恢复',harness:'Pi',time:'2026-09-12 10:45',last:'发现超时后重试可能重复写入。',parents:['a']},d:{title:'合并实现与验证',harness:'Codex',time:'2026-09-12 11:30',last:'结合实现和验证记录，处理幂等性。',parents:['b','c']}};
+function show(ids){const ancestors=new Set();function walk(id){if(ancestors.has(id))return;ancestors.add(id);data[id].parents.forEach(walk)}ids.forEach(walk);const ordered=Object.keys(data).filter(id=>ancestors.has(id));document.querySelectorAll('[data-node]').forEach(el=>{const id=el.dataset.node;el.classList.toggle('active',ancestors.has(id));el.classList.toggle('selected',ids.includes(id));el.setAttribute('aria-pressed',String(ids.includes(id)))});document.querySelectorAll('[data-edge]').forEach(el=>el.classList.toggle('lit',[...el.dataset.edge].every(id=>ancestors.has(id))));document.getElementById('selection').textContent=`实际引用：${ordered.map(id=>id.toUpperCase()).join(' + ')}`;document.getElementById('selection-note').textContent=ids.length>1?'B + C 的准备包只有 A、B、C；尚未创建目标 D。':ids[0]==='b'?'不继承同项目的兄弟分支 C，也不继承后续 D。':ids[0]==='d'?'已有合并节点 D，回溯两条入边，公共祖先 A 仅出现一次。':'只沿已记录的入边回溯，不按目录收集全部会话。';document.getElementById('detail-title').textContent=ids.length>1?'多源交接预览':`${ids[0].toUpperCase()} · ${data[ids[0]].title}`;const dl=document.getElementById('detail-fields');dl.replaceChildren();const item=data[ids[0]];const fields=ids.length>1?[['源节点','B + C'],['祖先去重','A 只引用一次'],['目标节点','等待实际创建与识别'],['工作目录','由用户在准备时明确选择']]:[['Harness',item.harness],['内部 ID',`demo-${ids[0]}`],['原生 ID',`native-demo-${ids[0]}`],['示例时间',item.time],['对话摘录',item.last]];for(const [key,value]of fields){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=key;dd.textContent=value;dl.append(dt,dd)}const edges=[];ordered.forEach(id=>data[id].parents.filter(p=>ancestors.has(p)).forEach(p=>edges.push({source:`demo-${p}`,target:`demo-${id}`})));document.getElementById('graph-json').textContent=JSON.stringify({content_mode:'references_only',entry_session_ids:ids.map(id=>`demo-${id}`),nodes:ordered.map(id=>({session_id:`demo-${id}`,harness:data[id].harness.toLowerCase(),native_id:`native-demo-${id}`})),edges},null,2)}
+document.querySelectorAll('[data-node]').forEach(el=>el.addEventListener('click',()=>show([el.dataset.node])));document.getElementById('merge').addEventListener('click',()=>show(['b','c']));document.querySelectorAll('[data-case]').forEach(el=>el.addEventListener('click',()=>{show(el.dataset.case==='merge'?['b','c']:[el.dataset.case]);document.getElementById('lineage').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'})}));show(['b']);
+const tabs=[...document.querySelectorAll('[role=tab]')];function activate(tab,focus=false){tabs.forEach(t=>{const selected=t===tab;t.setAttribute('aria-selected',String(selected));t.tabIndex=selected?0:-1;document.getElementById(t.getAttribute('aria-controls')).hidden=!selected});if(focus)tab.focus()}tabs.forEach((tab,i)=>{tab.addEventListener('click',()=>activate(tab));tab.addEventListener('keydown',event=>{let next;if(event.key==='ArrowRight')next=(i+1)%tabs.length;if(event.key==='ArrowLeft')next=(i+tabs.length-1)%tabs.length;if(event.key==='Home')next=0;if(event.key==='End')next=tabs.length-1;if(next!==undefined){event.preventDefault();activate(tabs[next],true)}})});
+document.querySelectorAll('[data-copy]').forEach(button=>button.addEventListener('click',async()=>{const code=document.getElementById(button.dataset.copy),status=document.getElementById('copy-status');try{await navigator.clipboard.writeText(code.textContent);button.textContent='已复制';status.textContent='示例已复制。请先替换路径与 ID；本页面没有执行任何命令。';setTimeout(()=>button.textContent='复制',1600)}catch{const range=document.createRange();range.selectNodeContents(code);getSelection().removeAllRanges();getSelection().addRange(range);status.textContent='浏览器未允许剪贴板访问，已选中代码，请按 Ctrl+C 复制。'}}));
+</script>
+</body></html>
