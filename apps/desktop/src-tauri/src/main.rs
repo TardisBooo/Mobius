@@ -1,4 +1,4 @@
-mod harness_launch;
+use mydesk_core::harness_launch;
 use mydesk_core::{
     AgentSummary, BoardDocument, ContextRecord, HealthStatus, McpApprovalGrant, McpApprovalRequest,
     McpApprovalStore, Message, MomeRecallRequest, MomeRecallResponse, MyDesk, NoteDraft,
@@ -572,6 +572,22 @@ async fn prepare_handoff_trajectory(state: State<'_, DesktopState>, session_id: 
     let desk = state.desk.clone();
     tauri::async_runtime::spawn_blocking(move || desk.prepare_trajectory(&session_id).map_err(command_error))
         .await.map_err(command_error)?
+}
+#[tauri::command]
+async fn session_lineage(state: State<'_, DesktopState>, session_ids: Vec<String>) -> CommandResult<mydesk_core::lineage::LineageManifest> {
+    let desk = state.desk.clone();
+    tauri::async_runtime::spawn_blocking(move || desk.session_lineage(&session_ids).map_err(command_error))
+        .await.map_err(command_error)?
+}
+#[tauri::command]
+async fn prepare_handoff_graph(state: State<'_, DesktopState>, session_ids: Vec<String>) -> CommandResult<mydesk_core::trajectory::TrajectoryReview> {
+    let desk = state.desk.clone();
+    tauri::async_runtime::spawn_blocking(move || desk.prepare_lineage_review(&session_ids).map_err(command_error))
+        .await.map_err(command_error)?
+}
+#[tauri::command]
+fn set_session_alias(state: State<'_, DesktopState>, session_id: String, alias: String) -> CommandResult<()> {
+    state.desk.database.set_session_alias(&session_id, &alias).map_err(command_error)
 }
 /// Desktop recall is an explicit user action. It only reads the derived local
 /// catalogue through Mome; it does not open a terminal, alter a source
@@ -1640,6 +1656,15 @@ fn start_agent_handoff(
     workspace_id: Option<String>,
     trajectory_id: Option<String>,
 ) -> CommandResult<TerminalInfo> {
+    let reviewed_id = trajectory_id.as_deref().ok_or("review the session graph before handoff")?;
+    let source_id = source_session_id.as_deref().ok_or("source session is required")?;
+    let reviewed_graph = state.desk.read_lineage(reviewed_id).map_err(command_error)?;
+    if !reviewed_graph.entry_session_ids.iter().any(|id| id == source_id) {
+        return Err("reviewed graph does not contain the selected session".into());
+    }
+    if checkout_id.is_none() || workspace_id.is_none() {
+        return Err("register the session workspace before handoff".into());
+    }
     let agent = known_agent(&provider)?;
     if packet.trim().is_empty() {
         return Err("handoff packet cannot be empty".into());
@@ -1657,28 +1682,38 @@ fn start_agent_handoff(
     if !handoff_cwd.is_dir() {
         return Err("handoff working directory is unavailable".into());
     }
+    let target_checkout = state.desk.database.get_checkout(checkout_id.as_deref().unwrap())
+        .map_err(command_error)?.ok_or("handoff checkout not found")?;
+    if Some(target_checkout.workspace_id.as_str()) != workspace_id.as_deref()
+        || Path::new(&target_checkout.canonical_path).canonicalize().map_err(command_error)? != handoff_cwd {
+        return Err("handoff target does not match the registered workspace and checkout".into());
+    }
     let handoff_process_cwd = terminal_process_path(&handoff_cwd);
     let mut packet = if let Some(id) = trajectory_id.as_deref() {
         state.desk.trajectory_launch_context(id, source_session_id.as_deref().ok_or("trajectory source is missing")?).map_err(command_error)?
     } else { packet };
-    if let (Some(source_session_id), Some(source_message_id), Some(checkout_id), Some(workspace_id)) =
-        (source_session_id, source_message_id, checkout_id, workspace_id)
+    let mut operation_id = None;
+    if let (Some(source_session_id), Some(checkout_id), Some(workspace_id)) =
+        (source_session_id, checkout_id, workspace_id)
     {
         let draft = HandoffDraft {
             source_session_id,
             target_provider: provider.clone(),
             target_checkout_id: checkout_id,
             mode: RelayMode::TakeOver,
-            message_ids: vec![source_message_id],
-            payload: serde_json::json!({ "packet": packet.clone(), "cwd": cwd.clone(), "trajectory_id": trajectory_id }),
+            message_ids: source_message_id.filter(|id| !id.is_empty()).into_iter().collect(),
+            payload: serde_json::json!({ "packet": packet.clone(), "cwd": cwd.clone(), "trajectory_id": trajectory_id, "content_mode": "references_only", "entry_session_ids": reviewed_graph.entry_session_ids }),
             token_estimate: (packet.chars().count() as i64 + 3) / 4,
         };
         let sealed = state.desk.database.seal_handoff(&draft).map_err(command_error)?;
         state.desk.database.record_relay_edge(&sealed, &workspace_id).map_err(command_error)?;
+        state.desk.database.set_handoff_state(&sealed.id, "starting", None).map_err(command_error)?;
+        operation_id = Some(sealed.id.clone());
         packet = format!("[MOBIUS_HANDOFF_ID:{}]\n{packet}", sealed.id);
     }
     // cmd.exe cannot forward a multiline argument intact. Keep the reviewed
     // bytes in the app artifact store, never in the user's project/session files.
+    let launched = (|| -> CommandResult<TerminalInfo> {
     let uses_batch_shim = executable.extension().is_some_and(|extension| {
         extension.eq_ignore_ascii_case("cmd") || extension.eq_ignore_ascii_case("bat")
     });
@@ -1709,6 +1744,14 @@ fn start_agent_handoff(
         Some(format!("{} · Möbius handoff", executable_name)),
         Some(command),
     )
+    })();
+    if let Some(id) = operation_id {
+        match &launched {
+            Ok(_) => state.desk.database.set_handoff_state(&id, "awaiting_identity", None).map_err(command_error)?,
+            Err(error) => state.desk.database.set_handoff_state(&id, "failed", Some(error)).map_err(command_error)?,
+        }
+    }
+    launched
 }
 
 fn base64_utf8(value: &str) -> String {
@@ -2269,6 +2312,9 @@ fn main() {
             query_sessions,
             get_session_messages,
             prepare_handoff_trajectory,
+            session_lineage,
+            prepare_handoff_graph,
+            set_session_alias,
             workspace_relay_graph,
             mome_recall_command,
             create_note,

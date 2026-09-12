@@ -1,10 +1,13 @@
-//! Explicit full-source handoff snapshots. The searchable catalogue is sampled;
-//! it is never used as a substitute for the original execution trajectory.
-use crate::{MyDesk, load_approved_session_sources};
+//! Reference-only handoff entry points plus a read-only legacy snapshot reader.
+use crate::MyDesk;
+#[cfg(test)]
+use crate::load_approved_session_sources;
 use anyhow::{Result, ensure, Context};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{fs, io::{Read, Write}, path::Path};
+use std::{fs, io::Read, path::Path};
+#[cfg(test)]
+use std::io::Write;
 
 const MAX_BYTES: usize = 16 * 1024 * 1024;
 
@@ -54,6 +57,28 @@ impl MyDesk {
     }
 
     pub fn prepare_trajectory(&self, session_id: &str) -> Result<TrajectoryReview> {
+        self.prepare_lineage_review(&[session_id.to_owned()])
+    }
+
+    pub fn prepare_lineage_review(&self, session_ids: &[String]) -> Result<TrajectoryReview> {
+        let graph = self.save_lineage(session_ids)?;
+        let serialized = serde_json::to_vec_pretty(&graph)?;
+        Ok(TrajectoryReview {
+            id: graph.id.clone(), source_count: graph.nodes.len(), bytes: serialized.len(),
+            estimated_tokens: serialized.len().div_ceil(3),
+            preview: String::from_utf8(serialized)?,
+            snapshot_path: self.lineage_path(&graph.id)?.display().to_string(),
+        })
+    }
+
+    pub fn trajectory_launch_context(&self, id: &str, source_session_id: &str) -> Result<String> {
+        self.lineage_launch_context(id, source_session_id)
+    }
+
+    // Historical behavior is retained only as a compatibility fixture. No
+    // production call can create new full-source snapshots or force full reads.
+    #[cfg(test)]
+    fn prepare_legacy_trajectory(&self, session_id: &str) -> Result<TrajectoryReview> {
         let session = self.database.get_session(session_id)?.context("source session not found")?;
         ensure!(session.provider.is_supported(), "unsupported source provider");
         let source = Path::new(&session.source_path);
@@ -103,7 +128,8 @@ impl MyDesk {
         Ok(TrajectoryReview { id: snapshot.id, source_count: snapshot.sources.len(), bytes: serialized.len(), estimated_tokens: serialized.len().div_ceil(3), preview: snapshot.sources.iter().map(|source| format!("{} / {}\nSHA-256: {}\n{}", source.provider, source.native_id, source.sha256, source.content.chars().take(1600).collect::<String>())).collect::<Vec<_>>().join("\n\n"), snapshot_path: path.display().to_string() })
     }
 
-    pub fn trajectory_launch_context(&self, id: &str, source_session_id: &str) -> Result<String> {
+    #[cfg(test)]
+    fn legacy_trajectory_launch_context(&self, id: &str, source_session_id: &str) -> Result<String> {
         let snapshot = self.read_trajectory(id)?;
         ensure!(snapshot.source_session_id == source_session_id, "reviewed trajectory belongs to another session");
         let path = self.trajectory_path(id)?;
@@ -145,13 +171,13 @@ mod tests {
     fn all_events_survive_without_using_sampled_catalogue() {
         let (_root, desk, session) = setup();
         let before = fs::read(&session.source_path).unwrap();
-        let review = desk.prepare_trajectory(&session.id).unwrap();
+        let review = desk.prepare_legacy_trajectory(&session.id).unwrap();
         let trace = desk.read_trajectory(&review.id).unwrap();
         assert_eq!(trace.sources[0].content.as_bytes(), before);
         assert_eq!(trace.sources[0].content.lines().count(), 100);
         assert!(trace.sources[0].content.contains("call-50"));
         assert_eq!(fs::read(&session.source_path).unwrap(), before);
-        assert!(desk.trajectory_launch_context(&review.id, "other-session").is_err());
+        assert!(desk.legacy_trajectory_launch_context(&review.id, "other-session").is_err());
         let path = desk.trajectory_path(&review.id).unwrap();
         let changed = fs::read_to_string(&path).unwrap().replace("attempt 50", "tampered 50");
         fs::write(path, changed).unwrap();
@@ -160,7 +186,7 @@ mod tests {
     #[test]
     fn second_hop_retains_sealed_ancestor_not_later_changes_or_other_branches() {
         let (_root, desk, mut session) = setup();
-        let first = desk.prepare_trajectory(&session.id).unwrap();
+        let first = desk.prepare_legacy_trajectory(&session.id).unwrap();
         fs::create_dir_all(&desk.paths.workspace_root).unwrap();
         let workspace = desk.register_workspace(&desk.paths.workspace_root, None).unwrap();
         let parent = desk.database.seal_handoff(&HandoffDraft { source_session_id: session.id.clone(), target_provider: "codex".into(), target_checkout_id: workspace.checkouts[0].id.clone(), mode: RelayMode::TakeOver, message_ids: vec![], payload: serde_json::json!({"trajectory_id":first.id}), token_estimate: 1 }).unwrap();
@@ -170,7 +196,7 @@ mod tests {
         fs::write(&session.source_path, "{\"role\":\"assistant\",\"content\":\"verified next step\"}\n").unwrap();
         session.metadata = serde_json::json!({"mobius_handoff_id":parent.id});
         desk.database.upsert_session(&session).unwrap();
-        let second = desk.prepare_trajectory(&session.id).unwrap();
+        let second = desk.prepare_legacy_trajectory(&session.id).unwrap();
         let trace = desk.read_trajectory(&second.id).unwrap();
         assert_eq!(trace.sources.len(), 2);
         assert!(trace.sources[0].content.contains("call-50"));
@@ -181,9 +207,9 @@ mod tests {
     fn invalid_source_and_oversize_are_rejected_not_silently_trimmed() {
         let (_root, desk, session) = setup();
         fs::write(&session.source_path, "{broken").unwrap();
-        assert!(desk.prepare_trajectory(&session.id).is_err());
+        assert!(desk.prepare_legacy_trajectory(&session.id).is_err());
         fs::File::create(&session.source_path).unwrap().set_len((MAX_BYTES + 1) as u64).unwrap();
-        assert!(desk.prepare_trajectory(&session.id).is_err());
+        assert!(desk.prepare_legacy_trajectory(&session.id).is_err());
         assert!(desk.read_trajectory("../../secrets").is_err());
     }
 }

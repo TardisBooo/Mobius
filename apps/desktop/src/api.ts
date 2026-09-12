@@ -143,6 +143,13 @@ export const desktopApi = {
     return inTauri() ? invoke<RelayGraph>("workspace_relay_graph", { workspaceId }) : { chains: [], edges: [], handoffs: [] };
   },
 
+  async sessionLineage(sessionIds: string[]): Promise<import("./types").LineageManifest> {
+    return invoke("session_lineage", { sessionIds });
+  },
+  async setSessionAlias(sessionId: string, alias: string): Promise<void> {
+    return invoke("set_session_alias", { sessionId, alias });
+  },
+
   async momeRecall(request: MomeRecallRequest): Promise<MomeRecallResponse> {
     if (!inTauri()) return { query: request.query, retrieval_mode: "browser_preview", semantic_status: "lexical_only_no_semantic_backend_configured", max_tokens: request.max_tokens ?? 1200, estimated_tokens: 0, sources: [] };
     return invoke<MomeRecallResponse>("mome_recall_command", { request });
@@ -157,6 +164,9 @@ export const desktopApi = {
   async createTerminal(cwd: string, title?: string): Promise<TerminalInfo> { return invoke<TerminalInfo>("terminal_create", { cwd, title: title ?? null, initialCommand: null }); },
   async prepareHandoffTrajectory(sessionId: string): Promise<{ id: string; source_count: number; bytes: number; estimated_tokens: number; preview: string; snapshot_path: string }> {
     return invoke("prepare_handoff_trajectory", { sessionId });
+  },
+  async prepareHandoffGraph(sessionIds: string[]): Promise<{ id: string; source_count: number; bytes: number; estimated_tokens: number; preview: string; snapshot_path: string }> {
+    return invoke("prepare_handoff_graph", { sessionIds });
   },
   async startAgentHandoff(provider: AgentKind, cwd: string, packet: string, lineage?: { sourceSessionId: string; sourceMessageId: string; checkoutId: string; workspaceId: string }, trajectoryId?: string): Promise<TerminalInfo> {
     return invoke<TerminalInfo>("start_agent_handoff", { provider, cwd, packet, sourceSessionId: lineage?.sourceSessionId ?? null, sourceMessageId: lineage?.sourceMessageId ?? null, checkoutId: lineage?.checkoutId ?? null, workspaceId: lineage?.workspaceId ?? null, trajectoryId: trajectoryId ?? null });

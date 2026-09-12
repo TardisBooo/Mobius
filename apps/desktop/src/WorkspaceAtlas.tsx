@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type
 import { Archive, ArrowRight, Braces, ChevronDown, ChevronRight, CirclePlay, File, Folder, FolderGit2, FolderOpen, FolderPlus, GitBranch, GripVertical, LoaderCircle, PanelRight, Pin, Plus, Search, TerminalSquare, Workflow, X } from "lucide-react";
 import { AccessibleDialog } from "./AccessibleDialog";
 import { ContextMenu } from "./ContextMenu";
+import { SessionLineagePanel } from "./SessionLineagePanel";
 import { desktopApi } from "./api";
 import type { Checkout, DirectoryEntry, RelayGraph, SessionSearchHit, SkillInfo, TerminalInfo, WorkspaceView } from "./types";
 
@@ -239,24 +240,15 @@ function WorkspaceInspector({ item, initialCheckoutId, openTerminal, onError, on
       {tab === "files" && checkout ? <DirectoryExplorer checkout={checkout} onError={onError} text={text}/> : null}
       {tab === "worktrees" ? <div className="inspector-worktree-list">{item.checkouts.map((candidate) => <article key={candidate.id}><GitBranch size={16}/><div><strong>{candidate.branch ?? candidate.kind}</strong><code>{candidate.canonical_path}</code></div><span className={candidate.dirty ? "dirty-dot" : "clean-dot"}/><button className="soft-button" onClick={() => void desktopApi.createTerminal(candidate.canonical_path, `PowerShell · ${item.workspace.display_name}`).then(openTerminal).catch((reason) => onError(String(reason)))}><TerminalSquare size={14}/>{text.open}</button></article>)}</div> : null}
       {tab === "skills" ? <WorkspaceSkills checkouts={item.checkouts} checkoutId={checkoutId} onError={onError} locale={locale}/> : null}
-      {tab === "handoffs" ? <WorkspaceRelayGraph graph={relayGraph} sessions={sessions} loading={loading} locale={locale} onOpenSession={(sessionId) => onOpenSessions({ workspaceId: item.workspace.id, checkoutId, sessionId })}/> : null}
+      {tab === "handoffs" ? <WorkspaceRelayGraph graph={relayGraph} sessions={sessions} loading={loading} locale={locale} workspace={item} openTerminal={openTerminal} onOpenSession={(sessionId) => onOpenSessions({ workspaceId: item.workspace.id, checkoutId: null, sessionId })}/> : null}
     </div>
   </section>;
 }
 
-function WorkspaceRelayGraph({ graph, sessions, loading, locale, onOpenSession }: { graph: RelayGraph; sessions: SessionSearchHit[]; loading: boolean; locale: Locale; onOpenSession: (sessionId: string) => void }) {
+function WorkspaceRelayGraph({ graph, loading, locale, onOpenSession, workspace, openTerminal }: { graph: RelayGraph; sessions: SessionSearchHit[]; loading: boolean; locale: Locale; onOpenSession: (sessionId: string) => void; workspace: WorkspaceView; openTerminal: (terminal: TerminalInfo) => void }) {
   const zh = locale === "zh-CN";
-  const bySession = new Map(sessions.map((hit) => [hit.session.id, hit.session]));
-  const handoffs = new Map(graph.handoffs.map((handoff) => [handoff.id, handoff]));
   if (loading) return <div className="atlas-loading"><LoaderCircle className="spin" size={16}/>{zh ? "正在读取交接图…" : "Loading handoff graph…"}</div>;
-  if (!graph.edges.length) return <div className="relay-graph-empty"><Workflow size={26}/><strong>{zh ? "还没有 Agent 交接" : "No Agent handoffs yet"}</strong><p>{zh ? "从项目会话中选择消息并交接后，关系会自动出现在这里。" : "Select a message in a project session and hand it off; the relationship will appear here automatically."}</p></div>;
-  return <div className="workspace-relay-graph">
-    <header><div><strong>{zh ? "Agent 交接链" : "Agent handoff chains"}</strong><span>{zh ? "Möbius 只维护索引关系，不修改原始会话。" : "Möbius stores only the lineage index and never changes source sessions."}</span></div><small>{graph.chains.length} {zh ? "条链" : "chains"} · {graph.edges.length} {zh ? "次交接" : "handoffs"}</small></header>
-    {graph.chains.map((chain) => <section key={chain.id} className="relay-chain-card"><header><strong>{chain.title}</strong><time>{chain.updated_at.slice(0, 16).replace("T", " · ")}</time></header><div className="relay-chain-flow">{graph.edges.filter((edge) => edge.chain_id === chain.id).map((edge) => {
-      const source = bySession.get(edge.source_session_id); const target = edge.target_session_id ? bySession.get(edge.target_session_id) : undefined; const handoff = handoffs.get(edge.handoff_id);
-      return <div className="relay-edge" key={edge.id}><button type="button" onClick={() => onOpenSession(edge.source_session_id)}><span className={`provider-pill ${source?.provider ?? ""}`}>{source?.provider ?? "session"}</span><strong>{source?.title ?? edge.source_session_id}</strong></button><span className="relay-arrow"><ArrowRight size={17}/><small>{zh ? "接手" : "take over"}</small></span>{target ? <button type="button" onClick={() => onOpenSession(target.id)}><span className={`provider-pill ${target.provider}`}>{target.provider}</span><strong>{target.title}</strong></button> : <div className="relay-pending"><span className={`provider-pill ${handoff?.target_provider ?? ""}`}>{handoff?.target_provider ?? "Agent"}</span><strong>{zh ? "等待识别目标会话" : "Waiting for target session"}</strong></div>}</div>;
-    })}</div></section>)}
-  </div>;
+  return <SessionLineagePanel graph={graph} locale={locale} onOpenSession={onOpenSession} workspace={workspace} openTerminal={openTerminal}/>;
 }
 
 function DirectoryExplorer({ checkout, onError, text }: { checkout: Checkout; onError: (message: string) => void; text: ReturnType<typeof words> }) {

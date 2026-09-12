@@ -14,7 +14,7 @@ use rusqlite::{
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, fs, path::Path, str::FromStr};
 
-pub const TARGET_SCHEMA_VERSION: i64 = 3;
+pub const TARGET_SCHEMA_VERSION: i64 = 4;
 const V2_SCHEMA_VERSION: i64 = 2;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -429,20 +429,30 @@ impl Database {
         ) {
             // Link only a packet explicitly observed in the target transcript.
             // Provider/cwd alone cannot identify which session took over.
-            transaction.execute(
+            let bound = transaction.execute(
                 r#"UPDATE relay_edges SET target_session_id = ?1
-                   WHERE id = (
+                   WHERE id IN (
                      SELECT re.id FROM relay_edges re
                      INNER JOIN handoff_packages hp ON hp.id = re.handoff_id
                      WHERE re.target_session_id IS NULL
                        AND hp.target_provider = ?2
                        AND hp.target_checkout_id = ?3
                        AND hp.id = ?4
+                       AND julianday(?5) >= julianday(hp.created_at)
                        AND re.source_session_id <> ?1
-                     ORDER BY re.created_at DESC LIMIT 1
+                       AND NOT EXISTS (
+                         SELECT 1 FROM relay_edges bound
+                         WHERE bound.handoff_id = hp.id
+                           AND bound.target_session_id IS NOT NULL
+                           AND bound.target_session_id <> ?1
+                       )
                    )"#,
-                params![session.id, session.provider.to_string(), checkout_id, handoff_id],
+                params![session.id, session.provider.to_string(), checkout_id, handoff_id, session.started_at],
             )?;
+            if bound > 0 {
+                transaction.execute("INSERT INTO handoff_operations(handoff_id, state, detail, updated_at) VALUES (?1, 'bound', NULL, ?2) ON CONFLICT(handoff_id) DO UPDATE SET state = 'bound', detail = NULL, updated_at = excluded.updated_at",
+                    params![handoff_id, Utc::now().to_rfc3339()])?;
+            }
         }
         transaction.commit()?;
         Ok(())
@@ -1104,9 +1114,23 @@ impl Database {
         let now = Utc::now().to_rfc3339();
         let mut connection = self.connection()?;
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let existing_edge: Option<String> = transaction.query_row(
+            "SELECT id FROM relay_edges WHERE handoff_id = ?1 ORDER BY id LIMIT 1",
+            [&handoff.id], |row| row.get(0),
+        ).optional()?;
+        if let Some(id) = existing_edge { return Ok(id); }
+        let source_ids: std::collections::BTreeSet<String> = match handoff.payload.get("entry_session_ids") {
+            Some(value) => serde_json::from_value::<Vec<String>>(value.clone())?.into_iter().collect(),
+            None => [handoff.source_session_id.clone()].into_iter().collect(),
+        };
+        anyhow::ensure!(source_ids.contains(&handoff.source_session_id), "primary source missing from handoff entry set");
+        for source in &source_ids {
+            let exists: bool = transaction.query_row("SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ?1)", [source], |row| row.get(0))?;
+            anyhow::ensure!(exists, "handoff source session not found");
+        }
         let existing_chain: Option<String> = transaction
             .query_row(
-                "SELECT chain_id FROM relay_edges WHERE target_session_id = ?1 ORDER BY created_at DESC LIMIT 1",
+                "SELECT chain_id FROM relay_edges WHERE target_session_id = ?1 OR source_session_id = ?1 ORDER BY created_at DESC LIMIT 1",
                 [&handoff.source_session_id],
                 |row| row.get(0),
             )
@@ -1121,10 +1145,13 @@ impl Database {
         } else {
             transaction.execute("UPDATE relay_chains SET updated_at = ?2 WHERE id = ?1", params![chain_id, now])?;
         }
+        for source in &source_ids {
+        let source_edge_id = if source == &handoff.source_session_id { edge_id.clone() } else { format!("edge:{}", uuid::Uuid::new_v4()) };
         transaction.execute(
             "INSERT INTO relay_edges(id, chain_id, source_session_id, target_session_id, handoff_id, relation, created_at) VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6)",
-            params![edge_id, chain_id, handoff.source_session_id, handoff.id, handoff.mode.as_str(), now],
+            params![source_edge_id, chain_id, source, handoff.id, handoff.mode.as_str(), now],
         )?;
+        }
         transaction.commit()?;
         Ok(edge_id)
     }
@@ -1343,7 +1370,7 @@ mod tests {
         let temporary = tempfile::tempdir().expect("temp");
         let paths = paths(temporary.path());
         let database = Database::open(&paths).expect("open V2 database");
-        assert_eq!(database.schema_version().expect("version"), 3);
+        assert_eq!(database.schema_version().expect("version"), 4);
         assert_eq!(
             fs::read_dir(paths.migration_backup_dir())
                 .expect("backups")
@@ -1369,7 +1396,7 @@ mod tests {
         drop(connection);
 
         let database = Database::open(&paths).expect("migrate");
-        assert_eq!(database.schema_version().expect("version"), 3);
+        assert_eq!(database.schema_version().expect("version"), 4);
         let backups = fs::read_dir(paths.migration_backup_dir())
             .expect("backup dir")
             .collect::<Result<Vec<_>, _>>()
@@ -1807,6 +1834,12 @@ mod tests {
         assert!(resolved.is_none(), "same-provider sessions are not evidence of a handoff");
         drop(connection);
         target.metadata = serde_json::json!({"mobius_handoff_id": sealed.id});
+        database.upsert_session(&target).expect("unknown creation time");
+        assert!(database.relay_graph_for_workspace("workspace:relay").unwrap().edges[0].target_session_id.is_none());
+        target.started_at = Some("2020-01-01T00:00:00Z".into());
+        database.upsert_session(&target).expect("historical copied marker");
+        assert!(database.relay_graph_for_workspace("workspace:relay").unwrap().edges[0].target_session_id.is_none());
+        target.started_at = Some(Utc::now().to_rfc3339());
         database.upsert_session(&target).expect("explicit target marker");
         let graph = database.relay_graph_for_workspace("workspace:relay").expect("graph");
         assert_eq!(graph.chains.len(), 1);

@@ -28,6 +28,7 @@ impl Database {
         database.migrate(&connection)?;
         database.migrate_v2(&connection)?;
         database.migrate_mome_schema(&connection)?;
+        database.migrate_lineage_schema()?;
         database.ensure_v2_indexes(&connection)?;
         Ok(database)
     }

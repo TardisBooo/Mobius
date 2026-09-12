@@ -100,17 +100,13 @@ export function SessionLibraryV2({ revision, workspaces, health, openTerminal, o
   const startHandoff = async (target: AgentKind, packet: string, trajectoryId?: string) => {
     if (!selected) return;
     try {
-      if (target === selected.session.provider && selected.session.capabilities.includes("native_resume")) {
-        openTerminal(await desktopApi.resumeSession(selected.session.id));
-        setHandoffOpen(false);
-        return;
-      }
       const recorded = typeof selected.session.metadata?.cwd === "string" ? selected.session.metadata.cwd : undefined;
       const workspace = workspaces.find((item) => item.checkouts.some((checkout) => checkout.id === selected.session.checkout_id));
       const checkout = workspace?.checkouts.find((item) => item.id === selected.session.checkout_id);
       const cwd = checkout?.canonical_path ?? recorded;
       if (!cwd) throw new Error(locale === "zh-CN" ? "该会话没有可验证的工作目录，请先把它关联到工作区。" : "This session has no verified working directory. Associate it with a workspace first.");
       const lineage = workspace && checkout ? { sourceSessionId: selected.session.id, sourceMessageId: selectedMessage?.id ?? "", checkoutId: checkout.id, workspaceId: workspace.workspace.id } : undefined;
+      if (!lineage) throw new Error(locale === "zh-CN" ? "请先登记此会话的工作目录，以便保存交接关系。" : "Register this session's workspace before handing it off so its lineage can be recorded.");
       openTerminal(await desktopApi.startAgentHandoff(target, cwd, packet, lineage, trajectoryId));
       setHandoffOpen(false);
     } catch (reason) { onError(String(reason)); }
@@ -165,7 +161,6 @@ function HandoffDialog({ source, message, locale, onClose, onCopy, onStart }: { 
   const [preparing, setPreparing] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState("");
-  const crossAgent = target !== source.session.provider;
   const prepare = async () => {
     setPreparing(true); setConfirmed(false); setError(""); setReview(null);
     try { setReview(await desktopApi.prepareHandoffTrajectory(source.session.id)); }
@@ -178,7 +173,7 @@ function HandoffDialog({ source, message, locale, onClose, onCopy, onStart }: { 
   };
   return <AccessibleDialog title={zh ? "交接给其他 Agent" : "Hand off to another Agent"} closeLabel={zh ? "关闭" : "Close"} onClose={onClose}>
     <div className="relay-dialog-v2">
-      <p>{zh ? "默认使用原 Agent 并原生恢复此会话；切换 Agent 后，会在当前项目目录直接创建目标 Agent 会话并携带可审查的交接包，不再选择文件夹。" : "The original Agent resumes this session natively. If you switch Agent, Möbius starts the target Agent directly in the current project with the reviewable handoff package—no folder picker."}</p>
+      <p>{zh ? "在当前工作目录新建目标 Agent 会话，传递所选会话及其祖先的图谱与来源引用。不总结、不压缩、不复制原始日志；由目标 Agent 自行决定如何读取。恢复原会话请使用会话列表中的恢复按钮。" : "Create a new target session in this working directory with the selected session's ancestry graph and source references. No summaries, compression or copied transcripts. The target decides what to read. Use Resume original in the session list to continue the existing session."}</p>
       <section className="handoff-route">
         <span className={`provider-pill ${source.session.provider}`}>{name(source.session.provider)}</span><ArrowRight size={15}/>
         <label><span>{zh ? "目标 Agent" : "Target Agent"}</span><select aria-label={zh ? "目标 Agent" : "Target Agent"} value={target} onChange={(event) => { setTarget(event.target.value as AgentKind); setCopied(false); }}>{targetChoices.map((agent) => <option key={agent} value={agent}>{name(agent)}</option>)}</select></label>
@@ -188,14 +183,14 @@ function HandoffDialog({ source, message, locale, onClose, onCopy, onStart }: { 
         <code>{referenceText(source.session, message)}</code>
         <p>{message.content}</p>
       </section>
-      {crossAgent ? <section className="trajectory-review">
-        <button className="soft-button" disabled={preparing || starting} onClick={() => void prepare()}>{preparing ? (zh ? "正在读取原始轨迹…" : "Reading native trajectory…") : (zh ? "生成完整轨迹预览" : "Prepare full trajectory")}</button>
+      <section className="trajectory-review">
+        <button className="soft-button" disabled={preparing || starting} onClick={() => void prepare()}>{preparing ? (zh ? "正在定位会话祖先…" : "Resolving session ancestry…") : (zh ? "预览交接图谱与引用" : "Review graph and references")}</button>
         {error ? <p role="alert">{error}</p> : null}
-        {review ? <><p>{zh ? "完整来源" : "Complete sources"}: {review.source_count} · {Math.ceil(review.bytes / 1024)} KiB · ≈ {review.estimated_tokens.toLocaleString()} tokens</p>
-          <details><summary>{zh ? "查看轨迹摘录与完整快照位置" : "View excerpt and full snapshot location"}</summary><p style={{ overflowWrap: "anywhere" }}>{review.snapshot_path}</p><pre style={{ maxHeight: 220, overflow: "auto", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{review.preview}</pre></details>
-          <label><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)}/>{zh ? "确认传递完整原始记录（可能含敏感信息和工具输出），并接受目标模型的上下文消耗。上方仅为摘录，快照未截断。" : "Transfer complete native logs, which may contain sensitive data and tool outputs, and accept context costs. The preview is an excerpt; the snapshot is not truncated."}</label></> : null}
-      </section> : null}
-      <div className="modal-actions"><span className="handoff-status" aria-live="polite">{copied ? (zh ? "选中消息已复制。" : "Selected message copied.") : null}</span><button className="soft-button" onClick={() => void copyPacket()}><Copy size={15}/>{zh ? "复制选中消息" : "Copy selected message"}</button><button className="primary-button" disabled={starting || (crossAgent && (!review || !confirmed))} onClick={() => { setStarting(true); void onStart(target, handoffPackage(source.session, message, target), crossAgent ? review?.id : undefined).finally(() => setStarting(false)); }}><CirclePlay size={15}/>{starting ? (zh ? "正在启动…" : "Starting…") : (zh ? `打开 ${name(target)} 并交接` : `Open ${name(target)} and hand off`)}</button></div>
+        {review ? <><p>{zh ? "来源节点" : "Source nodes"}: {review.source_count} · {Math.ceil(review.bytes / 1024)} KiB {zh ? "图谱文件" : "graph file"}</p>
+          <details><summary>{zh ? "查看完整图谱 JSON 与文件位置" : "View complete graph JSON and location"}</summary><p style={{ overflowWrap: "anywhere" }}>{review.snapshot_path}</p><pre style={{ maxHeight: 220, overflow: "auto", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{review.preview}</pre></details>
+          <label><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)}/>{zh ? "确认向目标 Agent 提供这些会话身份、关系与来源位置。缺失来源会明确标注，日志正文不会自动注入。" : "Share these session identities, relationships and source locations with the target Agent. Missing sources are explicit; transcript bodies are not injected."}</label></> : null}
+      </section>
+      <div className="modal-actions"><span className="handoff-status" aria-live="polite">{copied ? (zh ? "选中消息已复制。" : "Selected message copied.") : null}</span><button className="soft-button" onClick={() => void copyPacket()}><Copy size={15}/>{zh ? "复制选中消息" : "Copy selected message"}</button><button className="primary-button" disabled={starting || !review || !confirmed} onClick={() => { setStarting(true); void onStart(target, handoffPackage(source.session, message, target), review?.id).finally(() => setStarting(false)); }}><CirclePlay size={15}/>{starting ? (zh ? "正在启动…" : "Starting…") : (zh ? `新建 ${name(target)} 会话并交接` : `Create ${name(target)} session and hand off`)}</button></div>
     </div>
   </AccessibleDialog>;
 }

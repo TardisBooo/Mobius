@@ -212,3 +212,24 @@ export interface TerminalOutput { terminal_id: string; sequence: number; data: s
 export interface TerminalSnapshot { terminal_id: string; sequence: number; data: string; }
 export interface NoteFileInfo { id: string; mount_id: string | null; title: string; virtual_path: string; real_path: string; read_only: boolean; modified_at: string | null; }
 export interface MountInfo { id: string; library_id: string; virtual_path: string; real_path: string; access: "read_only" | "read_write"; watcher_mode: string; state: string; created_at: string; updated_at: string; }
+export interface SessionReference {
+  session_id: string;
+  harness: string | null;
+  native_id: string | null;
+  title: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  checkout_id: string | null;
+  source_path: string | null;
+  source_status: string;
+  observed_bytes: number | null;
+}
+export interface LineageManifest {
+  schema_version: number;
+  id: string;
+  content_mode: "references_only";
+  entry_session_ids: string[];
+  nodes: SessionReference[];
+  edges: { id: string; source: string; target: string; handoff_id: string; created_at: string }[];
+  missing_sources: string[];
+}

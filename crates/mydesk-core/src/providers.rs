@@ -4,6 +4,7 @@ use crate::{
     sources::{SessionSourceRoot, load_approved_session_sources, source_fingerprint},
 };
 use anyhow::Result;
+#[cfg(test)]
 use chrono::Utc;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -457,7 +458,8 @@ impl<'a> ProviderIndexer<'a> {
             capabilities.push(SessionCapability::NativeResume);
         }
         let native_resume = capabilities.contains(&SessionCapability::NativeResume);
-        let handoff_marker = Regex::new(r"\[MOBIUS_HANDOFF_ID:([^\]\r\n]+)\]")?;
+        // Quoted historical markers must never bind an unrelated target.
+        let handoff_marker = Regex::new(r"^\[MOBIUS_HANDOFF_ID:([^\]\r\n]+)\]")?;
         let mobius_handoff_id = parsed.messages.iter()
             .filter(|message| message.role == MessageRole::User)
             .find_map(|message| handoff_marker.captures(&message.content).map(|capture| capture[1].to_string()));
@@ -472,8 +474,12 @@ impl<'a> ProviderIndexer<'a> {
             source_path: fingerprint.source_path.clone(),
             source_available: true,
             started_at: parsed.started_at,
-            updated_at: parsed.updated_at.unwrap_or_else(|| Utc::now().to_rfc3339()),
+            updated_at: parsed.updated_at.clone().unwrap_or_else(|| fingerprint.modified_unix_millis
+                .and_then(|ms| i64::try_from(ms).ok())
+                .and_then(chrono::DateTime::from_timestamp_millis)
+                .map(|time| time.to_rfc3339()).unwrap_or_default()),
             metadata: json!({
+                "updated_at_source": if parsed.updated_at.is_some() { "native_event" } else if fingerprint.modified_unix_millis.is_some() { "source_file_mtime" } else { "unknown" },
                 "cwd": parsed.cwd,
                 "mobius_handoff_id": mobius_handoff_id,
                 "source_version": source_version,

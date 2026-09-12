@@ -20,6 +20,8 @@ pub mod session_maps;
 pub mod skills;
 pub mod sources;
 pub mod trajectory;
+pub mod lineage;
+pub mod harness_launch;
 pub mod vault;
 pub mod workspace_identity;
 

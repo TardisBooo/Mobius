@@ -291,7 +291,7 @@ fn validate_request(request: &McpApprovalRequest) -> Result<()> {
         || request.operations.iter().any(|operation| {
             !matches!(
                 operation.as_str(),
-                "search_sessions" | "get_messages" | "resolve_reference" | "mome_recall"
+                "search_sessions" | "get_messages" | "resolve_reference" | "mome_recall" | "read_session_range" | "commit_handoff"
             )
         })
     {
@@ -334,10 +334,14 @@ fn validate_request(request: &McpApprovalRequest) -> Result<()> {
     if request
         .operations
         .iter()
-        .any(|value| value != "search_sessions" && value != "mome_recall")
+        .any(|value| value == "get_messages" || value == "resolve_reference")
         && (request.start_ordinal.is_none() || request.end_ordinal.is_none())
     {
         bail!("message approval needs one explicit inclusive message range");
+    }
+    if request.operations.iter().any(|value| value == "read_session_range" || value == "commit_handoff")
+        && request.query.as_deref().is_none_or(|q| q.trim().is_empty()) {
+        bail!("source read approval requires an exact byte-range fingerprint");
     }
     if let (Some(start), Some(end)) = (request.start_ordinal, request.end_ordinal) {
         if start < 0 || end < start || end - start > 200 {
