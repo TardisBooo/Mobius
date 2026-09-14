@@ -2,8 +2,8 @@ use crate::{
     AgentKind, Artifact, Checkout, CheckoutKind, Database, HandoffDraft, HandoffPackage,
     MatchRange, Message, MessageMatch, MessageRole, PathMapping, RelayChain, RelayEdge, RelayGraph,
     RelayMode, Session,
-    SessionCapability, SessionQuery, SessionSearchHit, SessionState, Workspace, WorkspacePaths,
-    WorkspaceStatus,
+    SessionCapability, SessionQuery, SessionSearchHit, SessionState, SessionTurnPreview,
+    SessionTurnState, Workspace, WorkspacePaths, WorkspaceStatus,
 };
 use anyhow::{Context, Result};
 use chrono::Utc;
@@ -12,7 +12,7 @@ use rusqlite::{
     types::Value as SqlValue,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, fs, path::Path, str::FromStr};
+use std::{collections::{HashMap, HashSet}, fs, path::Path, str::FromStr};
 
 pub const TARGET_SCHEMA_VERSION: i64 = 4;
 const V2_SCHEMA_VERSION: i64 = 2;
@@ -617,6 +617,7 @@ impl Database {
                     session,
                     message: Some(matched.message),
                     ranges: matched.ranges,
+                    last_turn: None,
                 });
                 if output.len() == limit {
                     break;
@@ -638,9 +639,11 @@ impl Database {
                         session,
                         message: None,
                         ranges: Vec::new(),
+                        last_turn: None,
                     });
                 }
             }
+            self.populate_last_turn_previews(&mut output)?;
             return Ok(output);
         }
         let connection = self.connection()?;
@@ -661,9 +664,50 @@ impl Database {
                 session,
                 message: None,
                 ranges: Vec::new(),
+                last_turn: None,
             });
         }
+        self.populate_last_turn_previews(&mut output)?;
         Ok(output)
+    }
+
+    fn populate_last_turn_previews(&self, hits: &mut [SessionSearchHit]) -> Result<()> {
+        if hits.is_empty() {
+            return Ok(());
+        }
+        let placeholders = vec!["?"; hits.len()].join(", ");
+        let sql = format!(
+            r#"WITH last_users AS (
+                   SELECT session_id, MAX(ordinal) AS user_ordinal
+                   FROM messages
+                   WHERE role = 'user' AND redacted = 0 AND trim(content) <> ''
+                     AND session_id IN ({placeholders})
+                   GROUP BY session_id
+               )
+               SELECT m.id, m.session_id, m.ordinal, m.role, m.kind, m.content, m.timestamp,
+                      m.source_locator_json, m.redacted
+               FROM messages m
+               INNER JOIN last_users u ON u.session_id = m.session_id
+               WHERE m.ordinal >= u.user_ordinal AND m.role IN ('user', 'assistant')
+               ORDER BY m.session_id, m.ordinal"#,
+        );
+        let parameters = hits.iter()
+            .map(|hit| SqlValue::Text(hit.session.id.clone()))
+            .collect::<Vec<_>>();
+        let connection = self.connection()?;
+        let mut statement = connection.prepare(&sql)?;
+        let messages = statement
+            .query_map(params_from_iter(parameters.iter()), message_from_row)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let mut by_session: HashMap<String, Vec<Message>> = HashMap::new();
+        for message in messages {
+            by_session.entry(message.session_id.clone()).or_default().push(message);
+        }
+        for hit in hits {
+            hit.last_turn = by_session.get(&hit.session.id)
+                .and_then(|messages| last_turn_preview(&hit.session, messages));
+        }
+        Ok(())
     }
 
     fn search_session_metadata_scoped(
@@ -1199,6 +1243,50 @@ fn message_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Message> {
     })
 }
 
+const SESSION_TURN_PREVIEW_CHARS: usize = 240;
+
+fn last_turn_preview(session: &Session, messages: &[Message]) -> Option<SessionTurnPreview> {
+    let user_index = messages.iter().rposition(|message| {
+        message.role == MessageRole::User && !message.redacted && !message.content.trim().is_empty()
+    })?;
+    let user = &messages[user_index];
+    let (user_excerpt, user_excerpt_truncated) = bounded_preview(&user.content);
+    let assistant_messages = messages[user_index + 1..].iter()
+        .filter(|message| message.role == MessageRole::Assistant && !message.redacted && !message.content.trim().is_empty())
+        .collect::<Vec<_>>();
+    let assistant_text = assistant_messages.iter()
+        .map(|message| message.content.trim())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    let (assistant_excerpt, assistant_excerpt_truncated) = if assistant_text.is_empty() {
+        (None, false)
+    } else {
+        let (value, truncated) = bounded_preview(&assistant_text);
+        (Some(value), truncated)
+    };
+    Some(SessionTurnPreview {
+        user_message_id: user.id.clone(),
+        user_ordinal: user.ordinal,
+        user_excerpt,
+        user_excerpt_truncated,
+        assistant_start_ordinal: assistant_messages.first().map(|message| message.ordinal),
+        assistant_end_ordinal: assistant_messages.last().map(|message| message.ordinal),
+        assistant_excerpt,
+        assistant_excerpt_truncated,
+        state: if assistant_messages.is_empty() { SessionTurnState::AwaitingReply } else { SessionTurnState::Answered },
+        catalogue_complete: session.metadata.get("catalogue_coverage")
+            .and_then(serde_json::Value::as_str)
+            .map(|coverage| coverage == "full")
+            .unwrap_or(true),
+    })
+}
+
+fn bounded_preview(content: &str) -> (String, bool) {
+    let mut chars = content.trim().chars();
+    let excerpt = chars.by_ref().take(SESSION_TURN_PREVIEW_CHARS).collect::<String>();
+    (excerpt, chars.next().is_some())
+}
+
 fn session_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Session> {
     let provider: String = row.get(1)?;
     let state: String = row.get(5)?;
@@ -1512,6 +1600,62 @@ mod tests {
             &hits[0].message.content[hits[0].ranges[0].start..hits[0].ranges[0].end],
             "invalidation"
         );
+    }
+
+    #[test]
+    fn session_query_projects_the_final_turn_without_tool_noise() {
+        let temporary = tempfile::tempdir().expect("temp");
+        let database = Database::open(&paths(temporary.path())).expect("database");
+        let session = Session {
+            id: "session:last-turn".into(), provider: AgentKind::Codex,
+            provider_session_id: "last-turn".into(), checkout_id: None,
+            title: "Last turn".into(), state: SessionState::Indexed,
+            capabilities: vec![SessionCapability::Inspect],
+            source_path: r"C:\sessions\last-turn.jsonl".into(), source_available: true,
+            started_at: None, updated_at: "2026-09-14T12:00:00Z".into(),
+            metadata: serde_json::json!({"catalogue_coverage": "partial"}),
+        };
+        database.upsert_session(&session).expect("session");
+        let message = |id: &str, ordinal: i64, role: MessageRole, content: &str| Message {
+            id: id.into(), session_id: session.id.clone(), ordinal, role, kind: "text".into(),
+            content: content.into(), timestamp: None,
+            source_locator: serde_json::json!({"line": ordinal + 1}), redacted: false,
+        };
+        database.replace_session_messages(&session.id, &[
+            message("m0", 0, MessageRole::User, "older question"),
+            message("m1", 1, MessageRole::Assistant, "older answer"),
+            message("m2", 2, MessageRole::User, "why did the build fail?"),
+            message("m3", 3, MessageRole::Tool, "compiler output"),
+            message("m4", 4, MessageRole::Assistant, "The library path was wrong."),
+        ]).expect("messages");
+
+        let hits = database.query_sessions(&SessionQuery { limit: 10, ..SessionQuery::default() }).expect("query");
+        let turn = hits[0].last_turn.as_ref().expect("last turn");
+        assert_eq!(turn.user_ordinal, 2);
+        assert_eq!(turn.user_excerpt, "why did the build fail?");
+        assert_eq!(turn.assistant_start_ordinal, Some(4));
+        assert_eq!(turn.assistant_excerpt.as_deref(), Some("The library path was wrong."));
+        assert_eq!(turn.state, SessionTurnState::Answered);
+        assert!(!turn.catalogue_complete);
+    }
+
+    #[test]
+    fn final_user_turn_without_an_answer_is_explicit() {
+        let session = Session {
+            id: "session:waiting".into(), provider: AgentKind::Claude,
+            provider_session_id: "waiting".into(), checkout_id: None, title: "Waiting".into(),
+            state: SessionState::Indexed, capabilities: Vec::new(), source_path: "waiting.jsonl".into(),
+            source_available: true, started_at: None, updated_at: "2026-09-14T12:00:00Z".into(),
+            metadata: serde_json::json!({"catalogue_coverage": "full"}),
+        };
+        let messages = vec![Message {
+            id: "m0".into(), session_id: session.id.clone(), ordinal: 0, role: MessageRole::User,
+            kind: "text".into(), content: "please continue".into(), timestamp: None,
+            source_locator: serde_json::json!({}), redacted: false,
+        }];
+        let turn = last_turn_preview(&session, &messages).expect("last turn");
+        assert_eq!(turn.state, SessionTurnState::AwaitingReply);
+        assert!(turn.assistant_excerpt.is_none());
     }
 
     #[test]

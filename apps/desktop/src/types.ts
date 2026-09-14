@@ -180,7 +180,8 @@ export interface DirectoryEntry { name: string; relative_path: string; path: str
 export interface Session { id: string; provider: AgentKind; provider_session_id: string; checkout_id: string | null; title: string; state: string; capabilities: string[]; source_path: string; source_available: boolean; started_at: string | null; updated_at: string; metadata: Record<string, unknown>; }
 export interface Message { id: string; session_id: string; ordinal: number; role: "user" | "assistant" | "tool" | "system" | "developer" | "unknown"; kind: string; content: string; timestamp: string | null; source_locator: Record<string, unknown>; redacted: boolean; }
 export interface MatchRange { start: number; end: number; }
-export interface SessionSearchHit { session: Session; message: Message | null; ranges: MatchRange[]; }
+export interface SessionTurnPreview { user_message_id: string; user_ordinal: number; user_excerpt: string; user_excerpt_truncated: boolean; assistant_start_ordinal: number | null; assistant_end_ordinal: number | null; assistant_excerpt: string | null; assistant_excerpt_truncated: boolean; state: "answered" | "awaiting_reply"; catalogue_complete: boolean; }
+export interface SessionSearchHit { session: Session; message: Message | null; ranges: MatchRange[]; last_turn: SessionTurnPreview | null; }
 export interface RelayChain { id: string; workspace_id: string; checkout_id: string | null; title: string; created_at: string; updated_at: string; }
 export interface RelayEdge { id: string; chain_id: string; source_session_id: string; target_session_id: string | null; handoff_id: string; relation: "take_over" | "parallel"; created_at: string; }
 export interface HandoffPackage { id: string; source_session_id: string; target_provider: AgentKind; target_checkout_id: string; mode: "take_over" | "parallel"; payload: Record<string, unknown>; token_estimate: number; created_at: string; }

@@ -118,6 +118,29 @@ pub struct SessionSearchHit {
     pub session: Session,
     pub message: Option<Message>,
     pub ranges: Vec<MatchRange>,
+    /// Bounded verbatim display data, never a generated summary.
+    pub last_turn: Option<SessionTurnPreview>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionTurnState {
+    Answered,
+    AwaitingReply,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct SessionTurnPreview {
+    pub user_message_id: String,
+    pub user_ordinal: i64,
+    pub user_excerpt: String,
+    pub user_excerpt_truncated: bool,
+    pub assistant_start_ordinal: Option<i64>,
+    pub assistant_end_ordinal: Option<i64>,
+    pub assistant_excerpt: Option<String>,
+    pub assistant_excerpt_truncated: bool,
+    pub state: SessionTurnState,
+    pub catalogue_complete: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]

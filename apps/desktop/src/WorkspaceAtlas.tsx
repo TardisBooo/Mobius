@@ -34,7 +34,7 @@ function words(locale: Locale) {
     drop: zh ? "拖到这里加入近期工作区" : "Drop a project here to add it",
     noWorkspace: zh ? "尚未登记工作区。" : "No workspaces are registered yet.",
     noSessions: zh ? "这个工程还没有可显示的会话。" : "No sessions are associated with this project yet.",
-    scanHint: zh ? "会话按目录和 worktree 聚合；原始记录始终保持只读。" : "Sessions are grouped by directory and worktree; original transcripts remain read-only.",
+    scanHint: zh ? "来自已批准 Agent 来源的会话，按最近活动排序；原始记录始终保持只读。" : "Sessions from approved Agent sources, sorted by recent activity. Original transcripts remain read-only.",
     resume: zh ? "继续原会话" : "Resume original",
     inspect: zh ? "在会话库中查看" : "Inspect in session library",
     projectPath: zh ? "工程目录" : "Project directory",
@@ -45,7 +45,11 @@ function words(locale: Locale) {
     register: zh ? "登记工作区" : "Register workspace",
     cancel: zh ? "取消" : "Cancel",
     dirty: zh ? "有改动" : "dirty",
-    sessionsCount: zh ? "个会话" : "sessions"
+    sessionsCount: zh ? "个会话" : "sessions",
+    lastYou: zh ? "你" : "You",
+    lastAgent: zh ? "Agent" : "Agent",
+    awaitingReply: zh ? "尚未回复" : "No reply yet",
+    partialPreview: zh ? "索引片段" : "Indexed excerpt"
   };
 }
 
@@ -228,15 +232,10 @@ function WorkspaceInspector({ item, initialCheckoutId, openTerminal, onError, on
       .finally(() => setLoading(false));
   }, [item.workspace.id, onError, tab]);
   const resume = async (sessionId: string) => { try { openTerminal(await desktopApi.resumeSession(sessionId)); } catch (reason) { onError(String(reason)); } };
-  const byProvider = useMemo(() => {
-    const groups = new Map<string, SessionSearchHit[]>();
-    for (const hit of sessions) groups.set(hit.session.provider, [...(groups.get(hit.session.provider) ?? []), hit]);
-    return groups;
-  }, [sessions]);
   return <section className="workspace-inspector-v2" aria-label={text.selected}>
     <header className="inspector-title"><div><span>{text.selected.toUpperCase()}</span><h2>{item.workspace.display_name}</h2><code>{item.workspace.canonical_path}</code></div><label><span>{text.allWorktrees}</span><select value={checkoutId ?? ""} onChange={(event) => setCheckoutId(event.target.value || null)}><option value="">{text.allWorktrees}</option>{item.checkouts.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.branch ?? candidate.kind}</option>)}</select></label></header>
     <nav className="inspector-tabs"><button className={tab === "sessions" ? "active" : ""} onClick={() => setTab("sessions")}><Archive size={15}/>{text.sessions}<em>{sessions.length || ""}</em></button><button className={tab === "files" ? "active" : ""} onClick={() => setTab("files")}><Folder size={15}/>{text.files}</button><button className={tab === "worktrees" ? "active" : ""} onClick={() => setTab("worktrees")}><GitBranch size={15}/>{text.worktrees}</button><button className={tab === "skills" ? "active" : ""} onClick={() => setTab("skills")}><Braces size={15}/>{text.skills}</button><button className={tab === "handoffs" ? "active" : ""} onClick={() => setTab("handoffs")}><Workflow size={15}/>{text.handoffs}<em>{relayGraph.edges.length || ""}</em></button></nav>
-    <div className="inspector-content">{tab === "sessions" ? <div className="project-session-panel"><p className="project-session-note">{text.scanHint}</p>{loading ? <div className="atlas-loading"><LoaderCircle className="spin" size={16}/>{text.loading}</div> : sessions.length ? [...byProvider.entries()].map(([provider, values]) => <section key={provider}><header><span className={`provider-pill ${provider}`}>{providerName(provider)}</span><small>{values.length} {text.sessionsCount}</small></header>{values.map((hit) => <article key={hit.session.id}><div><strong>{hit.session.title}</strong><small>{hit.session.updated_at.slice(0, 16).replace("T", " · ")} · {hit.session.state}</small><code>{hit.session.provider_session_id}</code></div><div className="project-session-actions">{hit.session.capabilities.includes("native_resume") ? <button className="soft-button" onClick={() => void resume(hit.session.id)}><CirclePlay size={14}/>{text.resume}</button> : null}<button className="icon-soft" onClick={() => onOpenSessions({ workspaceId: item.workspace.id, checkoutId, sessionId: hit.session.id })} title={text.inspect}><PanelRight size={16}/></button></div></article>)}</section>) : <div className="atlas-empty compact"><Archive size={24}/><strong>{text.noSessions}</strong><button className="soft-button" onClick={() => onOpenSessions({ workspaceId: item.workspace.id, checkoutId })}>{text.inspect}</button></div>}</div> : null}
+    <div className="inspector-content">{tab === "sessions" ? <div className="project-session-panel"><p className="project-session-note">{text.scanHint}</p>{loading ? <div className="atlas-loading"><LoaderCircle className="spin" size={16}/>{text.loading}</div> : sessions.length ? <section className="project-session-timeline"><header><strong>{text.sessions}</strong><small>{sessions.length} {text.sessionsCount}</small></header>{sessions.map((hit) => <article key={hit.session.id} className="project-session-row"><div className="project-session-copy"><div className="project-session-heading"><span className={`provider-pill ${hit.session.provider}`}>{providerName(hit.session.provider)}</span><strong>{hit.session.title}</strong></div><small>{hit.session.updated_at.slice(0, 16).replace("T", " · ")} · {hit.session.state}</small>{hit.last_turn ? <div className="session-turn-preview"><p><b>{text.lastYou}</b><span>{hit.last_turn.user_excerpt}{hit.last_turn.user_excerpt_truncated ? "…" : ""}</span></p><p className={!hit.last_turn.assistant_excerpt ? "pending" : ""}><b>{text.lastAgent}</b><span>{hit.last_turn.assistant_excerpt ?? text.awaitingReply}{hit.last_turn.assistant_excerpt_truncated ? "…" : ""}</span></p>{!hit.last_turn.catalogue_complete ? <em>{text.partialPreview}</em> : null}</div> : null}</div><div className="project-session-actions">{hit.session.capabilities.includes("native_resume") ? <button className="soft-button" onClick={() => void resume(hit.session.id)}><CirclePlay size={14}/>{text.resume}</button> : null}<button className="icon-soft" onClick={() => onOpenSessions({ workspaceId: item.workspace.id, checkoutId, sessionId: hit.session.id })} title={text.inspect}><PanelRight size={16}/></button></div></article>)}</section> : <div className="atlas-empty compact"><Archive size={24}/><strong>{text.noSessions}</strong><button className="soft-button" onClick={() => onOpenSessions({ workspaceId: item.workspace.id, checkoutId })}>{text.inspect}</button></div>}</div> : null}
       {tab === "files" && checkout ? <DirectoryExplorer checkout={checkout} onError={onError} text={text}/> : null}
       {tab === "worktrees" ? <div className="inspector-worktree-list">{item.checkouts.map((candidate) => <article key={candidate.id}><GitBranch size={16}/><div><strong>{candidate.branch ?? candidate.kind}</strong><code>{candidate.canonical_path}</code></div><span className={candidate.dirty ? "dirty-dot" : "clean-dot"}/><button className="soft-button" onClick={() => void desktopApi.createTerminal(candidate.canonical_path, `PowerShell · ${item.workspace.display_name}`).then(openTerminal).catch((reason) => onError(String(reason)))}><TerminalSquare size={14}/>{text.open}</button></article>)}</div> : null}
       {tab === "skills" ? <WorkspaceSkills checkouts={item.checkouts} checkoutId={checkoutId} onError={onError} locale={locale}/> : null}
