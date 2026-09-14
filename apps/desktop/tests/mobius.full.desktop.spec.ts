@@ -228,7 +228,7 @@ test("full isolated desktop acceptance: all local product flows remain explicit 
     const health = await invoke<{ database_path: string }>(page, "health");
     expect(health.database_path).toContain(runName);
 
-    await page.locator(".rail-item").nth(1).click();
+    await page.locator(".rail-item").nth(0).click();
     await expect(page.locator(".session-library-v2")).toBeVisible();
     await page.getByRole("button", { name: "Scan sessions" }).click();
     await expect(page.locator(".scan-status")).toBeHidden({ timeout: 20_000 });
@@ -326,7 +326,7 @@ test("full isolated desktop acceptance: all local product flows remain explicit 
     // Switching Harness is a separate choice in the same dialog. The target
     // opens directly in the same checkout and the reviewed packet becomes the
     // first explicit argument; there is still no folder-selection step.
-    await page.locator(".rail-item").nth(1).click();
+    await page.locator(".rail-item").nth(0).click();
     await page.locator(".session-tree-v2").getByRole("button", { name: "All sessions" }).click();
     await page.locator(".session-search-v2 input").fill(memoryMarker);
     const codexAgain = page.locator(".session-list-row", { has: page.locator(".provider-pill.codex") });
@@ -339,7 +339,7 @@ test("full isolated desktop acceptance: all local product flows remain explicit 
     await expect(page.locator(".terminal-page")).toBeVisible({ timeout: 12_000 });
     await expect.poll(() => snapshots(page), { timeout: 12_000 }).toContain("MÖBIUS HANDOFF");
 
-    await page.locator(".rail-item").nth(1).click();
+    await page.locator(".rail-item").nth(0).click();
     await page.locator(".session-tree-v2").getByRole("button", { name: "All sessions" }).click();
     await page.locator(".session-search-v2 input").fill(memoryMarker);
 
@@ -351,7 +351,7 @@ test("full isolated desktop acceptance: all local product flows remain explicit 
 
     // Mome is opt-in. This call occurs only after the explicit button + query,
     // remains local BM25, and produces reviewable citations within its budget.
-    await page.locator(".rail-item").nth(1).click();
+    await page.locator(".rail-item").nth(0).click();
     await expect(page.locator(".session-library-v2")).toBeVisible();
     await page.locator(".session-mome-trigger").click();
     const mome = page.locator(".mome-dialog");
@@ -369,15 +369,15 @@ test("full isolated desktop acceptance: all local product flows remain explicit 
 
     // Exact references are copied only. The dedicated picker must fit a large
     // desktop viewport, expose both actions, and never type into xterm.
-    await page.locator(".rail-item").first().click();
+    await page.locator(".rail-item").nth(1).click();
     // The new workbench intentionally keeps Recent workspaces user-maintained,
     // so a fresh profile has no corridor card. Create the disposable terminal
     // in the fixture directory, then verify the persistent Terminals entry can
     // return to it after leaving the page.
     const acceptanceTerminalTitle = `Acceptance PowerShell ${Date.now()}`;
     const acceptanceTerminal = await invoke<Terminal>(page, "terminal_create", { cwd: fixtureProject, title: acceptanceTerminalTitle, initialCommand: null });
+    await page.locator(".rail-item").nth(0).click();
     await page.locator(".rail-item").nth(1).click();
-    await page.locator(".rail-item").first().click();
     if (!await page.locator(".terminal-page").isVisible()) {
       await page.getByRole("button", { name: /Terminals/ }).click();
     }
@@ -704,7 +704,7 @@ test("full isolated desktop acceptance: all local product flows remain explicit 
     expect(await invoke<Array<{ id: string }>>(page, "list_managed_skills")).toHaveLength(0);
 
     await drawer.getByRole("button", { name: "Close" }).click();
-    await page.locator(".rail-item").nth(0).click();
+    await page.locator(".rail-item").nth(1).click();
     await page.getByRole("button", { name: "Workspaces", exact: true }).click();
     await page.locator(".atlas-project-button").and(page.getByTitle(fixtureProject, { exact: true })).click();
     await page.getByRole("button", { name: "Handoff graph" }).click();

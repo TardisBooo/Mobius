@@ -148,7 +148,7 @@ export function SessionLineagePanel({ graph, locale, onOpenSession, workspace, o
     ]}/>}
     {review && <AccessibleDialog title={zh ? "确认图谱交接" : "Review graph handoff"} closeLabel={zh ? "关闭" : "Close"} onClose={() => { if (!busy) setReview(null); }}>
       <div className="lineage-handoff-review"><p>{zh ? "仅传递以下图谱与来源引用。原生会话保持不变。" : "Only this graph and its source references are passed. Native sessions remain unchanged."}</p>
-        <label>Harness<select value={target} disabled={busy} onChange={e => { setTarget(e.target.value as AgentKind); setConfirmed(false); }}>{["codex", "claude", "pi", "grok"].map(h => <option key={h} value={h}>{h}</option>)}</select></label>
+        <label>Harness<select value={target} disabled={busy} onChange={e => { setTarget(e.target.value as AgentKind); setConfirmed(false); }}>{["codex", "claude", "pi"].map(h => <option key={h} value={h}>{h}</option>)}</select></label>
         <label>{zh ? "目标工作目录" : "Target working directory"}<select value={checkoutId} disabled={busy} onChange={e => { setCheckoutId(e.target.value); setConfirmed(false); }}>{workspace.checkouts.map(c => <option key={c.id} value={c.id}>{c.branch ?? c.kind} · {c.canonical_path}</option>)}</select></label>
         <pre>{review.preview}</pre><label><input type="checkbox" checked={confirmed} disabled={busy} onChange={e => setConfirmed(e.target.checked)}/>{zh ? "确认以上来源与目标，并新建目标会话。" : "Approve these sources and target, and create a new target session."}</label>
         {error && <p role="alert">{error}</p>}<button className="primary-button" disabled={!confirmed || busy} onClick={() => void launch()}>{busy ? (zh ? "启动中…" : "Starting…") : (zh ? "新建会话并交接" : "Create session and hand off")}</button>

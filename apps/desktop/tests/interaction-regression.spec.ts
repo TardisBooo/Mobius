@@ -112,7 +112,7 @@ test("workspace drag, note save, mount tree and terminal contrast", async () => 
     // The terminal deliberately stays dark even while the shell is light.
     const terminal = await invoke<{ id: string }>(page, "terminal_create", { cwd: workspace, title: "interaction-regression", initialCommand: null });
     await invoke(page, "terminal_resize", { id: terminal.id, rows: 24, cols: 100 });
-    await page.locator(".rail-item").nth(0).click();
+    await page.locator(".rail-item").nth(1).click();
     await page.getByRole("button", { name: /Terminals|缁堢/ }).click();
     await expect(page.locator(".terminal-stage")).toBeVisible();
     const terminalColors = await page.locator(".terminal-stage").evaluate((node) => ({ background: getComputedStyle(node).backgroundColor, screen: getComputedStyle(node.querySelector(".xterm-screen")!).backgroundColor }));

@@ -59,7 +59,7 @@ test("v0.3 isolated desktop: all harnesses, sessions, @ picker, canvas, and term
     await registration.locator("button.primary-button").click();
     await expect(page.locator(".workspace-inspector-v2")).toContainText("fixture-project");
 
-    await page.locator(".rail-item").nth(1).click();
+    await page.locator(".rail-item").nth(0).click();
     await expect(page.locator(".session-library-v2")).toBeVisible();
     await page.getByRole("button", { name: "Scan sessions" }).click();
     await expect(page.locator(".scan-status")).toBeHidden({ timeout: 20_000 });
@@ -97,7 +97,7 @@ test("v0.3 isolated desktop: all harnesses, sessions, @ picker, canvas, and term
     await page.keyboard.press("Escape");
     await expect(page.locator(".mobius-modal[role=dialog]")).toBeHidden();
 
-    await page.locator(".rail-item").first().click();
+    await page.locator(".rail-item").nth(1).click();
     await page.locator(".inspector-tabs button", { hasText: "Worktrees" }).click();
     await page.locator(".workspace-inspector-v2 .inspector-worktree-list").getByRole("button", { name: "Open terminal" }).click();
     await expect(page.locator(".terminal-page")).toBeVisible();

@@ -56,7 +56,7 @@ await linkComposer.getByRole("textbox").fill("https://example.com/reference");
 await linkComposer.getByRole("button", { name: /加入画布|Add to canvas/ }).click();
 await page.screenshot({ path: canvasOutputPath, fullPage: false });
 
-await page.getByRole("button", { name: /会话|Sessions/ }).first().click();
+await page.getByRole("button", { name: /Agents/ }).first().click();
 await page.locator(".session-library-v2").waitFor({ state: "visible" });
 
 if (errors.length) throw new Error(errors.join("\n"));

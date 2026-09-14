@@ -48,7 +48,7 @@ async function main() {
         console.log(JSON.stringify({ index, tail: text.slice(-4500) }));
       }
     } else if (stage === 'graph') {
-      await page.locator('.rail-item').nth(0).click();
+      await page.locator('.rail-item').nth(1).click();
       const show = page.getByRole('button', { name: '工作区', exact: true });
       if (await show.isVisible()) await show.click();
       await page.locator('.atlas-project-button').and(page.getByTitle(workspace, { exact: true })).click();
@@ -60,7 +60,7 @@ async function main() {
     } else if (stage === 'source') {
       const source = page.locator('.session-sources-dialog');
       if (!await source.isVisible()) {
-        await page.locator('.rail-item').nth(1).click();
+        await page.locator('.rail-item').nth(0).click();
         await page.getByRole('button', { name: '来源', exact: true }).click();
       }
       await source.getByLabel('Agent provider').selectOption(process.argv[3]);
@@ -68,7 +68,7 @@ async function main() {
       await source.getByRole('button', { name: '添加来源', exact: true }).click();
       console.log('Source submitted through UI');
     } else if (stage === 'scan') {
-      await page.locator('.rail-item').nth(1).click();
+      await page.locator('.rail-item').nth(0).click();
       await page.getByRole('button', { name: '扫描会话', exact: true }).click();
     } else if (stage === 'resume') {
       const reader = page.locator('.session-reader-v2');
@@ -89,7 +89,7 @@ async function main() {
       await dialog.getByRole('button', { name: `打开 ${targetLabel} 并交接`, exact: true }).click();
     } else if (stage === 'find') {
       if (await page.locator('.session-sources-dialog').isVisible()) await page.keyboard.press('Escape');
-      await page.locator('.rail-item').nth(1).click();
+      await page.locator('.rail-item').nth(0).click();
       await page.locator('.session-tree-v2').getByRole('button', { name: '全部会话', exact: true }).click();
       await page.locator('.session-search-v2 input').fill(process.argv[3]);
       await page.locator('.session-list-row').first().waitFor();

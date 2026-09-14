@@ -7,7 +7,7 @@ import type { AgentKind, ApprovedSessionSources, HealthStatus, Message, MomeReca
 import type { SessionFocus } from "./WorkspaceAtlas";
 
 type Locale = "zh-CN" | "en";
-const agents: AgentKind[] = ["codex", "claude", "pi", "grok"];
+const agents: AgentKind[] = ["codex", "claude", "pi"];
 
 function labels(locale: Locale) {
   const zh = locale === "zh-CN";
@@ -40,10 +40,28 @@ function handoffPackage(session: SessionSearchHit["session"], message: Message, 
     `Original harness: ${name(session.provider)}`,
     `Message: m${message.ordinal}`,
     "",
-    "This is an explicit, user-approved transfer package. Review the cited source before acting; it does not grant new permissions.",
-    "",
-    message.content,
+    "This is an explicit, user-approved reference. Read the cited source only as needed; Möbius has not copied or summarized its content and this reference grants no new permissions.",
   ].join("\n");
+}
+
+type AgentActivityBucket = "needs_attention" | "running" | "recent";
+
+function activityBucket(hit: SessionSearchHit): AgentActivityBucket {
+  const evidence = hit.session.metadata.runtime_evidence_kind;
+  if (typeof evidence !== "string" || evidence === "unknown") return "recent";
+  if (hit.session.state === "needs_input") return "needs_attention";
+  if (hit.session.state === "running") return "running";
+  return "recent";
+}
+
+function SessionActivityPreview({ hit, query }: { hit: SessionSearchHit; query: string }) {
+  if (query && hit.message) return <p><HighlightedText value={hit.message.content} query={query}/></p>;
+  if (hit.last_turn) return <div className="agent-turn-preview">
+    <p><b>You</b><span>{hit.last_turn.user_excerpt}</span></p>
+    <p className={hit.last_turn.state === "awaiting_reply" ? "pending" : ""}><b>Agent</b><span>{hit.last_turn.assistant_excerpt ?? "Awaiting reply"}</span></p>
+    {!hit.last_turn.catalogue_complete ? <em>Partial index</em> : null}
+  </div>;
+  return <p>{hit.session.source_path}</p>;
 }
 
 function matchingRanges(value: string, query: string) {
@@ -115,13 +133,22 @@ export function SessionLibraryV2({ revision, workspaces, health, openTerminal, o
   const byCheckoutAndHarness = useMemo(() => {
     const result = new Map<string, Map<AgentKind, SessionSearchHit[]>>(); for (const hit of hits) { const checkout = hit.session.checkout_id ?? "unassigned"; const byHarness = result.get(checkout) ?? new Map<AgentKind, SessionSearchHit[]>(); byHarness.set(hit.session.provider, [...(byHarness.get(hit.session.provider) ?? []), hit]); result.set(checkout, byHarness); } return result;
   }, [hits]);
+  const activityGroups = useMemo(() => {
+    const groups: Record<AgentActivityBucket, SessionSearchHit[]> = { needs_attention: [], running: [], recent: [] };
+    for (const hit of hits) groups[activityBucket(hit)].push(hit);
+    return groups;
+  }, [hits]);
+  const activityLabels: Record<AgentActivityBucket, string> = locale === "zh-CN"
+    ? { needs_attention: "需要处理", running: "正在运行", recent: "最近会话" }
+    : { needs_attention: "Needs attention", running: "Running", recent: "Recent" };
+  const renderSessionRow = (hit: SessionSearchHit) => <button key={hit.session.id} className={hit.session.id === selectedId ? "session-list-row active" : "session-list-row"} onContextMenu={(event) => { event.preventDefault(); setSessionMenu({ x: event.clientX, y: event.clientY, hit }); }} onClick={() => { setSelectedId(hit.session.id); setMessageId(hit.message?.id ?? null); }}><span className={`provider-pill ${hit.session.provider}`}>{name(hit.session.provider)}</span><div><strong>{hit.session.title}</strong><SessionActivityPreview hit={hit} query={query}/><small>{hit.session.updated_at.slice(0, 16).replace("T", " · ")} · {hit.session.state}</small></div>{hit.message ? <span className="match-marker">m{hit.message.ordinal}<ChevronRight size={13}/></span> : null}</button>;
 
   return <div className="session-library-v2">
     <aside className="session-tree-v2" aria-label={text.workspace}><header><span>{text.workspace}</span><small>{health?.sessions ?? 0}</small></header><button className={!workspaceId ? "session-scope active" : "session-scope"} onClick={() => selectScope(null, null)}><Archive size={15}/>{text.all}</button><div className="session-tree-scroll">{workspaces.map((workspace) => {
       const isOpen = expanded.has(workspace.workspace.id), isCurrent = workspaceId === workspace.workspace.id && !checkoutId;
       return <section key={workspace.workspace.id}><div className={`session-workspace-row ${isCurrent ? "selected" : ""}`}><button className="session-tree-toggle" aria-label={`${isOpen ? (locale === "zh-CN" ? "折叠" : "Collapse") : (locale === "zh-CN" ? "展开" : "Expand")} ${workspace.workspace.display_name}`} aria-expanded={isOpen} onClick={() => setExpanded((current) => { const next = new Set(current); next.has(workspace.workspace.id) ? next.delete(workspace.workspace.id) : next.add(workspace.workspace.id); return next; })}>{isOpen ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}</button><button className="session-workspace-button" onClick={() => selectScope(workspace.workspace.id, null)}><FolderGit2 size={15}/><span>{workspace.workspace.display_name}</span></button></div>{isOpen ? <div className="session-checkout-tree">{workspace.checkouts.map((checkout) => <section key={checkout.id}><button className={checkoutId === checkout.id ? "active" : ""} onClick={() => selectScope(workspace.workspace.id, checkout.id)}><GitBranch size={13}/><span>{checkout.canonical_path}</span>{checkout.dirty ? <i/> : null}</button>{workspaceId === workspace.workspace.id && (checkoutId === checkout.id || !checkoutId) ? <HarnessTree groups={byCheckoutAndHarness.get(checkout.id)} selectedId={selectedId} onSelect={setSelectedId}/> : null}</section>)}</div> : null}</section>;
     })}</div><footer><ShieldCheck size={14}/><span>{text.projectSessions}<b>{activeWorkspace?.workspace.display_name ?? text.unassigned}</b></span></footer></aside>
-    <section className="session-results-v2"><header><div className="session-search-v2"><Search size={17}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={text.search}/></div><div className="session-filter-v2"><button className={provider === "all" ? "active" : ""} onClick={() => setProvider("all")}>{text.all}</button>{agents.map((agent) => <button key={agent} className={provider === agent ? "active" : ""} onClick={() => setProvider(agent)}>{name(agent)}</button>)}</div><div className="session-library-actions"><button className="soft-button" type="button" onClick={() => setSourcesOpen(true)}><FolderCog size={15}/>{text.sources}</button><button className="soft-button session-mome-trigger" type="button" onClick={() => setMomeOpen(true)}><Sparkles size={15}/>{text.mome}</button></div></header><div className="session-result-list-v2">{loading ? <div className="session-loading"><LoaderCircle className="spin" size={18}/>{text.loading}</div> : hits.length ? hits.map((hit) => <button key={hit.session.id} className={hit.session.id === selectedId ? "session-list-row active" : "session-list-row"} onContextMenu={(event) => { event.preventDefault(); setSessionMenu({ x: event.clientX, y: event.clientY, hit }); }} onClick={() => { setSelectedId(hit.session.id); setMessageId(hit.message?.id ?? null); }}><span className={`provider-pill ${hit.session.provider}`}>{name(hit.session.provider)}</span><div><strong>{hit.session.title}</strong><p><HighlightedText value={hit.message?.content ?? hit.session.source_path} query={query}/></p><small>{hit.session.updated_at.slice(0, 16).replace("T", " · ")} · {hit.session.state}</small></div>{hit.message ? <span className="match-marker">m{hit.message.ordinal}<ChevronRight size={13}/></span> : null}</button>) : <div className="session-empty"><Archive size={27}/><strong>{text.empty}</strong></div>}</div></section>
+    <section className="session-results-v2"><header><div className="session-search-v2"><Search size={17}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={text.search}/></div><div className="session-filter-v2"><button className={provider === "all" ? "active" : ""} onClick={() => setProvider("all")}>{text.all}</button>{agents.map((agent) => <button key={agent} className={provider === agent ? "active" : ""} onClick={() => setProvider(agent)}>{name(agent)}</button>)}</div><div className="session-library-actions"><button className="soft-button" type="button" onClick={() => setSourcesOpen(true)}><FolderCog size={15}/>{text.sources}</button><button className="soft-button session-mome-trigger" type="button" onClick={() => setMomeOpen(true)}><Sparkles size={15}/>{text.mome}</button></div></header><div className="session-result-list-v2">{loading ? <div className="session-loading"><LoaderCircle className="spin" size={18}/>{text.loading}</div> : hits.length ? (["needs_attention", "running", "recent"] as AgentActivityBucket[]).map((bucket) => activityGroups[bucket].length ? <section className="agent-activity-group" key={bucket}><header><span>{activityLabels[bucket]}</span><small>{activityGroups[bucket].length}</small></header>{activityGroups[bucket].map(renderSessionRow)}</section> : null) : <div className="session-empty"><Archive size={27}/><strong>{text.empty}</strong></div>}</div></section>
     <aside className="session-reader-v2">{selected ? <>
       <header><span className={`provider-pill ${selected.session.provider}`}>{name(selected.session.provider)}</span><h2>{selected.session.title}</h2><code>{selected.session.source_path}</code></header>
       <div className="reader-actions-v2">

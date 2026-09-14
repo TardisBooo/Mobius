@@ -129,10 +129,10 @@ test("isolated v0.3 Workbench, SessionLibraryV2, and PTY smoke", async () => {
     await page.locator(".inspector-tabs button").nth(0).click();
     await expect(page.locator(".project-session-panel")).toContainText(sessionMarker);
 
-    // The rail has exactly the three primary destinations: Workbench,
-    // Sessions, and Library. Skills live behind the top command action.
+    // The rail has exactly the three primary destinations: Agents,
+    // Workspaces, and Library. Skills live behind the top command action.
     await expect(page.locator(".rail-item")).toHaveCount(3);
-    await page.locator(".rail-item").nth(1).click();
+    await page.locator(".rail-item").nth(0).click();
     await expect(page.locator(".session-library-v2")).toBeVisible();
     const tree = page.locator(".session-tree-v2");
     await expect(tree).toContainText("mobius-v020-atlas-fixture");
