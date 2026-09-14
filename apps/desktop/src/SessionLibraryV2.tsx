@@ -3,7 +3,7 @@ import { Archive, ArrowRight, ChevronDown, ChevronRight, CirclePlay, Copy, Folde
 import { desktopApi } from "./api";
 import { AccessibleDialog } from "./AccessibleDialog";
 import { ContextMenu } from "./ContextMenu";
-import type { AgentKind, ApprovedSessionSources, HealthStatus, Message, MomeRecallResponse, SessionSearchHit, SessionSourceRoot, TerminalInfo, WorkspaceView } from "./types";
+import type { AgentKind, ApprovedSessionSources, HealthStatus, LineageManifest, Message, MomeRecallResponse, SessionSearchHit, SessionSourceRoot, TerminalInfo, WorkspaceView } from "./types";
 import type { SessionFocus } from "./WorkspaceAtlas";
 
 type Locale = "zh-CN" | "en";
@@ -94,6 +94,8 @@ export function SessionLibraryV2({ revision, workspaces, health, openTerminal, o
   const scopeInitialized = useRef(false);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set()); const [hits, setHits] = useState<SessionSearchHit[]>([]); const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null); const [loadedMessages, setMessages] = useState<Message[]>([]); const [messageId, setMessageId] = useState<string | null>(null); const [messageLimit, setMessageLimit] = useState(180); const [handoffOpen, setHandoffOpen] = useState(false); const [momeOpen, setMomeOpen] = useState(false); const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [lineage, setLineage] = useState<LineageManifest | null>(null);
+  const [lineageLoading, setLineageLoading] = useState(false);
   const [sessionMenu, setSessionMenu] = useState<{ x: number; y: number; hit: SessionSearchHit } | null>(null);
   // Never offer a previous session's message for copying/handoff during fetch.
   const messages = useMemo(() => loadedMessages.filter((message) => message.session_id === selectedId), [loadedMessages, selectedId]);
@@ -111,6 +113,17 @@ export function SessionLibraryV2({ revision, workspaces, health, openTerminal, o
   useEffect(() => { const timer = window.setTimeout(() => void search(), 130); return () => window.clearTimeout(timer); }, [search]);
   const selected = hits.find((item) => item.session.id === selectedId) ?? null;
   useEffect(() => { if (!selected) { setMessages([]); setMessageId(null); return; } let active = true; void desktopApi.getSessionMessages(selected.session.id).then((next) => { if (!active) return; const matchedIndex = selected.message ? next.findIndex((message) => message.id === selected.message?.id) : -1; setMessages(next); setMessageLimit(matchedIndex >= 0 ? Math.max(180, next.length - matchedIndex) : 180); setMessageId((current) => selected.message?.id ?? (next.some((message) => message.id === current) ? current : next.filter((message) => message.role === "user" || message.role === "assistant").at(-1)?.id ?? next.at(-1)?.id ?? null)); }).catch((reason) => onError(String(reason))); return () => { active = false; }; }, [onError, selected]);
+  useEffect(() => {
+    setLineage(null);
+    if (!selectedId || desktopApi.runtime !== "desktop") return;
+    let active = true;
+    setLineageLoading(true);
+    void desktopApi.sessionLineage([selectedId])
+      .then((value) => { if (active) setLineage(value); })
+      .catch((reason) => { if (active) onError(String(reason)); })
+      .finally(() => { if (active) setLineageLoading(false); });
+    return () => { active = false; };
+  }, [onError, selectedId]);
   useEffect(() => { if (!messageId) return; const frame = window.requestAnimationFrame(() => document.querySelector<HTMLElement>(".message-stream-v2 article.selected")?.scrollIntoView({ block: "center", behavior: "smooth" })); return () => window.cancelAnimationFrame(frame); }, [messageId, messages.length, selectedId]);
   const selectedMessage = messages.find((message) => message.id === messageId) ?? null; const visibleMessages = messages.slice(Math.max(0, messages.length - messageLimit)); const activeWorkspace = workspaces.find((item) => item.workspace.id === workspaceId) ?? null;
   const copy = async (value: string) => { try { await navigator.clipboard.writeText(value); onToast(text.copied); } catch (reason) { onError(String(reason)); } };
@@ -158,6 +171,7 @@ export function SessionLibraryV2({ revision, workspaces, health, openTerminal, o
       </div>
       <div className="reader-explanation"><ShieldCheck size={14}/><span>{referenceHint}</span></div>
       <dl><dt>Harness</dt><dd>{name(selected.session.provider)}</dd><dt>Checkout</dt><dd>{selected.session.checkout_id ?? text.unassigned}</dd><dt>{text.source}</dt><dd>{selected.session.provider_session_id}</dd></dl>
+      <SessionMemoryPath lineage={lineage} currentSessionId={selected.session.id} loading={lineageLoading} locale={locale}/>
       <div className="message-toolbar"><span>{text.messages}</span><small>{messages.length}</small></div>
       <div className="message-stream-v2">{messages.length > visibleMessages.length ? <button className="earlier-messages" onClick={() => setMessageLimit((current) => current + 180)}>{text.loadEarlier}</button> : null}{visibleMessages.map((message) => { const matched = selected.message?.id === message.id; return <article key={message.id} className={`${message.id === messageId ? "selected" : ""} ${matched ? "has-search-match" : ""} ${message.role}`} onClick={() => setMessageId(message.id)} tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setMessageId(message.id); } }}><header><span>{message.role}</span><small>m{message.ordinal}</small></header><p>{matched ? <HighlightedText value={message.content} query={query}/> : message.content}</p></article>; })}</div>
     </> : <div className="session-empty reader"><PanelRight size={28}/><strong>{text.empty}</strong></div>}</aside>
@@ -171,6 +185,15 @@ export function SessionLibraryV2({ revision, workspaces, health, openTerminal, o
     {momeOpen ? <MomeDialog text={text} workspaceId={workspaceId} checkoutId={checkoutId} providers={provider === "all" ? [] : [provider]} onClose={() => setMomeOpen(false)} onCopy={copy} onError={onError}/> : null}
     {sourcesOpen ? <SourcesDialog text={text} onClose={() => setSourcesOpen(false)} onError={onError} onToast={onToast} onRefresh={search}/> : null}
   </div>;
+}
+
+function SessionMemoryPath({ lineage, currentSessionId, loading, locale }: { lineage: LineageManifest | null; currentSessionId: string; loading: boolean; locale: Locale }) {
+  const zh = locale === "zh-CN";
+  const nodes = [...(lineage?.nodes ?? [])].sort((left, right) => (left.updated_at ?? "").localeCompare(right.updated_at ?? ""));
+  return <section className="session-memory-path" aria-label={zh ? "当前会话的记忆来路" : "Memory path for current session"}>
+    <header><span>{zh ? "记忆来路" : "Memory path"}</span><small>{loading ? "…" : Math.max(0, nodes.length - 1)}</small></header>
+    {loading ? <p>{zh ? "正在读取 Session 祖先…" : "Loading Session ancestors…"}</p> : nodes.length > 1 ? <div>{nodes.map((node) => <article key={node.session_id} className={node.session_id === currentSessionId ? "current" : ""}><i/><span><strong>{node.title ?? node.native_id ?? node.session_id}</strong><small>{node.harness ?? "?"} · {node.updated_at ? new Date(node.updated_at).toLocaleString(locale) : (zh ? "时间未知" : "Time unknown")}</small></span></article>)}</div> : <p>{zh ? "这个 Session 尚无已确认的上游交接。" : "This Session has no confirmed upstream handoff."}</p>}
+  </section>;
 }
 
 function HarnessTree({ groups, selectedId, onSelect }: { groups: Map<AgentKind, SessionSearchHit[]> | undefined; selectedId: string | null; onSelect: (id: string) => void }) {
