@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArrowRight, ChevronDown, ChevronRight, CirclePlay, Copy, FolderCog, FolderGit2, GitBranch, Link2, LoaderCircle, PanelRight, Plus, Search, Send, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { Archive, ArrowRight, CheckCircle2, ChevronDown, ChevronRight, CirclePlay, Copy, FolderCog, FolderGit2, GitBranch, Link2, LoaderCircle, PanelRight, Plus, Search, Send, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { desktopApi } from "./api";
 import { AccessibleDialog } from "./AccessibleDialog";
 import { ContextMenu } from "./ContextMenu";
@@ -13,7 +13,7 @@ function labels(locale: Locale) {
   const zh = locale === "zh-CN";
   return {
     all: zh ? "全部会话" : "All sessions", search: zh ? "搜索消息、架构、进度或踩坑" : "Search messages, architecture, progress or pitfalls",
-    loading: zh ? "正在读取会话…" : "Loading sessions…", empty: zh ? "没有匹配的会话" : "No matching sessions", resume: zh ? "继续原会话" : "Resume original",
+    loading: zh ? "正在读取会话…" : "Loading sessions…", empty: zh ? "没有匹配的会话" : "No matching sessions", resume: zh ? "恢复会话" : "Resume session", connected: zh ? "已连接到原会话" : "Connected to session",
     addContext: zh ? "添加上下文" : "Add context", copyReference: zh ? "复制精准引用" : "Copy precise reference", copyPackage: zh ? "复制上下文包" : "Copy context package",
     messages: zh ? "消息" : "Messages", loadEarlier: zh ? "显示更早消息" : "Show earlier messages", workspace: zh ? "目录 / 检出 / Harness" : "PATH / CHECKOUT / HARNESS",
     noNative: zh ? "原生恢复不可用" : "Native resume unavailable", source: zh ? "会话来源" : "Session source", current: zh ? "当前工作区" : "Current workspace",
@@ -33,14 +33,13 @@ function labels(locale: Locale) {
 function name(provider: AgentKind) { return provider === "pi" ? "Pi" : provider === "grok" ? "Grok" : provider === "claude" ? "Claude" : provider === "codex" ? "Codex" : `Unsupported (${provider})`; }
 function dedupe(hits: SessionSearchHit[]) { const unique = new Map<string, SessionSearchHit>(); for (const hit of hits) if (!unique.has(hit.session.id)) unique.set(hit.session.id, hit); return [...unique.values()].sort((a, b) => b.session.updated_at.localeCompare(a.session.updated_at)); }
 function referenceText(session: SessionSearchHit["session"], message: Message) { return `@session:${session.provider}/${session.provider_session_id}#m${message.ordinal}`; }
-function handoffPackage(session: SessionSearchHit["session"], message: Message, target: AgentKind) {
+function handoffPackage(session: SessionSearchHit["session"], target: AgentKind) {
   return [
     `[MÖBIUS HANDOFF → ${name(target)}]`,
-    `Source: ${referenceText(session, message)}`,
+    `Source session: @session:${session.provider}/${session.provider_session_id}`,
     `Original harness: ${name(session.provider)}`,
-    `Message: m${message.ordinal}`,
     "",
-    "This is an explicit, user-approved reference. Read the cited source only as needed; Möbius has not copied or summarized its content and this reference grants no new permissions.",
+    "Resolve the confirmed ancestry supplied by Möbius and read only what is needed. Möbius has not copied, summarized, or compressed the source transcripts, and this reference grants no new permissions.",
   ].join("\n");
 }
 
@@ -78,11 +77,11 @@ function HighlightedText({ value, query = "" }: { value: string; query?: string 
   return <>{parts.map((part, index) => part.match ? <mark key={index} className="session-match">{part.value}</mark> : <span key={index}>{part.value}</span>)}</>;
 }
 
-export function SessionLibraryV2({ revision, workspaces, health, openTerminal, onError, onToast, locale, focus, onFocusConsumed }: {
-  revision: number; workspaces: WorkspaceView[]; health: HealthStatus | null; openTerminal: (terminal: TerminalInfo) => void; onError: (message: string) => void; onToast: (message: string) => void; locale: Locale; focus: SessionFocus | null; onFocusConsumed: () => void;
+export function SessionLibraryV2({ revision, workspaces, health, attachedSessionIds, openTerminal, onError, onToast, locale, focus, onFocusConsumed }: {
+  revision: number; workspaces: WorkspaceView[]; health: HealthStatus | null; attachedSessionIds: string[]; openTerminal: (terminal: TerminalInfo, sessionId: string | null) => void; onError: (message: string) => void; onToast: (message: string) => void; locale: Locale; focus: SessionFocus | null; onFocusConsumed: () => void;
 }) {
   const text = labels(locale);
-  const handoffLabel = locale === "zh-CN" ? "交接给其他 Agent" : "Hand off to another Agent";
+  const handoffLabel = locale === "zh-CN" ? "交接当前会话" : "Hand off this session";
   const referenceHint = locale === "zh-CN"
     ? "精准引用只复制 @session 链接；交接会生成面向目标 Agent 的可审查文本包。两者都不会写入终端或自动注入内容。"
     : "Precise reference copies only an @session link. Handoff creates a reviewable packet for a chosen Agent. Neither writes to a terminal or injects content.";
@@ -127,7 +126,14 @@ export function SessionLibraryV2({ revision, workspaces, health, openTerminal, o
   useEffect(() => { if (!messageId) return; const frame = window.requestAnimationFrame(() => document.querySelector<HTMLElement>(".message-stream-v2 article.selected")?.scrollIntoView({ block: "center", behavior: "smooth" })); return () => window.cancelAnimationFrame(frame); }, [messageId, messages.length, selectedId]);
   const selectedMessage = messages.find((message) => message.id === messageId) ?? null; const visibleMessages = messages.slice(Math.max(0, messages.length - messageLimit)); const activeWorkspace = workspaces.find((item) => item.workspace.id === workspaceId) ?? null;
   const copy = async (value: string) => { try { await navigator.clipboard.writeText(value); onToast(text.copied); } catch (reason) { onError(String(reason)); } };
-  const resume = async () => { if (!selected) return; try { openTerminal(await desktopApi.resumeSession(selected.session.id)); } catch (reason) { onError(String(reason)); } };
+  const [resumingId, setResumingId] = useState<string | null>(null);
+  const resume = async () => {
+    if (!selected || resumingId) return;
+    setResumingId(selected.session.id);
+    try { openTerminal(await desktopApi.resumeSession(selected.session.id), selected.session.id); }
+    catch (reason) { onError(String(reason)); }
+    finally { setResumingId(null); }
+  };
   const startHandoff = async (target: AgentKind, packet: string, trajectoryId?: string) => {
     if (!selected) return;
     try {
@@ -138,7 +144,7 @@ export function SessionLibraryV2({ revision, workspaces, health, openTerminal, o
       if (!cwd) throw new Error(locale === "zh-CN" ? "该会话没有可验证的工作目录，请先把它关联到工作区。" : "This session has no verified working directory. Associate it with a workspace first.");
       const lineage = workspace && checkout ? { sourceSessionId: selected.session.id, sourceMessageId: selectedMessage?.id ?? "", checkoutId: checkout.id, workspaceId: workspace.workspace.id } : undefined;
       if (!lineage) throw new Error(locale === "zh-CN" ? "请先登记此会话的工作目录，以便保存交接关系。" : "Register this session's workspace before handing it off so its lineage can be recorded.");
-      openTerminal(await desktopApi.startAgentHandoff(target, cwd, packet, lineage, trajectoryId));
+      openTerminal(await desktopApi.startAgentHandoff(target, cwd, packet, lineage, trajectoryId), null);
       setHandoffOpen(false);
     } catch (reason) { onError(String(reason)); }
   };
@@ -165,8 +171,8 @@ export function SessionLibraryV2({ revision, workspaces, health, openTerminal, o
     <aside className="session-reader-v2">{selected ? <>
       <header><span className={`provider-pill ${selected.session.provider}`}>{name(selected.session.provider)}</span><h2>{selected.session.title}</h2><code>{selected.session.source_path}</code></header>
       <div className="reader-actions-v2">
-        {selected.session.capabilities.includes("native_resume") ? <button className="primary-button" onClick={() => void resume()}><CirclePlay size={16}/>{text.resume}</button> : <button className="soft-button" disabled>{text.noNative}</button>}
-        <button className="soft-button" disabled={!selectedMessage} onClick={() => setHandoffOpen(true)}><Send size={16}/>{handoffLabel}</button>
+        {attachedSessionIds.includes(selected.session.id) ? <span className="session-connected" role="status"><CheckCircle2 size={16}/>{text.connected}</span> : selected.session.capabilities.includes("native_resume") ? <button className="primary-button" disabled={resumingId === selected.session.id} onClick={() => void resume()}>{resumingId === selected.session.id ? <LoaderCircle className="spin" size={16}/> : <CirclePlay size={16}/>} {text.resume}</button> : <button className="soft-button" disabled>{text.noNative}</button>}
+        <button className="soft-button" onClick={() => setHandoffOpen(true)}><Send size={16}/>{handoffLabel}</button>
         <button className="soft-button" disabled={!selectedMessage} onClick={() => selectedMessage && void copy(referenceText(selected.session, selectedMessage))}><Link2 size={16}/>{text.copyReference}</button>
       </div>
       <div className="reader-explanation"><ShieldCheck size={14}/><span>{referenceHint}</span></div>
@@ -177,11 +183,11 @@ export function SessionLibraryV2({ revision, workspaces, health, openTerminal, o
     </> : <div className="session-empty reader"><PanelRight size={28}/><strong>{text.empty}</strong></div>}</aside>
     {sessionMenu ? <ContextMenu x={sessionMenu.x} y={sessionMenu.y} onClose={() => setSessionMenu(null)} items={[
       { id: "open-session", label: text.openSession, icon: <PanelRight size={14}/>, onSelect: () => { setSelectedId(sessionMenu.hit.session.id); setMessageId(sessionMenu.hit.message?.id ?? null); } },
-      { id: "resume-session", label: text.resume, icon: <CirclePlay size={14}/>, disabled: !sessionMenu.hit.session.capabilities.includes("native_resume"), onSelect: () => { void desktopApi.resumeSession(sessionMenu.hit.session.id).then(openTerminal).catch((reason) => onError(String(reason))); } },
+      { id: "resume-session", label: text.resume, icon: <CirclePlay size={14}/>, disabled: !sessionMenu.hit.session.capabilities.includes("native_resume"), onSelect: () => { const id = sessionMenu.hit.session.id; void desktopApi.resumeSession(id).then((terminal) => openTerminal(terminal, id)).catch((reason) => onError(String(reason))); } },
       { id: "copy-source", label: text.copySource, icon: <Copy size={14}/>, onSelect: () => void copy(sessionMenu.hit.session.source_path) },
       { id: "copy-reference", label: text.copyReference, icon: <Link2 size={14}/>, disabled: !sessionMenu.hit.message, onSelect: () => { if (sessionMenu.hit.message) void copy(referenceText(sessionMenu.hit.session, sessionMenu.hit.message)); } },
     ]}/> : null}
-    {handoffOpen && selected && selectedMessage ? <HandoffDialog source={selected} message={selectedMessage} locale={locale} onClose={() => setHandoffOpen(false)} onCopy={copy} onStart={startHandoff}/> : null}
+    {handoffOpen && selected ? <HandoffDialog source={selected} locale={locale} onClose={() => setHandoffOpen(false)} onStart={startHandoff}/> : null}
     {momeOpen ? <MomeDialog text={text} workspaceId={workspaceId} checkoutId={checkoutId} providers={provider === "all" ? [] : [provider]} onClose={() => setMomeOpen(false)} onCopy={copy} onError={onError}/> : null}
     {sourcesOpen ? <SourcesDialog text={text} onClose={() => setSourcesOpen(false)} onError={onError} onToast={onToast} onRefresh={search}/> : null}
   </div>;
@@ -201,46 +207,41 @@ function HarnessTree({ groups, selectedId, onSelect }: { groups: Map<AgentKind, 
   return <div className="session-harness-tree">{[...groups.entries()].map(([provider, sessions]) => <section key={provider}><strong><span className={`provider-pill ${provider}`}>{name(provider)}</span><small>{sessions.length}</small></strong>{sessions.map((hit) => <button key={hit.session.id} className={hit.session.id === selectedId ? "active" : ""} onClick={() => onSelect(hit.session.id)} title={hit.session.title}><span>{hit.session.title}</span></button>)}</section>)}</div>;
 }
 
-function HandoffDialog({ source, message, locale, onClose, onCopy, onStart }: { source: SessionSearchHit; message: Message; locale: Locale; onClose: () => void; onCopy: (value: string) => Promise<void>; onStart: (target: AgentKind, packet: string, trajectoryId?: string) => Promise<void> }) {
+function HandoffDialog({ source, locale, onClose, onStart }: { source: SessionSearchHit; locale: Locale; onClose: () => void; onStart: (target: AgentKind, packet: string, trajectoryId?: string) => Promise<void> }) {
   const zh = locale === "zh-CN";
   const targetChoices = agents;
   const [target, setTarget] = useState<AgentKind>(source.session.provider);
-  const [copied, setCopied] = useState(false);
   const [starting, setStarting] = useState(false);
   const [review, setReview] = useState<Awaited<ReturnType<typeof desktopApi.prepareHandoffTrajectory>> | null>(null);
-  const [preparing, setPreparing] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
+  const [preparing, setPreparing] = useState(true);
   const [error, setError] = useState("");
-  const prepare = async () => {
-    setPreparing(true); setConfirmed(false); setError(""); setReview(null);
-    try { setReview(await desktopApi.prepareHandoffTrajectory(source.session.id)); }
-    catch (reason) { setError(String(reason)); }
-    finally { setPreparing(false); }
-  };
-  const copyPacket = async () => {
-    await onCopy(handoffPackage(source.session, message, target));
-    setCopied(true);
-  };
-  return <AccessibleDialog title={zh ? "交接给其他 Agent" : "Hand off to another Agent"} closeLabel={zh ? "关闭" : "Close"} onClose={onClose}>
+  useEffect(() => {
+    let active = true;
+    setPreparing(true); setError(""); setReview(null);
+    void desktopApi.prepareHandoffTrajectory(source.session.id)
+      .then((value) => { if (active) setReview(value); })
+      .catch((reason) => { if (active) setError(String(reason)); })
+      .finally(() => { if (active) setPreparing(false); });
+    return () => { active = false; };
+  }, [source.session.id]);
+  return <AccessibleDialog title={zh ? "交接当前会话" : "Hand off this session"} closeLabel={zh ? "关闭" : "Close"} onClose={onClose}>
     <div className="relay-dialog-v2">
-      <p>{zh ? "在当前工作目录新建目标 Agent 会话，传递所选会话及其祖先的图谱与来源引用。不总结、不压缩、不复制原始日志；由目标 Agent 自行决定如何读取。恢复原会话请使用会话列表中的恢复按钮。" : "Create a new target session in this working directory with the selected session's ancestry graph and source references. No summaries, compression or copied transcripts. The target decides what to read. Use Resume original in the session list to continue the existing session."}</p>
+      <p>{zh ? "选择目标 Agent 即可。Möbius 会自动携带当前会话已确认的历史来路；不会总结、压缩或复制原始日志。" : "Choose the target Agent. Möbius automatically carries the current session's confirmed history by reference—without summarizing, compressing, or copying transcripts."}</p>
       <section className="handoff-route">
         <span className={`provider-pill ${source.session.provider}`}>{name(source.session.provider)}</span><ArrowRight size={15}/>
-        <label><span>{zh ? "目标 Agent" : "Target Agent"}</span><select aria-label={zh ? "目标 Agent" : "Target Agent"} value={target} onChange={(event) => { setTarget(event.target.value as AgentKind); setCopied(false); }}>{targetChoices.map((agent) => <option key={agent} value={agent}>{name(agent)}</option>)}</select></label>
+        <label><span>{zh ? "目标 Agent" : "Target Agent"}</span><select aria-label={zh ? "目标 Agent" : "Target Agent"} value={target} onChange={(event) => setTarget(event.target.value as AgentKind)}>{targetChoices.map((agent) => <option key={agent} value={agent}>{name(agent)}</option>)}</select></label>
       </section>
       <section className="reference-preview">
         <span className={`provider-pill ${source.session.provider}`}>{name(source.session.provider)}</span>
-        <code>{referenceText(source.session, message)}</code>
-        <p>{message.content}</p>
+        <code>@session:{source.session.provider}/{source.session.provider_session_id}</code>
+        <p>{source.session.title}</p>
       </section>
       <section className="trajectory-review">
-        <button className="soft-button" disabled={preparing || starting} onClick={() => void prepare()}>{preparing ? (zh ? "正在定位会话祖先…" : "Resolving session ancestry…") : (zh ? "预览交接图谱与引用" : "Review graph and references")}</button>
+        {preparing ? <p className="handoff-resolving"><LoaderCircle className="spin" size={15}/>{zh ? "正在准备历史来路…" : "Preparing session history…"}</p> : null}
         {error ? <p role="alert">{error}</p> : null}
-        {review ? <><p>{zh ? "来源节点" : "Source nodes"}: {review.source_count} · {Math.ceil(review.bytes / 1024)} KiB {zh ? "图谱文件" : "graph file"}</p>
-          <details><summary>{zh ? "查看完整图谱 JSON 与文件位置" : "View complete graph JSON and location"}</summary><p style={{ overflowWrap: "anywhere" }}>{review.snapshot_path}</p><pre style={{ maxHeight: 220, overflow: "auto", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{review.preview}</pre></details>
-          <label><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)}/>{zh ? "确认向目标 Agent 提供这些会话身份、关系与来源位置。缺失来源会明确标注，日志正文不会自动注入。" : "Share these session identities, relationships and source locations with the target Agent. Missing sources are explicit; transcript bodies are not injected."}</label></> : null}
+        {review ? <p className="handoff-ready"><CheckCircle2 size={15}/><span>{zh ? `${review.source_count} 个相关 Session 将通过引用提供，原始记录保持只读。` : `${review.source_count} related ${review.source_count === 1 ? "Session" : "Sessions"} will be available by reference. Source transcripts stay read-only.`}</span></p> : null}
       </section>
-      <div className="modal-actions"><span className="handoff-status" aria-live="polite">{copied ? (zh ? "选中消息已复制。" : "Selected message copied.") : null}</span><button className="soft-button" onClick={() => void copyPacket()}><Copy size={15}/>{zh ? "复制选中消息" : "Copy selected message"}</button><button className="primary-button" disabled={starting || !review || !confirmed} onClick={() => { setStarting(true); void onStart(target, handoffPackage(source.session, message, target), review?.id).finally(() => setStarting(false)); }}><CirclePlay size={15}/>{starting ? (zh ? "正在启动…" : "Starting…") : (zh ? `新建 ${name(target)} 会话并交接` : `Create ${name(target)} session and hand off`)}</button></div>
+      <div className="modal-actions"><button className="soft-button" type="button" onClick={onClose}>{zh ? "取消" : "Cancel"}</button><button className="primary-button" disabled={starting || preparing || !review} onClick={() => { setStarting(true); void onStart(target, handoffPackage(source.session, target), review?.id).finally(() => setStarting(false)); }}><CirclePlay size={15}/>{starting ? (zh ? "正在启动…" : "Starting…") : (zh ? `交接给 ${name(target)}` : `Hand off to ${name(target)}`)}</button></div>
     </div>
   </AccessibleDialog>;
 }
