@@ -89,6 +89,16 @@ pub fn standard_skill_roots(paths: &WorkspacePaths) -> Vec<SkillRoot> {
             scope: "global".to_string(),
             source_kind: "pi".to_string(),
         },
+        SkillRoot {
+            path: user.join(".grok/skills"),
+            scope: "global".to_string(),
+            source_kind: "grok".to_string(),
+        },
+        SkillRoot {
+            path: user.join(".omp/agent/skills"),
+            scope: "global".to_string(),
+            source_kind: "omp".to_string(),
+        },
     ]
 }
 
@@ -123,6 +133,8 @@ pub fn project_skill_roots(workspace: &Path) -> Vec<SkillRoot> {
         (".codex/skills", "codex"),
         (".claude/skills", "claude"),
         (".pi/skills", "pi"),
+        (".grok/skills", "grok"),
+        (".omp/skills", "omp"),
     ]
     .into_iter()
     .map(|(relative, source_kind)| SkillRoot {
@@ -383,21 +395,44 @@ pub fn install_marketplace_skill(
     target: &str,
 ) -> Result<SkillDeployment> {
     if content.is_empty() || content.len() > MAX_SKILL_CONTENT_BYTES {
-        bail!("Marketplace SKILL.md is empty or exceeds the {} MiB safety limit.", MAX_SKILL_CONTENT_BYTES / 1024 / 1024);
+        bail!(
+            "Marketplace SKILL.md is empty or exceeds the {} MiB safety limit.",
+            MAX_SKILL_CONTENT_BYTES / 1024 / 1024
+        );
     }
     let mut parts = slug.split('/');
-    let owner = parts.next().filter(|value| !value.is_empty()).context("marketplace skill owner is missing")?;
-    let skill_slug = parts.next().filter(|value| !value.is_empty()).context("marketplace skill slug is missing")?;
-    if parts.next().is_some() || !is_safe_marketplace_segment(owner) || !is_safe_marketplace_segment(skill_slug) {
+    let owner = parts
+        .next()
+        .filter(|value| !value.is_empty())
+        .context("marketplace skill owner is missing")?;
+    let skill_slug = parts
+        .next()
+        .filter(|value| !value.is_empty())
+        .context("marketplace skill slug is missing")?;
+    if parts.next().is_some()
+        || !is_safe_marketplace_segment(owner)
+        || !is_safe_marketplace_segment(skill_slug)
+    {
         bail!("invalid marketplace skill slug");
     }
-    let source_dir = paths.data_root.join("skills/marketplace").join(owner).join(skill_slug);
-    fs::create_dir_all(&source_dir).with_context(|| format!("creating marketplace cache {}", source_dir.display()))?;
+    let source_dir = paths
+        .data_root
+        .join("skills/marketplace")
+        .join(owner)
+        .join(skill_slug);
+    fs::create_dir_all(&source_dir)
+        .with_context(|| format!("creating marketplace cache {}", source_dir.display()))?;
     let source = source_dir.join("SKILL.md");
     fs::write(&source, content).with_context(|| format!("caching marketplace skill {}", slug))?;
-    let source = source.canonicalize().with_context(|| format!("resolving marketplace skill {}", slug))?;
+    let source = source
+        .canonicalize()
+        .with_context(|| format!("resolving marketplace skill {}", slug))?;
     let display_name = first_skill_name(content.as_bytes()).unwrap_or_else(|| {
-        if name.trim().is_empty() { skill_slug.to_string() } else { name.trim().to_string() }
+        if name.trim().is_empty() {
+            skill_slug.to_string()
+        } else {
+            name.trim().to_string()
+        }
     });
     let content_hash = hash_bytes(content.as_bytes());
     let skill = SkillInfo {
@@ -413,7 +448,9 @@ pub fn install_marketplace_skill(
 }
 
 fn is_safe_marketplace_segment(value: &str) -> bool {
-    value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+    value
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
 
 fn install_resolved_skill(
@@ -607,38 +644,78 @@ pub fn write_managed_skill(
 }
 
 fn skill_history_root(paths: &WorkspacePaths, managed_id: &str) -> PathBuf {
-    paths.catalog_root.join("Mobius").join("SkillHistory").join(hash_bytes(managed_id.as_bytes()))
+    paths
+        .catalog_root
+        .join("Mobius")
+        .join("SkillHistory")
+        .join(hash_bytes(managed_id.as_bytes()))
 }
 
-fn snapshot_managed_skill(paths: &WorkspacePaths, install: &ManagedSkillInstall) -> Result<SkillHistoryEntry> {
+fn snapshot_managed_skill(
+    paths: &WorkspacePaths,
+    install: &ManagedSkillInstall,
+) -> Result<SkillHistoryEntry> {
     let document = managed_skill_document(paths, install)?;
-    let content = fs::read(&document).with_context(|| format!("reading history source {}", document.display()))?;
+    let content = fs::read(&document)
+        .with_context(|| format!("reading history source {}", document.display()))?;
     let content_hash = hash_bytes(&content);
     let created_at = chrono::Utc::now().to_rfc3339();
-    let id = format!("{}-{}", chrono::Utc::now().format("%Y%m%dT%H%M%S%.3fZ"), &content_hash[..12]);
+    let id = format!(
+        "{}-{}",
+        chrono::Utc::now().format("%Y%m%dT%H%M%S%.3fZ"),
+        &content_hash[..12]
+    );
     let root = skill_history_root(paths, &install.id);
     fs::create_dir_all(&root).with_context(|| format!("creating {}", root.display()))?;
     let target = root.join(format!("{id}.md"));
-    if !target.exists() { fs::write(&target, &content).with_context(|| format!("writing {}", target.display()))?; }
-    Ok(SkillHistoryEntry { id, managed_id: install.id.clone(), created_at, content_hash })
+    if !target.exists() {
+        fs::write(&target, &content).with_context(|| format!("writing {}", target.display()))?;
+    }
+    Ok(SkillHistoryEntry {
+        id,
+        managed_id: install.id.clone(),
+        created_at,
+        content_hash,
+    })
 }
 
-pub fn list_skill_history(paths: &WorkspacePaths, managed_id: &str) -> Result<Vec<SkillHistoryEntry>> {
+pub fn list_skill_history(
+    paths: &WorkspacePaths,
+    managed_id: &str,
+) -> Result<Vec<SkillHistoryEntry>> {
     let root = skill_history_root(paths, managed_id);
-    if !root.is_dir() { return Ok(Vec::new()); }
-    let mut entries = fs::read_dir(root)?.filter_map(Result::ok).filter_map(|entry| {
-        let name = entry.file_name().to_string_lossy().to_string();
-        let id = name.strip_suffix(".md")?.to_string();
-        let hash = id.rsplit('-').next()?.to_string();
-        let created = id.split('-').next()?.to_string();
-        Some(SkillHistoryEntry { id, managed_id: managed_id.to_string(), created_at: created, content_hash: hash })
-    }).collect::<Vec<_>>();
+    if !root.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut entries = fs::read_dir(root)?
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let id = name.strip_suffix(".md")?.to_string();
+            let hash = id.rsplit('-').next()?.to_string();
+            let created = id.split('-').next()?.to_string();
+            Some(SkillHistoryEntry {
+                id,
+                managed_id: managed_id.to_string(),
+                created_at: created,
+                content_hash: hash,
+            })
+        })
+        .collect::<Vec<_>>();
     entries.sort_by(|a, b| b.id.cmp(&a.id));
     Ok(entries)
 }
 
-pub fn restore_skill_history(paths: &WorkspacePaths, managed_id: &str, history_id: &str) -> Result<ManagedSkillInstall> {
-    if history_id.contains(['/', '\\']) || !history_id.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.')) {
+pub fn restore_skill_history(
+    paths: &WorkspacePaths,
+    managed_id: &str,
+    history_id: &str,
+) -> Result<ManagedSkillInstall> {
+    if history_id.contains(['/', '\\'])
+        || !history_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.'))
+    {
         bail!("invalid skill history id");
     }
     let source = skill_history_root(paths, managed_id).join(format!("{history_id}.md"));
@@ -732,8 +809,10 @@ fn target_root_for_harness(
         "codex" => Ok(codex_home.join("skills")),
         "claude" => Ok(user.join(".claude/skills")),
         "pi" => Ok(user.join(".pi/skills")),
+        "grok" => Ok(user.join(".grok/skills")),
+        "omp" => Ok(user.join(".omp/agent/skills")),
         _ => bail!(
-            "Unsupported skill target {target}. Use global, project:<registered-checkout>, codex, claude, or pi."
+            "Unsupported skill target {target}. Use global, project:<registered-checkout>, codex, claude, pi, grok, or omp."
         ),
     }
 }

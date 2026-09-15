@@ -119,7 +119,14 @@ function managedDocument(install: ManagedSkillInstall) {
 
 async function fetchMarketplaceSkills(query: string): Promise<MarketplaceSkill[]> {
   if (desktopApi.runtime === "desktop") {
-    return desktopApi.listMarketplaceSkills(query);
+    try {
+      return await desktopApi.listMarketplaceSkills(query);
+    } catch {
+      // The public catalogue occasionally closes a TLS connection during its
+      // first cold request. Retry once without hiding a persistent failure.
+      await new Promise((resolve) => window.setTimeout(resolve, 350));
+      return desktopApi.listMarketplaceSkills(query);
+    }
   }
   const params = new URLSearchParams({ page: "1", limit: "36", section: "top", includeTotal: "false" });
   if (query.trim()) params.set("q", query.trim());

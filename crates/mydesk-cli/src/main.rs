@@ -604,7 +604,7 @@ fn mome_request_from_args(arguments: MomeRecallArgs) -> Result<MomeRecallRequest
 fn parse_mome_provider(value: &str) -> Result<AgentKind> {
     let provider = value.parse::<AgentKind>()?;
     if !provider.is_supported() {
-        anyhow::bail!("Unsupported Mome provider {value}. Use codex, claude, or pi.");
+        anyhow::bail!("Unsupported Mome provider {value}. Use codex, claude, pi, grok, or omp.");
     }
     Ok(provider)
 }
@@ -618,7 +618,7 @@ fn validate_skill_scope(scope: &str) -> Result<()> {
 
 fn require_supported_agent(agent: &AgentKind) -> Result<()> {
     if !agent.is_supported() {
-        anyhow::bail!("Choose codex, claude, or pi.")
+        anyhow::bail!("Choose codex, claude, pi, grok, or omp.")
     }
     Ok(())
 }
@@ -628,7 +628,11 @@ fn print_agent_connection(agent: AgentKind) -> Result<()> {
         AgentKind::Codex => "codex mcp add mydesk -- mydesk-mcp",
         AgentKind::Claude => "claude mcp add mydesk -- mydesk-mcp",
         AgentKind::Pi => "Add mydesk-mcp to the Pi MCP extension configuration.",
-        AgentKind::Grok | AgentKind::Apodex | AgentKind::Unknown => "Choose a supported agent: codex, claude, or pi.",
+        AgentKind::Grok => "Add mydesk-mcp to the Grok MCP configuration.",
+        AgentKind::Omp => "Add mydesk-mcp to an OMP extension or MCP configuration.",
+        AgentKind::Apodex | AgentKind::Unknown => {
+            "Choose a supported agent: codex, claude, pi, grok, or omp."
+        }
     };
     println!("{command}");
     Ok(())

@@ -1,15 +1,16 @@
 use mydesk_core::harness_launch;
 use mydesk_core::{
-    AgentSummary, BoardDocument, ContextRecord, HealthStatus, McpApprovalGrant, McpApprovalRequest,
-    McpApprovalStore, Message, MomeRecallRequest, MomeRecallResponse, MyDesk, NoteDraft,
-    NoteFileInfo, ProjectSummary, ProviderIndexReport, SearchRequest, SessionQuery, TrashItem,
-    SessionSearchHit, SessionSourceRoot, SkillInfo, WikiDraft, WikiQueueItem, Workspace,
-    WorkspaceInspection, WorkspaceStatus, HandoffDraft, RelayGraph, RelayMode,
+    AgentSummary, BoardDocument, ContextRecord, HandoffDraft, HealthStatus, McpApprovalGrant,
+    McpApprovalRequest, McpApprovalStore, Message, MomeRecallRequest, MomeRecallResponse, MyDesk,
+    NoteDraft, NoteFileInfo, ProjectSummary, ProviderIndexReport, RelayGraph, RelayMode,
+    SearchRequest, SessionQuery, SessionSearchHit, SessionSourceRoot, SkillInfo, TrashItem,
+    WikiDraft, WikiQueueItem, Workspace, WorkspaceInspection, WorkspaceStatus,
     note_mounts::{list_note_files, read_note_file},
     skills::{
-        ManagedSkillInstall, SkillDeployment, SkillHistoryEntry, discover_project_skills, discover_standard_skills,
-        install_marketplace_skill, install_skill_from_catalogue, list_managed_installations, preview_install_from_catalogue,
-        read_known_or_managed_skill_content, uninstall_skill, list_skill_history, restore_skill_history,
+        ManagedSkillInstall, SkillDeployment, SkillHistoryEntry, discover_project_skills,
+        discover_standard_skills, install_marketplace_skill, install_skill_from_catalogue,
+        list_managed_installations, list_skill_history, preview_install_from_catalogue,
+        read_known_or_managed_skill_content, restore_skill_history, uninstall_skill,
         write_managed_skill as write_managed_skill_file,
     },
 };
@@ -24,11 +25,11 @@ use std::{
     io::{Read, Write},
     net::IpAddr,
     path::{Component, Path, PathBuf},
+    process::Command,
     str::FromStr,
     sync::{Arc, OnceLock, mpsc},
     thread,
     time::Duration,
-    process::Command,
 };
 use tauri::{AppHandle, Emitter, Manager, State};
 use url::Url;
@@ -568,36 +569,66 @@ fn workspace_relay_graph(
         .map_err(command_error)
 }
 #[tauri::command]
-async fn prepare_handoff_trajectory(state: State<'_, DesktopState>, session_id: String) -> CommandResult<mydesk_core::trajectory::TrajectoryReview> {
+async fn prepare_handoff_trajectory(
+    state: State<'_, DesktopState>,
+    session_id: String,
+) -> CommandResult<mydesk_core::trajectory::TrajectoryReview> {
     let desk = state.desk.clone();
-    tauri::async_runtime::spawn_blocking(move || desk.prepare_trajectory(&session_id).map_err(command_error))
-        .await.map_err(command_error)?
+    tauri::async_runtime::spawn_blocking(move || {
+        desk.prepare_trajectory(&session_id).map_err(command_error)
+    })
+    .await
+    .map_err(command_error)?
 }
 #[tauri::command]
-async fn session_lineage(state: State<'_, DesktopState>, session_ids: Vec<String>) -> CommandResult<mydesk_core::lineage::LineageManifest> {
+async fn session_lineage(
+    state: State<'_, DesktopState>,
+    session_ids: Vec<String>,
+) -> CommandResult<mydesk_core::lineage::LineageManifest> {
     let desk = state.desk.clone();
-    tauri::async_runtime::spawn_blocking(move || desk.session_lineage(&session_ids).map_err(command_error))
-        .await.map_err(command_error)?
+    tauri::async_runtime::spawn_blocking(move || {
+        desk.session_lineage(&session_ids).map_err(command_error)
+    })
+    .await
+    .map_err(command_error)?
 }
 #[tauri::command]
-async fn prepare_handoff_graph(state: State<'_, DesktopState>, session_ids: Vec<String>) -> CommandResult<mydesk_core::trajectory::TrajectoryReview> {
+async fn prepare_handoff_graph(
+    state: State<'_, DesktopState>,
+    session_ids: Vec<String>,
+) -> CommandResult<mydesk_core::trajectory::TrajectoryReview> {
     let desk = state.desk.clone();
-    tauri::async_runtime::spawn_blocking(move || desk.prepare_lineage_review(&session_ids).map_err(command_error))
-        .await.map_err(command_error)?
+    tauri::async_runtime::spawn_blocking(move || {
+        desk.prepare_lineage_review(&session_ids)
+            .map_err(command_error)
+    })
+    .await
+    .map_err(command_error)?
 }
 #[tauri::command]
-fn set_session_alias(state: State<'_, DesktopState>, session_id: String, alias: String) -> CommandResult<()> {
-    state.desk.database.set_session_alias(&session_id, &alias).map_err(command_error)
+fn set_session_alias(
+    state: State<'_, DesktopState>,
+    session_id: String,
+    alias: String,
+) -> CommandResult<()> {
+    state
+        .desk
+        .database
+        .set_session_alias(&session_id, &alias)
+        .map_err(command_error)
 }
 /// Desktop recall is an explicit user action. It only reads the derived local
 /// catalogue through Mome; it does not open a terminal, alter a source
 /// transcript, or inject content into an Agent prompt.
 #[tauri::command]
-fn mome_recall_command(
+async fn mome_recall_command(
     state: State<'_, DesktopState>,
     request: MomeRecallRequest,
 ) -> CommandResult<MomeRecallResponse> {
-    state.desk.mome_recall(&request).map_err(command_error)
+    let desk = state.desk.clone();
+    tauri::async_runtime::spawn_blocking(move || desk.mome_recall(&request).map_err(command_error))
+        .await
+        .map_err(command_error)?
 }
 #[tauri::command]
 fn create_note(state: State<'_, DesktopState>, draft: NoteDraft) -> CommandResult<ContextRecord> {
@@ -665,13 +696,10 @@ fn reveal_note_source(state: State<'_, DesktopState>, path: String) -> CommandRe
         .map_err(command_error)?;
     let known = list_note_files(&state.desk.paths, &mounts).map_err(command_error)?;
     let candidate = Path::new(&path).canonicalize().map_err(command_error)?;
-    if !known.iter().any(|file| {
-        Path::new(&file.real_path)
-            .canonicalize()
-            .ok()
-            .as_ref()
-            == Some(&candidate)
-    }) {
+    if !known
+        .iter()
+        .any(|file| Path::new(&file.real_path).canonicalize().ok().as_ref() == Some(&candidate))
+    {
         return Err("note source is outside configured libraries".into());
     }
 
@@ -779,11 +807,18 @@ fn remove_note_mount(state: State<'_, DesktopState>, id: String) -> CommandResul
 
 #[tauri::command]
 fn trash_note(state: State<'_, DesktopState>, path: String) -> CommandResult<TrashItem> {
-    state.desk.trash_note(Path::new(&path)).map_err(command_error)
+    state
+        .desk
+        .trash_note(Path::new(&path))
+        .map_err(command_error)
 }
 
 #[tauri::command]
-fn move_note(state: State<'_, DesktopState>, path: String, destination: String) -> CommandResult<(String, String)> {
+fn move_note(
+    state: State<'_, DesktopState>,
+    path: String,
+    destination: String,
+) -> CommandResult<(String, String)> {
     state
         .desk
         .move_note(Path::new(&path), &destination)
@@ -1480,30 +1515,91 @@ async fn fetch_marketplace_skills(query: String) -> CommandResult<Vec<Marketplac
     }
     let mut endpoint = Url::parse("https://agentskill.sh/api/skills")
         .map_err(|error| format!("invalid marketplace endpoint: {error}"))?;
-    endpoint.query_pairs_mut().append_pair("page", "1").append_pair("limit", "36").append_pair("section", "top").append_pair("includeTotal", "false");
-    if !query.is_empty() { endpoint.query_pairs_mut().append_pair("q", query); }
-    let response = preview_http_client().get(endpoint).header(header::ACCEPT, "application/json").send().await.map_err(|error| format!("could not fetch skill marketplace: {error}"))?;
-    if !response.status().is_success() { return Err(format!("skill marketplace returned HTTP {}", response.status()).into()); }
-    let bytes = response.bytes().await.map_err(|error| format!("could not read skill marketplace: {error}"))?;
-    if bytes.len() > 2 * 1024 * 1024 { return Err("skill marketplace response is too large".into()); }
-    let payload: serde_json::Value = serde_json::from_slice(&bytes).map_err(|error| format!("skill marketplace returned invalid JSON: {error}"))?;
-    Ok(payload.get("data").and_then(|value| value.as_array()).map(|entries| entries.iter().filter_map(marketplace_skill_from_value).collect()).unwrap_or_default())
+    endpoint
+        .query_pairs_mut()
+        .append_pair("page", "1")
+        .append_pair("limit", "36")
+        .append_pair("section", "top")
+        .append_pair("includeTotal", "false");
+    if !query.is_empty() {
+        endpoint.query_pairs_mut().append_pair("q", query);
+    }
+    let response = preview_http_client()
+        .get(endpoint)
+        .header(header::ACCEPT, "application/json")
+        .send()
+        .await
+        .map_err(|error| format!("could not fetch skill marketplace: {error}"))?;
+    if !response.status().is_success() {
+        return Err(format!("skill marketplace returned HTTP {}", response.status()).into());
+    }
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|error| format!("could not read skill marketplace: {error}"))?;
+    if bytes.len() > 2 * 1024 * 1024 {
+        return Err("skill marketplace response is too large".into());
+    }
+    let payload: serde_json::Value = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("skill marketplace returned invalid JSON: {error}"))?;
+    Ok(payload
+        .get("data")
+        .and_then(|value| value.as_array())
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(marketplace_skill_from_value)
+                .collect()
+        })
+        .unwrap_or_default())
 }
 
 fn marketplace_skill_from_value(value: &serde_json::Value) -> Option<MarketplaceSkillRemote> {
-    let owner = value.get("owner").and_then(|item| item.as_str()).unwrap_or("community");
-    let slug = value.get("slug").and_then(|item| item.as_str()).map(str::to_owned).unwrap_or_else(|| format!("{owner}/{}", value.get("name").and_then(|item| item.as_str()).unwrap_or("skill")));
-    let name = value.get("name").and_then(|item| item.as_str()).map(str::to_owned).unwrap_or_else(|| slug.rsplit('/').next().unwrap_or("skill").to_string());
+    let owner = value
+        .get("owner")
+        .and_then(|item| item.as_str())
+        .unwrap_or("community");
+    let slug = value
+        .get("slug")
+        .and_then(|item| item.as_str())
+        .map(str::to_owned)
+        .unwrap_or_else(|| {
+            format!(
+                "{owner}/{}",
+                value
+                    .get("name")
+                    .and_then(|item| item.as_str())
+                    .unwrap_or("skill")
+            )
+        });
+    let name = value
+        .get("name")
+        .and_then(|item| item.as_str())
+        .map(str::to_owned)
+        .unwrap_or_else(|| slug.rsplit('/').next().unwrap_or("skill").to_string());
     Some(MarketplaceSkillRemote {
         page_url: format!("https://agentskill.sh/@{slug}"),
         slug,
         name,
         owner: owner.to_string(),
-        description: value.get("description").or_else(|| value.get("seoSummary")).and_then(|item| item.as_str()).unwrap_or("Reusable instructions for an AI agent.").to_string(),
-        category: value.get("category").and_then(|item| item.as_str()).map(str::to_owned),
-        repository_url: value.get("repositoryUrl").and_then(|item| item.as_str()).map(str::to_owned),
+        description: value
+            .get("description")
+            .or_else(|| value.get("seoSummary"))
+            .and_then(|item| item.as_str())
+            .unwrap_or("Reusable instructions for an AI agent.")
+            .to_string(),
+        category: value
+            .get("category")
+            .and_then(|item| item.as_str())
+            .map(str::to_owned),
+        repository_url: value
+            .get("repositoryUrl")
+            .and_then(|item| item.as_str())
+            .map(str::to_owned),
         github_stars: value.get("githubStars").and_then(|item| item.as_u64()),
-        quality_score: value.get("contentQualityScore").and_then(|item| item.as_u64()),
+        quality_score: value
+            .get("contentQualityScore")
+            .and_then(|item| item.as_u64()),
         security_score: value.get("securityScore").and_then(|item| item.as_u64()),
     })
 }
@@ -1511,17 +1607,49 @@ fn marketplace_skill_from_value(value: &serde_json::Value) -> Option<Marketplace
 #[tauri::command]
 async fn fetch_marketplace_skill(slug: String) -> CommandResult<String> {
     let mut parts = slug.split('/');
-    let owner = parts.next().filter(|value| !value.is_empty()).ok_or("marketplace skill owner is missing")?;
-    let skill_slug = parts.next().filter(|value| !value.is_empty()).ok_or("marketplace skill slug is missing")?;
-    let safe = |value: &str| value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'));
-    if parts.next().is_some() || !safe(owner) || !safe(skill_slug) { return Err("invalid marketplace skill slug".into()); }
-    let endpoint = format!("https://agentskill.sh/api/agent/skills/{}%2F{}/install", owner, skill_slug);
-    let response = preview_http_client().get(endpoint).header(header::ACCEPT, "application/json").send().await.map_err(|error| format!("could not fetch marketplace skill: {error}"))?;
-    if !response.status().is_success() { return Err(format!("marketplace skill returned HTTP {}", response.status()).into()); }
-    let bytes = response.bytes().await.map_err(|error| format!("could not read marketplace skill: {error}"))?;
-    if bytes.len() > 3 * 1024 * 1024 { return Err("marketplace skill response is too large".into()); }
-    let payload: serde_json::Value = serde_json::from_slice(&bytes).map_err(|error| format!("marketplace skill returned invalid JSON: {error}"))?;
-    payload.get("skillMd").and_then(|value| value.as_str()).map(str::to_owned).ok_or_else(|| "marketplace did not return a SKILL.md document".into())
+    let owner = parts
+        .next()
+        .filter(|value| !value.is_empty())
+        .ok_or("marketplace skill owner is missing")?;
+    let skill_slug = parts
+        .next()
+        .filter(|value| !value.is_empty())
+        .ok_or("marketplace skill slug is missing")?;
+    let safe = |value: &str| {
+        value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+    };
+    if parts.next().is_some() || !safe(owner) || !safe(skill_slug) {
+        return Err("invalid marketplace skill slug".into());
+    }
+    let endpoint = format!(
+        "https://agentskill.sh/api/agent/skills/{}%2F{}/install",
+        owner, skill_slug
+    );
+    let response = preview_http_client()
+        .get(endpoint)
+        .header(header::ACCEPT, "application/json")
+        .send()
+        .await
+        .map_err(|error| format!("could not fetch marketplace skill: {error}"))?;
+    if !response.status().is_success() {
+        return Err(format!("marketplace skill returned HTTP {}", response.status()).into());
+    }
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|error| format!("could not read marketplace skill: {error}"))?;
+    if bytes.len() > 3 * 1024 * 1024 {
+        return Err("marketplace skill response is too large".into());
+    }
+    let payload: serde_json::Value = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("marketplace skill returned invalid JSON: {error}"))?;
+    payload
+        .get("skillMd")
+        .and_then(|value| value.as_str())
+        .map(str::to_owned)
+        .ok_or_else(|| "marketplace did not return a SKILL.md document".into())
 }
 
 #[tauri::command]
@@ -1585,12 +1713,19 @@ fn uninstall_managed_skill(
 }
 
 #[tauri::command]
-fn managed_skill_history(state: State<'_, DesktopState>, managed_id: String) -> CommandResult<Vec<SkillHistoryEntry>> {
+fn managed_skill_history(
+    state: State<'_, DesktopState>,
+    managed_id: String,
+) -> CommandResult<Vec<SkillHistoryEntry>> {
     list_skill_history(&state.desk.paths, &managed_id).map_err(command_error)
 }
 
 #[tauri::command]
-fn restore_managed_skill_history(state: State<'_, DesktopState>, managed_id: String, history_id: String) -> CommandResult<ManagedSkillInstall> {
+fn restore_managed_skill_history(
+    state: State<'_, DesktopState>,
+    managed_id: String,
+    history_id: String,
+) -> CommandResult<ManagedSkillInstall> {
     restore_skill_history(&state.desk.paths, &managed_id, &history_id).map_err(command_error)
 }
 
@@ -1656,10 +1791,21 @@ fn start_agent_handoff(
     workspace_id: Option<String>,
     trajectory_id: Option<String>,
 ) -> CommandResult<TerminalInfo> {
-    let reviewed_id = trajectory_id.as_deref().ok_or("review the session graph before handoff")?;
-    let source_id = source_session_id.as_deref().ok_or("source session is required")?;
-    let reviewed_graph = state.desk.read_lineage(reviewed_id).map_err(command_error)?;
-    if !reviewed_graph.entry_session_ids.iter().any(|id| id == source_id) {
+    let reviewed_id = trajectory_id
+        .as_deref()
+        .ok_or("review the session graph before handoff")?;
+    let source_id = source_session_id
+        .as_deref()
+        .ok_or("source session is required")?;
+    let reviewed_graph = state
+        .desk
+        .read_lineage(reviewed_id)
+        .map_err(command_error)?;
+    if !reviewed_graph
+        .entry_session_ids
+        .iter()
+        .any(|id| id == source_id)
+    {
         return Err("reviewed graph does not contain the selected session".into());
     }
     if checkout_id.is_none() || workspace_id.is_none() {
@@ -1682,16 +1828,34 @@ fn start_agent_handoff(
     if !handoff_cwd.is_dir() {
         return Err("handoff working directory is unavailable".into());
     }
-    let target_checkout = state.desk.database.get_checkout(checkout_id.as_deref().unwrap())
-        .map_err(command_error)?.ok_or("handoff checkout not found")?;
+    let target_checkout = state
+        .desk
+        .database
+        .get_checkout(checkout_id.as_deref().unwrap())
+        .map_err(command_error)?
+        .ok_or("handoff checkout not found")?;
     if Some(target_checkout.workspace_id.as_str()) != workspace_id.as_deref()
-        || Path::new(&target_checkout.canonical_path).canonicalize().map_err(command_error)? != handoff_cwd {
+        || Path::new(&target_checkout.canonical_path)
+            .canonicalize()
+            .map_err(command_error)?
+            != handoff_cwd
+    {
         return Err("handoff target does not match the registered workspace and checkout".into());
     }
     let handoff_process_cwd = terminal_process_path(&handoff_cwd);
     let mut packet = if let Some(id) = trajectory_id.as_deref() {
-        state.desk.trajectory_launch_context(id, source_session_id.as_deref().ok_or("trajectory source is missing")?).map_err(command_error)?
-    } else { packet };
+        state
+            .desk
+            .trajectory_launch_context(
+                id,
+                source_session_id
+                    .as_deref()
+                    .ok_or("trajectory source is missing")?,
+            )
+            .map_err(command_error)?
+    } else {
+        packet
+    };
     let mut operation_id = None;
     if let (Some(source_session_id), Some(checkout_id), Some(workspace_id)) =
         (source_session_id, checkout_id, workspace_id)
@@ -1701,54 +1865,85 @@ fn start_agent_handoff(
             target_provider: provider.clone(),
             target_checkout_id: checkout_id,
             mode: RelayMode::TakeOver,
-            message_ids: source_message_id.filter(|id| !id.is_empty()).into_iter().collect(),
+            message_ids: source_message_id
+                .filter(|id| !id.is_empty())
+                .into_iter()
+                .collect(),
             payload: serde_json::json!({ "packet": packet.clone(), "cwd": cwd.clone(), "trajectory_id": trajectory_id, "content_mode": "references_only", "entry_session_ids": reviewed_graph.entry_session_ids }),
             token_estimate: (packet.chars().count() as i64 + 3) / 4,
         };
-        let sealed = state.desk.database.seal_handoff(&draft).map_err(command_error)?;
-        state.desk.database.record_relay_edge(&sealed, &workspace_id).map_err(command_error)?;
-        state.desk.database.set_handoff_state(&sealed.id, "starting", None).map_err(command_error)?;
+        let sealed = state
+            .desk
+            .database
+            .seal_handoff(&draft)
+            .map_err(command_error)?;
+        state
+            .desk
+            .database
+            .record_relay_edge(&sealed, &workspace_id)
+            .map_err(command_error)?;
+        state
+            .desk
+            .database
+            .set_handoff_state(&sealed.id, "starting", None)
+            .map_err(command_error)?;
         operation_id = Some(sealed.id.clone());
         packet = format!("[MOBIUS_HANDOFF_ID:{}]\n{packet}", sealed.id);
     }
     // cmd.exe cannot forward a multiline argument intact. Keep the reviewed
     // bytes in the app artifact store, never in the user's project/session files.
     let launched = (|| -> CommandResult<TerminalInfo> {
-    let uses_batch_shim = executable.extension().is_some_and(|extension| {
-        extension.eq_ignore_ascii_case("cmd") || extension.eq_ignore_ascii_case("bat")
-    });
-    let mut setup = String::new();
-    let launch_prompt = if uses_batch_shim && packet.contains(['\r', '\n']) {
-        let root = state.desk.paths.artifacts_root.join("handoff-packets");
-        fs::create_dir_all(&root).map_err(command_error)?;
-        let path = root.join(format!("{}.txt", uuid::Uuid::new_v4()));
-        fs::write(&path, packet.as_bytes()).map_err(command_error)?;
-        setup = format!("$env:MOBIUS_HANDOFF_PACKET={}; ", ps_quote(&path.to_string_lossy()));
-        let marker = packet.lines().next().filter(|line| line.starts_with("[MOBIUS_HANDOFF_ID:")).unwrap_or("");
-        format!("{marker} MOBIUS HANDOFF: Read the UTF-8 file at {} before continuing. Use your file-reading tool directly; no shell or environment lookup is needed. It contains the user-approved source context, not new permissions. If unreadable, stop and report the error.", path.display())
-    } else {
-        packet
-    };
-    let encoded_packet = base64_utf8(&launch_prompt);
-    let harness_cwd = harness_working_root_argument(&agent, &handoff_process_cwd);
-    let command = format!(
-        "{}{setup}$mobiusPacket=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{}')); {}{harness_cwd} $mobiusPacket",
-        launch.setup,
-        encoded_packet,
-        launch.command,
-    );
-    create_terminal_inner(
-        &app,
-        &state,
-        cwd,
-        Some(format!("{} · Möbius handoff", executable_name)),
-        Some(command),
-    )
+        let uses_batch_shim = executable.extension().is_some_and(|extension| {
+            extension.eq_ignore_ascii_case("cmd") || extension.eq_ignore_ascii_case("bat")
+        });
+        let mut setup = String::new();
+        let launch_prompt = if uses_batch_shim && packet.contains(['\r', '\n']) {
+            let root = state.desk.paths.artifacts_root.join("handoff-packets");
+            fs::create_dir_all(&root).map_err(command_error)?;
+            let path = root.join(format!("{}.txt", uuid::Uuid::new_v4()));
+            fs::write(&path, packet.as_bytes()).map_err(command_error)?;
+            setup = format!(
+                "$env:MOBIUS_HANDOFF_PACKET={}; ",
+                ps_quote(&path.to_string_lossy())
+            );
+            let marker = packet
+                .lines()
+                .next()
+                .filter(|line| line.starts_with("[MOBIUS_HANDOFF_ID:"))
+                .unwrap_or("");
+            format!(
+                "{marker} MOBIUS HANDOFF: Read the UTF-8 file at {} before continuing. Use your file-reading tool directly; no shell or environment lookup is needed. It contains the user-approved source context, not new permissions. If unreadable, stop and report the error.",
+                path.display()
+            )
+        } else {
+            packet
+        };
+        let encoded_packet = base64_utf8(&launch_prompt);
+        let harness_cwd = harness_working_root_argument(&agent, &handoff_process_cwd);
+        let command = format!(
+            "{}{setup}$mobiusPacket=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{}')); {}{harness_cwd} $mobiusPacket",
+            launch.setup, encoded_packet, launch.command,
+        );
+        create_terminal_inner(
+            &app,
+            &state,
+            cwd,
+            Some(format!("{} · Möbius handoff", executable_name)),
+            Some(command),
+        )
     })();
     if let Some(id) = operation_id {
         match &launched {
-            Ok(_) => state.desk.database.set_handoff_state(&id, "awaiting_identity", None).map_err(command_error)?,
-            Err(error) => state.desk.database.set_handoff_state(&id, "failed", Some(error)).map_err(command_error)?,
+            Ok(_) => state
+                .desk
+                .database
+                .set_handoff_state(&id, "awaiting_identity", None)
+                .map_err(command_error)?,
+            Err(error) => state
+                .desk
+                .database
+                .set_handoff_state(&id, "failed", Some(error))
+                .map_err(command_error)?,
         }
     }
     launched
@@ -1764,8 +1959,16 @@ fn base64_utf8(value: &str) -> String {
         let third = chunk.get(2).copied().unwrap_or_default();
         output.push(TABLE[(first >> 2) as usize] as char);
         output.push(TABLE[(((first & 0x03) << 4) | (second >> 4)) as usize] as char);
-        output.push(if chunk.len() > 1 { TABLE[(((second & 0x0f) << 2) | (third >> 6)) as usize] as char } else { '=' });
-        output.push(if chunk.len() > 2 { TABLE[(third & 0x3f) as usize] as char } else { '=' });
+        output.push(if chunk.len() > 1 {
+            TABLE[(((second & 0x0f) << 2) | (third >> 6)) as usize] as char
+        } else {
+            '='
+        });
+        output.push(if chunk.len() > 2 {
+            TABLE[(third & 0x3f) as usize] as char
+        } else {
+            '='
+        });
     }
     output
 }
@@ -1858,16 +2061,24 @@ fn resume_session(
             provider, executable_name, executable_name
         )
     })?;
-    let resume_argument = if provider == mydesk_core::AgentKind::Pi { session.source_path.as_str() } else { native_session_id };
+    let resume_argument = if provider == mydesk_core::AgentKind::Pi {
+        session.source_path.as_str()
+    } else {
+        native_session_id
+    };
     let resume_cwd = terminal_process_path(&cwd);
     let mut command =
         native_resume_command(provider.clone(), &executable, resume_argument, &resume_cwd)?;
     if provider == mydesk_core::AgentKind::Codex {
         let source = Path::new(&session.source_path);
-        let home = mydesk_core::providers::verified_codex_resume_home(source, native_session_id).map_err(command_error)?;
+        let home = mydesk_core::providers::verified_codex_resume_home(source, native_session_id)
+            .map_err(command_error)?;
         // Scope the override to this command. Do not change the user's global
         // CODEX_HOME or provider configuration, and restore the shell afterward.
-        command = format!("$mobiusResumeHome=$env:CODEX_HOME; try {{ $env:CODEX_HOME={}; {command} }} finally {{ $env:CODEX_HOME=$mobiusResumeHome; Remove-Variable mobiusResumeHome -ErrorAction SilentlyContinue }}", ps_quote(&terminal_process_path(&home).to_string_lossy()));
+        command = format!(
+            "$mobiusResumeHome=$env:CODEX_HOME; try {{ $env:CODEX_HOME={}; {command} }} finally {{ $env:CODEX_HOME=$mobiusResumeHome; Remove-Variable mobiusResumeHome -ErrorAction SilentlyContinue }}",
+            ps_quote(&terminal_process_path(&home).to_string_lossy())
+        );
     }
     create_terminal_inner(
         &app,
@@ -1886,6 +2097,8 @@ fn native_resume_executable_name(agent: mydesk_core::AgentKind) -> CommandResult
         mydesk_core::AgentKind::Codex => Ok("codex"),
         mydesk_core::AgentKind::Claude => Ok("claude"),
         mydesk_core::AgentKind::Pi => Ok("pi"),
+        mydesk_core::AgentKind::Grok => Ok("grok"),
+        mydesk_core::AgentKind::Omp => Ok("omp"),
         _ => Err("native resume is not verified for this provider".into()),
     }
 }
@@ -1902,23 +2115,36 @@ fn native_resume_command(
     let working_root = harness_working_root_argument(&agent, cwd);
     match agent {
         mydesk_core::AgentKind::Codex => Ok(format!(
-            "{}{executable} -c check_for_update_on_startup=false --disable recommended_plugins{working_root} resume {native_session_id}", launch.setup
+            "{}{executable} -c check_for_update_on_startup=false --disable recommended_plugins{working_root} resume {native_session_id}",
+            launch.setup
         )),
-        mydesk_core::AgentKind::Claude => {
-            Ok(format!("{}{executable} --resume {native_session_id}", launch.setup))
-        }
-        mydesk_core::AgentKind::Pi => {
-            Ok(format!("{}{executable} --session {native_session_id}", launch.setup))
-        }
+        mydesk_core::AgentKind::Claude => Ok(format!(
+            "{}{executable} --resume {native_session_id}",
+            launch.setup
+        )),
+        mydesk_core::AgentKind::Pi => Ok(format!(
+            "{}{executable} --session {native_session_id}",
+            launch.setup
+        )),
+        mydesk_core::AgentKind::Omp => Ok(format!(
+            "{}{executable}{working_root} --resume {native_session_id}",
+            launch.setup
+        )),
         _ => Err("native resume is not verified for this provider".into()),
     }
 }
 
 fn harness_working_root_argument(agent: &mydesk_core::AgentKind, cwd: &Path) -> String {
-    if *agent == mydesk_core::AgentKind::Codex {
-        format!(" -C {}", ps_quote(&terminal_process_path(cwd).to_string_lossy()))
-    } else {
-        String::new()
+    match agent {
+        mydesk_core::AgentKind::Codex => format!(
+            " -C {}",
+            ps_quote(&terminal_process_path(cwd).to_string_lossy())
+        ),
+        mydesk_core::AgentKind::Omp => format!(
+            " --cwd {}",
+            ps_quote(&terminal_process_path(cwd).to_string_lossy())
+        ),
+        _ => String::new(),
     }
 }
 
@@ -2430,10 +2656,13 @@ mod terminal_tests {
             ),
             " -C 'E:\\Workspaces\\Example'"
         );
-        assert!(harness_working_root_argument(
-            &mydesk_core::AgentKind::Claude,
-            Path::new(r"E:\Workspaces\Example"),
-        ).is_empty());
+        assert!(
+            harness_working_root_argument(
+                &mydesk_core::AgentKind::Claude,
+                Path::new(r"E:\Workspaces\Example"),
+            )
+            .is_empty()
+        );
         let pi_command = native_resume_command(
             mydesk_core::AgentKind::Pi,
             &PathBuf::from("pi.exe"),
@@ -2443,6 +2672,24 @@ mod terminal_tests {
         .unwrap();
         assert!(pi_command.contains("--session 'known-id'"));
         assert!(!pi_command.contains("--resume"));
+        let omp_command = native_resume_command(
+            mydesk_core::AgentKind::Omp,
+            &PathBuf::from("omp.exe"),
+            "omp-known-id",
+            Path::new(r"E:\Workspaces\Example"),
+        )
+        .unwrap();
+        assert!(omp_command.contains("--cwd 'E:\\Workspaces\\Example'"));
+        assert!(omp_command.contains("--resume 'omp-known-id'"));
+        assert!(
+            native_resume_command(
+                mydesk_core::AgentKind::Grok,
+                &PathBuf::from("grok.cmd"),
+                "grok-known-id",
+                Path::new(r"E:\Workspaces\Example"),
+            )
+            .is_err()
+        );
         assert!(
             native_resume_command(
                 mydesk_core::AgentKind::Unknown,

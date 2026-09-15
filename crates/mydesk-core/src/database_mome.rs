@@ -5,10 +5,10 @@ use crate::{
 use anyhow::{Context, Result};
 use chrono::Utc;
 use rusqlite::{
-    Connection, OptionalExtension, TransactionBehavior, params, params_from_iter, types::Value,
+    Connection, Transaction, TransactionBehavior, params, params_from_iter, types::Value,
 };
 use sha2::{Digest, Sha256};
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 const MOME_SCHEMA_VERSION: i64 = 3;
 const CHUNK_CHARACTER_TARGET: usize = 1_800;
@@ -80,54 +80,154 @@ impl Database {
         Ok(())
     }
 
-    /// Rebuild only changed session-derived chunks. The source is the already
-    /// indexed `messages` table, never a Harness JSONL file.
+    /// Rebuild only sessions explicitly invalidated by catalogue message
+    /// replacement. Warm recall performs one small index-state query instead
+    /// of hashing every message in the catalogue.
     pub(crate) fn sync_mome_chunks(&self) -> Result<()> {
         let connection = self.connection()?;
-        let mut statement = connection.prepare("SELECT id, title FROM sessions ORDER BY id")?;
+        let mut statement = connection.prepare(
+            "SELECT s.id, s.title FROM sessions s
+             LEFT JOIN mome_session_state ms ON ms.session_id = s.id
+             WHERE ms.session_id IS NULL
+             ORDER BY s.id",
+        )?;
         let sessions = statement
             .query_map([], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         drop(statement);
-        drop(connection);
 
-        for (session_id, title) in sessions {
-            let messages = self.list_session_messages(&session_id)?;
-            let source_hash = session_hash(&title, &messages);
-            let connection = self.connection()?;
-            let existing: Option<String> = connection
-                .query_row(
-                    "SELECT source_hash FROM mome_session_state WHERE session_id = ?1",
-                    [&session_id],
-                    |row| row.get(0),
-                )
-                .optional()?;
-            drop(connection);
-            if existing.as_deref() == Some(source_hash.as_str()) {
-                continue;
-            }
-            self.replace_mome_session_chunks(&session_id, &title, &source_hash, &messages)?;
+        let mut messages_by_session: HashMap<String, Vec<Message>> = HashMap::new();
+        let mut messages_statement = connection.prepare(
+            "SELECT m.id, m.session_id, m.ordinal, m.role, m.kind, m.content,
+                    m.timestamp, m.source_locator_json, m.redacted
+             FROM messages m
+             INNER JOIN sessions s ON s.id = m.session_id
+             LEFT JOIN mome_session_state ms ON ms.session_id = s.id
+             WHERE ms.session_id IS NULL
+             ORDER BY m.session_id, m.ordinal",
+        )?;
+        let messages = messages_statement
+            .query_map([], |row| {
+                let role: String = row.get(3)?;
+                let source_locator: String = row.get(7)?;
+                Ok(Message {
+                    id: row.get(0)?,
+                    session_id: row.get(1)?,
+                    ordinal: row.get(2)?,
+                    role: match role.as_str() {
+                        "user" => MessageRole::User,
+                        "assistant" => MessageRole::Assistant,
+                        "system" => MessageRole::System,
+                        "tool" => MessageRole::Tool,
+                        _ => MessageRole::Unknown,
+                    },
+                    kind: row.get(4)?,
+                    content: row.get(5)?,
+                    timestamp: row.get(6)?,
+                    source_locator: serde_json::from_str(&source_locator).unwrap_or_default(),
+                    redacted: row.get(8)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        drop(messages_statement);
+        drop(connection);
+        for message in messages {
+            messages_by_session
+                .entry(message.session_id.clone())
+                .or_default()
+                .push(message);
         }
+
         let connection = self.connection()?;
-        connection.execute(
+        let mut existing_statement = connection.prepare(
+            "SELECT c.session_id, c.start_ordinal, c.end_ordinal, c.content_hash
+             FROM mome_chunks c
+             LEFT JOIN mome_session_state ms ON ms.session_id = c.session_id
+             WHERE ms.session_id IS NULL
+             ORDER BY c.session_id, c.start_ordinal, c.end_ordinal",
+        )?;
+        let existing_rows = existing_statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        drop(existing_statement);
+        drop(connection);
+        let mut existing_signatures: HashMap<String, Vec<(i64, i64, String)>> = HashMap::new();
+        for (session_id, start, end, hash) in existing_rows {
+            existing_signatures
+                .entry(session_id)
+                .or_default()
+                .push((start, end, hash));
+        }
+
+        let mut pending = Vec::with_capacity(sessions.len());
+        for (session_id, title) in sessions {
+            let messages = messages_by_session.remove(&session_id).unwrap_or_default();
+            let source_hash = session_hash(&title, &messages);
+            let chunks = make_chunks(&messages);
+            let signature = chunks
+                .iter()
+                .map(|chunk| {
+                    (
+                        chunk.start_ordinal,
+                        chunk.end_ordinal,
+                        sha256(&chunk.content),
+                    )
+                })
+                .collect::<Vec<_>>();
+            let content_unchanged = existing_signatures.get(&session_id) == Some(&signature);
+            pending.push((session_id, title, source_hash, chunks, content_unchanged));
+        }
+        if pending.is_empty() {
+            return Ok(());
+        }
+        // One durable transaction avoids thousands of FULL-sync commits during
+        // a first-run/backfill while retaining atomic visibility for recall.
+        let mut connection = self.connection()?;
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        for (session_id, title, source_hash, chunks, content_unchanged) in pending {
+            if content_unchanged {
+                transaction.execute(
+                    "UPDATE mome_chunk_fts SET title = ?1 WHERE session_record_id = ?2",
+                    params![title, session_id],
+                )?;
+                transaction.execute(
+                    "INSERT INTO mome_session_state(session_id, source_hash, indexed_at) VALUES(?1, ?2, ?3)",
+                    params![session_id, source_hash, Utc::now().to_rfc3339()],
+                )?;
+            } else {
+                Self::replace_mome_session_chunks(
+                    &transaction,
+                    &session_id,
+                    &title,
+                    &source_hash,
+                    &chunks,
+                )?;
+            }
+        }
+        transaction.execute(
             "DELETE FROM mome_chunk_fts WHERE chunk_id NOT IN (SELECT id FROM mome_chunks)",
             [],
         )?;
+        transaction.commit()?;
         Ok(())
     }
 
     fn replace_mome_session_chunks(
-        &self,
+        transaction: &Transaction<'_>,
         session_id: &str,
         title: &str,
         source_hash: &str,
-        messages: &[Message],
+        chunks: &[ChunkDraft],
     ) -> Result<()> {
-        let chunks = make_chunks(messages);
-        let mut connection = self.connection()?;
-        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
         transaction.execute(
             "DELETE FROM mome_chunk_fts WHERE session_record_id = ?1",
             [session_id],
@@ -152,7 +252,6 @@ impl Database {
             "INSERT INTO mome_session_state(session_id, source_hash, indexed_at) VALUES(?1, ?2, ?3) ON CONFLICT(session_id) DO UPDATE SET source_hash = excluded.source_hash, indexed_at = excluded.indexed_at",
             params![session_id, source_hash, Utc::now().to_rfc3339()],
         )?;
-        transaction.commit()?;
         Ok(())
     }
 

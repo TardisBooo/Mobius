@@ -4,9 +4,9 @@
 
 **切换 Agent，工作不断线。**
 
-面向同时在同一项目中使用 Codex、Claude Code 与 Pi 的 Windows 本地工作台。采用 **Rust 核心、Tauri 2 桌面外壳、React/TypeScript 界面与 SQLite 本地索引**。
+面向同时在同一项目中使用 Codex、Claude Code、Pi、Grok 与 OMP 的 Windows 工作台。采用 **Rust 核心、Tauri 2 桌面外壳、React/TypeScript 界面与 SQLite 本地索引**。
 
-[English](README.md) · [在线产品页](http://8.137.87.76/mobius/?lang=zh) · [播放产品视频](http://8.137.87.76/mobius/?lang=zh#demo) · [下载](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.14) · [完整验收记录](docs/acceptance/full-desktop-0.3.14.md) · [MIT License](LICENSE)
+[English](README.md) · [在线产品页](http://8.137.87.76/mobius/?lang=zh) · [播放产品视频](http://8.137.87.76/mobius/?lang=zh#demo) · [下载](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.15) · [完整验收记录](docs/acceptance/full-desktop-0.3.15.md) · [MIT License](LICENSE)
 
 > 当前为开发预览版。兼容性按 Harness 逐项验证并附证据发布。莫比乌斯不提供模型账号、订阅或 API 额度。
 
@@ -38,7 +38,7 @@ Agent CLI 各自记得自己的会话，却不会提供一张以项目为中心�
 | 能力 | 可以做什么 |
 | --- | --- |
 | **Rust 实现、本地优先** | Rust 负责索引、Harness 适配、交接数据与本地服务，Tauri 承载桌面界面；模型账号由用户自行配置。 |
-| **多 Agent 会话库** | 按项目目录与 worktree 聚合已批准的 Codex、Claude Code 与 Pi 会话。 |
+| **多 Agent 会话库** | 按项目目录与 worktree 聚合已批准的 Codex、Claude Code、Pi、Grok 与 OMP 会话。 |
 | **会话历史精准定位** | 按名称或原生 ID 找会话，查看原始消息，复制精确到 `@session:provider/id#mN` 或 `#mN-mM` 的引用。 |
 | **会话内容全文搜索** | 使用 SQLite FTS/BM25 检索本地索引、查看命中原文；通过 Mome 主动提取有预算限制的历史片段。 |
 | **跨 Agent 交接** | 审核完整轨迹后，在项目目录启动目标 Agent 的新会话，不覆盖来源记录。 |
@@ -51,7 +51,7 @@ Agent CLI 各自记得自己的会话，却不会提供一张以项目为中心�
 
 - **精准引用：已支持。** 已知 session ID 和消息范围时，直接定位对应证据。
 - **关键词／全文检索：已支持。** Mome 使用本地 SQLite FTS/BM25 分块索引，在已索引来源中优先排序当前项目／worktree，每次最多返回三个可引用会话，输出预算上限为 1,200 token。
-- **语义／向量与混合检索：v0.3.14 尚未提供。** 当前未接入 embedding 模型或向量后端，这是后续能力，不是可在设置中开启的现成功能；Mome 会明确显示当前仅为词法检索。
+- **语义／向量与混合检索：v0.3.15 尚未提供。** 当前未接入 embedding 模型或向量后端，这是后续能力，不是可在设置中开启的现成功能；Mome 会明确显示当前仅为词法检索。
 
 默认不搜索其他会话，也不自动注入历史。本地检索不调用模型；将选中的片段发给 Agent 后，会占用上下文 token。
 
@@ -59,7 +59,7 @@ Agent CLI 各自记得自己的会话，却不会提供一张以项目为中心�
 
 ![按项目与 Agent 聚合的会话库](apps/website/public/product/session-library.png)
 
-- 支持已批准的 Codex、Claude Code 与 Pi 来源目录。
+- 支持已批准的 Codex、Claude Code、Pi、Grok 与 OMP 来源目录；仅当已安装 Harness 有经过验证的恢复协议时显示原生恢复。OMP 使用其公开的 `--cwd … --resume …` 流程，当前 Grok 历史格式仅支持查看、搜索与交接。
 - 搜索消息、架构决策、进度和失败尝试。
 - 找到来源后复制精确的 `@session:provider/id#mN` 引用。
 - 只有主动运行 Mome 时，才检索相关历史，并优先排序当前项目／worktree 的结果。
@@ -95,9 +95,9 @@ Agent CLI 各自记得自己的会话，却不会提供一张以项目为中心�
 
 ## 安装
 
-从 [GitHub Releases](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.14) 下载 v0.3.14 Windows 预览版安装包或便携 EXE，并核对 SHA-256 和已知限制。构建尚未签名，可能触发 SmartScreen。
+从 [GitHub Releases](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.15) 下载 v0.3.15 Windows 预览版安装包或便携 EXE，并核对 SHA-256 和已知限制。构建尚未签名，可能触发 SmartScreen。
 
-参见 [0.3.14 完整桌面验收](docs/acceptance/full-desktop-0.3.14.md)。MÖBIUS 只通过各 Harness 公开的命令行接口调用已安装程序，不会修改或替换 Codex、Claude Code 与 Pi。
+参见 [0.3.15 完整桌面验收](docs/acceptance/full-desktop-0.3.15.md)。MÖBIUS 只通过各 Harness 公开的命令行接口调用已安装程序，不会修改或替换 Codex、Claude Code、Pi、Grok 与 OMP。
 
 ### 从源码构建
 

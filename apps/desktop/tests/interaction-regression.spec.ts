@@ -33,6 +33,7 @@ test("workspace drag, note save, mount tree and terminal contrast", async () => 
   writeFileSync(globalSkill, "name: interaction-global-skill\n\ndescription: Isolated global skill discovery fixture.\n", "utf8");
   const browser = await chromium.connectOverCDP(endpoint);
   const page = await appPage(browser);
+  await page.bringToFront();
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });

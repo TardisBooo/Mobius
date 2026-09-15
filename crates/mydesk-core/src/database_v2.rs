@@ -1,9 +1,8 @@
 use crate::{
     AgentKind, Artifact, Checkout, CheckoutKind, Database, HandoffDraft, HandoffPackage,
     MatchRange, Message, MessageMatch, MessageRole, PathMapping, RelayChain, RelayEdge, RelayGraph,
-    RelayMode, Session,
-    SessionCapability, SessionQuery, SessionSearchHit, SessionState, SessionTurnPreview,
-    SessionTurnState, Workspace, WorkspacePaths, WorkspaceStatus,
+    RelayMode, Session, SessionCapability, SessionQuery, SessionSearchHit, SessionState,
+    SessionTurnPreview, SessionTurnState, Workspace, WorkspacePaths, WorkspaceStatus,
 };
 use anyhow::{Context, Result};
 use chrono::Utc;
@@ -12,7 +11,12 @@ use rusqlite::{
     types::Value as SqlValue,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::{HashMap, HashSet}, fs, path::Path, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    path::Path,
+    str::FromStr,
+};
 
 pub const TARGET_SCHEMA_VERSION: i64 = 4;
 const V2_SCHEMA_VERSION: i64 = 2;
@@ -425,7 +429,10 @@ impl Database {
         )?;
         if let (Some(checkout_id), Some(handoff_id)) = (
             session.checkout_id.as_deref(),
-            session.metadata.get("mobius_handoff_id").and_then(|value| value.as_str()),
+            session
+                .metadata
+                .get("mobius_handoff_id")
+                .and_then(|value| value.as_str()),
         ) {
             // Link only a packet explicitly observed in the target transcript.
             // Provider/cwd alone cannot identify which session took over.
@@ -447,7 +454,13 @@ impl Database {
                            AND bound.target_session_id <> ?1
                        )
                    )"#,
-                params![session.id, session.provider.to_string(), checkout_id, handoff_id, session.started_at],
+                params![
+                    session.id,
+                    session.provider.to_string(),
+                    checkout_id,
+                    handoff_id,
+                    session.started_at
+                ],
             )?;
             if bound > 0 {
                 transaction.execute("INSERT INTO handoff_operations(handoff_id, state, detail, updated_at) VALUES (?1, 'bound', NULL, ?2) ON CONFLICT(handoff_id) DO UPDATE SET state = 'bound', detail = NULL, updated_at = excluded.updated_at",
@@ -473,10 +486,14 @@ impl Database {
     }
 
     pub fn session_id_for_source(&self, source: &str) -> Result<Option<String>> {
-        Ok(self.connection()?.query_row(
-            "SELECT id FROM sessions WHERE source_path = ?1 ORDER BY id LIMIT 1",
-            [source], |row| row.get(0),
-        ).optional()?)
+        Ok(self
+            .connection()?
+            .query_row(
+                "SELECT id FROM sessions WHERE source_path = ?1 ORDER BY id LIMIT 1",
+                [source],
+                |row| row.get(0),
+            )
+            .optional()?)
     }
 
     pub fn sessions_for_source_audit(&self) -> Result<Vec<Session>> {
@@ -484,8 +501,11 @@ impl Database {
         let mut statement = connection.prepare(
             "SELECT id, provider, provider_session_id, checkout_id, title, state,
              capabilities_json, source_path, source_available, started_at, updated_at,
-             metadata_json FROM sessions")?;
-        Ok(statement.query_map([], session_from_row)?.collect::<rusqlite::Result<Vec<_>>>()?)
+             metadata_json FROM sessions",
+        )?;
+        Ok(statement
+            .query_map([], session_from_row)?
+            .collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
     pub fn update_session_source(&self, session: &Session) -> Result<()> {
@@ -643,6 +663,8 @@ impl Database {
                     });
                 }
             }
+            dedupe_logical_session_hits(&mut output);
+            output.truncate(limit);
             self.populate_last_turn_previews(&mut output)?;
             return Ok(output);
         }
@@ -667,6 +689,8 @@ impl Database {
                 last_turn: None,
             });
         }
+        dedupe_logical_session_hits(&mut output);
+        output.truncate(limit);
         self.populate_last_turn_previews(&mut output)?;
         Ok(output)
     }
@@ -691,7 +715,8 @@ impl Database {
                WHERE m.ordinal >= u.user_ordinal AND m.role IN ('user', 'assistant')
                ORDER BY m.session_id, m.ordinal"#,
         );
-        let parameters = hits.iter()
+        let parameters = hits
+            .iter()
             .map(|hit| SqlValue::Text(hit.session.id.clone()))
             .collect::<Vec<_>>();
         let connection = self.connection()?;
@@ -701,10 +726,14 @@ impl Database {
             .collect::<rusqlite::Result<Vec<_>>>()?;
         let mut by_session: HashMap<String, Vec<Message>> = HashMap::new();
         for message in messages {
-            by_session.entry(message.session_id.clone()).or_default().push(message);
+            by_session
+                .entry(message.session_id.clone())
+                .or_default()
+                .push(message);
         }
         for hit in hits {
-            hit.last_turn = by_session.get(&hit.session.id)
+            hit.last_turn = by_session
+                .get(&hit.session.id)
                 .and_then(|messages| last_turn_preview(&hit.session, messages));
         }
         Ok(())
@@ -843,6 +872,10 @@ impl Database {
             [session_id],
         )?;
         transaction.execute("DELETE FROM messages WHERE session_id = ?1", [session_id])?;
+        transaction.execute(
+            "DELETE FROM mome_session_state WHERE session_id = ?1",
+            [session_id],
+        )?;
         for message in messages {
             if message.session_id != session_id {
                 anyhow::bail!("message {} belongs to a different session", message.id);
@@ -898,6 +931,10 @@ impl Database {
             transaction.execute("DELETE FROM message_fts_trigram WHERE rowid = ?1", [rowid])?;
         }
         transaction.execute("DELETE FROM messages WHERE session_id = ?1", [session_id])?;
+        transaction.execute(
+            "DELETE FROM mome_session_state WHERE session_id = ?1",
+            [session_id],
+        )?;
         for message in messages {
             if message.session_id != session_id {
                 anyhow::bail!("message {} belongs to a different session", message.id);
@@ -1133,7 +1170,11 @@ impl Database {
                     source_session_id: row.get(2)?,
                     target_session_id: row.get(3)?,
                     handoff_id: row.get(4)?,
-                    relation: if relation == "parallel" { RelayMode::Parallel } else { RelayMode::TakeOver },
+                    relation: if relation == "parallel" {
+                        RelayMode::Parallel
+                    } else {
+                        RelayMode::TakeOver
+                    },
                     created_at: row.get(6)?,
                 })
             })?
@@ -1148,7 +1189,11 @@ impl Database {
         let handoffs = handoff_statement
             .query_map([workspace_id], handoff_from_row)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
-        Ok(RelayGraph { chains, edges, handoffs })
+        Ok(RelayGraph {
+            chains,
+            edges,
+            handoffs,
+        })
     }
 
     pub fn get_handoff_package(&self, id: &str) -> Result<Option<HandoffPackage>> {
@@ -1165,22 +1210,41 @@ impl Database {
     /// Adds an immutable edge to Möbius' own relay graph. The target session
     /// remains pending until the target Harness writes and the read-only index
     /// discovers its native session; source transcripts are never modified.
-    pub fn record_relay_edge(&self, handoff: &HandoffPackage, workspace_id: &str) -> Result<String> {
+    pub fn record_relay_edge(
+        &self,
+        handoff: &HandoffPackage,
+        workspace_id: &str,
+    ) -> Result<String> {
         let now = Utc::now().to_rfc3339();
         let mut connection = self.connection()?;
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let existing_edge: Option<String> = transaction.query_row(
-            "SELECT id FROM relay_edges WHERE handoff_id = ?1 ORDER BY id LIMIT 1",
-            [&handoff.id], |row| row.get(0),
-        ).optional()?;
-        if let Some(id) = existing_edge { return Ok(id); }
-        let source_ids: std::collections::BTreeSet<String> = match handoff.payload.get("entry_session_ids") {
-            Some(value) => serde_json::from_value::<Vec<String>>(value.clone())?.into_iter().collect(),
-            None => [handoff.source_session_id.clone()].into_iter().collect(),
-        };
-        anyhow::ensure!(source_ids.contains(&handoff.source_session_id), "primary source missing from handoff entry set");
+        let existing_edge: Option<String> = transaction
+            .query_row(
+                "SELECT id FROM relay_edges WHERE handoff_id = ?1 ORDER BY id LIMIT 1",
+                [&handoff.id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if let Some(id) = existing_edge {
+            return Ok(id);
+        }
+        let source_ids: std::collections::BTreeSet<String> =
+            match handoff.payload.get("entry_session_ids") {
+                Some(value) => serde_json::from_value::<Vec<String>>(value.clone())?
+                    .into_iter()
+                    .collect(),
+                None => [handoff.source_session_id.clone()].into_iter().collect(),
+            };
+        anyhow::ensure!(
+            source_ids.contains(&handoff.source_session_id),
+            "primary source missing from handoff entry set"
+        );
         for source in &source_ids {
-            let exists: bool = transaction.query_row("SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ?1)", [source], |row| row.get(0))?;
+            let exists: bool = transaction.query_row(
+                "SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ?1)",
+                [source],
+                |row| row.get(0),
+            )?;
             anyhow::ensure!(exists, "handoff source session not found");
         }
         let existing_chain: Option<String> = transaction
@@ -1190,7 +1254,9 @@ impl Database {
                 |row| row.get(0),
             )
             .optional()?;
-        let chain_id = existing_chain.clone().unwrap_or_else(|| format!("relay:{}", uuid::Uuid::new_v4()));
+        let chain_id = existing_chain
+            .clone()
+            .unwrap_or_else(|| format!("relay:{}", uuid::Uuid::new_v4()));
         let edge_id = format!("edge:{}", uuid::Uuid::new_v4());
         if existing_chain.is_none() {
             transaction.execute(
@@ -1198,11 +1264,18 @@ impl Database {
                 params![chain_id, workspace_id, handoff.target_checkout_id, format!("{} → {}", handoff.source_session_id, handoff.target_provider), now],
             )?;
         } else {
-            transaction.execute("UPDATE relay_chains SET updated_at = ?2 WHERE id = ?1", params![chain_id, now])?;
+            transaction.execute(
+                "UPDATE relay_chains SET updated_at = ?2 WHERE id = ?1",
+                params![chain_id, now],
+            )?;
         }
         for source in &source_ids {
-        let source_edge_id = if source == &handoff.source_session_id { edge_id.clone() } else { format!("edge:{}", uuid::Uuid::new_v4()) };
-        transaction.execute(
+            let source_edge_id = if source == &handoff.source_session_id {
+                edge_id.clone()
+            } else {
+                format!("edge:{}", uuid::Uuid::new_v4())
+            };
+            transaction.execute(
             "INSERT INTO relay_edges(id, chain_id, source_session_id, target_session_id, handoff_id, relation, created_at) VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6)",
             params![source_edge_id, chain_id, source, handoff.id, handoff.mode.as_str(), now],
         )?;
@@ -1256,16 +1329,32 @@ fn message_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Message> {
 
 const SESSION_TURN_PREVIEW_CHARS: usize = 240;
 
+fn dedupe_logical_session_hits(hits: &mut Vec<SessionSearchHit>) {
+    let mut seen = HashSet::new();
+    hits.retain(|hit| {
+        seen.insert((
+            hit.session.provider.to_string(),
+            hit.session.provider_session_id.clone(),
+        ))
+    });
+}
+
 fn last_turn_preview(session: &Session, messages: &[Message]) -> Option<SessionTurnPreview> {
     let user_index = messages.iter().rposition(|message| {
         message.role == MessageRole::User && !message.redacted && !message.content.trim().is_empty()
     })?;
     let user = &messages[user_index];
     let (user_excerpt, user_excerpt_truncated) = bounded_preview(&user.content);
-    let assistant_messages = messages[user_index + 1..].iter()
-        .filter(|message| message.role == MessageRole::Assistant && !message.redacted && !message.content.trim().is_empty())
+    let assistant_messages = messages[user_index + 1..]
+        .iter()
+        .filter(|message| {
+            message.role == MessageRole::Assistant
+                && !message.redacted
+                && !message.content.trim().is_empty()
+        })
         .collect::<Vec<_>>();
-    let assistant_text = assistant_messages.iter()
+    let assistant_text = assistant_messages
+        .iter()
         .map(|message| message.content.trim())
         .collect::<Vec<_>>()
         .join("\n\n");
@@ -1284,8 +1373,14 @@ fn last_turn_preview(session: &Session, messages: &[Message]) -> Option<SessionT
         assistant_end_ordinal: assistant_messages.last().map(|message| message.ordinal),
         assistant_excerpt,
         assistant_excerpt_truncated,
-        state: if assistant_messages.is_empty() { SessionTurnState::AwaitingReply } else { SessionTurnState::Answered },
-        catalogue_complete: session.metadata.get("catalogue_coverage")
+        state: if assistant_messages.is_empty() {
+            SessionTurnState::AwaitingReply
+        } else {
+            SessionTurnState::Answered
+        },
+        catalogue_complete: session
+            .metadata
+            .get("catalogue_coverage")
             .and_then(serde_json::Value::as_str)
             .map(|coverage| coverage == "full")
             .unwrap_or(true),
@@ -1294,7 +1389,10 @@ fn last_turn_preview(session: &Session, messages: &[Message]) -> Option<SessionT
 
 fn bounded_preview(content: &str) -> (String, bool) {
     let mut chars = content.trim().chars();
-    let excerpt = chars.by_ref().take(SESSION_TURN_PREVIEW_CHARS).collect::<String>();
+    let excerpt = chars
+        .by_ref()
+        .take(SESSION_TURN_PREVIEW_CHARS)
+        .collect::<String>();
     (excerpt, chars.next().is_some())
 }
 
@@ -1618,34 +1716,63 @@ mod tests {
         let temporary = tempfile::tempdir().expect("temp");
         let database = Database::open(&paths(temporary.path())).expect("database");
         let session = Session {
-            id: "session:last-turn".into(), provider: AgentKind::Codex,
-            provider_session_id: "last-turn".into(), checkout_id: None,
-            title: "Last turn".into(), state: SessionState::Indexed,
+            id: "session:last-turn".into(),
+            provider: AgentKind::Codex,
+            provider_session_id: "last-turn".into(),
+            checkout_id: None,
+            title: "Last turn".into(),
+            state: SessionState::Indexed,
             capabilities: vec![SessionCapability::Inspect],
-            source_path: r"C:\sessions\last-turn.jsonl".into(), source_available: true,
-            started_at: None, updated_at: "2026-09-14T12:00:00Z".into(),
+            source_path: r"C:\sessions\last-turn.jsonl".into(),
+            source_available: true,
+            started_at: None,
+            updated_at: "2026-09-14T12:00:00Z".into(),
             metadata: serde_json::json!({"catalogue_coverage": "partial"}),
         };
         database.upsert_session(&session).expect("session");
         let message = |id: &str, ordinal: i64, role: MessageRole, content: &str| Message {
-            id: id.into(), session_id: session.id.clone(), ordinal, role, kind: "text".into(),
-            content: content.into(), timestamp: None,
-            source_locator: serde_json::json!({"line": ordinal + 1}), redacted: false,
+            id: id.into(),
+            session_id: session.id.clone(),
+            ordinal,
+            role,
+            kind: "text".into(),
+            content: content.into(),
+            timestamp: None,
+            source_locator: serde_json::json!({"line": ordinal + 1}),
+            redacted: false,
         };
-        database.replace_session_messages(&session.id, &[
-            message("m0", 0, MessageRole::User, "older question"),
-            message("m1", 1, MessageRole::Assistant, "older answer"),
-            message("m2", 2, MessageRole::User, "why did the build fail?"),
-            message("m3", 3, MessageRole::Tool, "compiler output"),
-            message("m4", 4, MessageRole::Assistant, "The library path was wrong."),
-        ]).expect("messages");
+        database
+            .replace_session_messages(
+                &session.id,
+                &[
+                    message("m0", 0, MessageRole::User, "older question"),
+                    message("m1", 1, MessageRole::Assistant, "older answer"),
+                    message("m2", 2, MessageRole::User, "why did the build fail?"),
+                    message("m3", 3, MessageRole::Tool, "compiler output"),
+                    message(
+                        "m4",
+                        4,
+                        MessageRole::Assistant,
+                        "The library path was wrong.",
+                    ),
+                ],
+            )
+            .expect("messages");
 
-        let hits = database.query_sessions(&SessionQuery { limit: 10, ..SessionQuery::default() }).expect("query");
+        let hits = database
+            .query_sessions(&SessionQuery {
+                limit: 10,
+                ..SessionQuery::default()
+            })
+            .expect("query");
         let turn = hits[0].last_turn.as_ref().expect("last turn");
         assert_eq!(turn.user_ordinal, 2);
         assert_eq!(turn.user_excerpt, "why did the build fail?");
         assert_eq!(turn.assistant_start_ordinal, Some(4));
-        assert_eq!(turn.assistant_excerpt.as_deref(), Some("The library path was wrong."));
+        assert_eq!(
+            turn.assistant_excerpt.as_deref(),
+            Some("The library path was wrong.")
+        );
         assert_eq!(turn.state, SessionTurnState::Answered);
         assert!(!turn.catalogue_complete);
     }
@@ -1653,16 +1780,29 @@ mod tests {
     #[test]
     fn final_user_turn_without_an_answer_is_explicit() {
         let session = Session {
-            id: "session:waiting".into(), provider: AgentKind::Claude,
-            provider_session_id: "waiting".into(), checkout_id: None, title: "Waiting".into(),
-            state: SessionState::Indexed, capabilities: Vec::new(), source_path: "waiting.jsonl".into(),
-            source_available: true, started_at: None, updated_at: "2026-09-14T12:00:00Z".into(),
+            id: "session:waiting".into(),
+            provider: AgentKind::Claude,
+            provider_session_id: "waiting".into(),
+            checkout_id: None,
+            title: "Waiting".into(),
+            state: SessionState::Indexed,
+            capabilities: Vec::new(),
+            source_path: "waiting.jsonl".into(),
+            source_available: true,
+            started_at: None,
+            updated_at: "2026-09-14T12:00:00Z".into(),
             metadata: serde_json::json!({"catalogue_coverage": "full"}),
         };
         let messages = vec![Message {
-            id: "m0".into(), session_id: session.id.clone(), ordinal: 0, role: MessageRole::User,
-            kind: "text".into(), content: "please continue".into(), timestamp: None,
-            source_locator: serde_json::json!({}), redacted: false,
+            id: "m0".into(),
+            session_id: session.id.clone(),
+            ordinal: 0,
+            role: MessageRole::User,
+            kind: "text".into(),
+            content: "please continue".into(),
+            timestamp: None,
+            source_locator: serde_json::json!({}),
+            redacted: false,
         }];
         let turn = last_turn_preview(&session, &messages).expect("last turn");
         assert_eq!(turn.state, SessionTurnState::AwaitingReply);
@@ -1963,43 +2103,89 @@ mod tests {
             database.get_handoff_package(&sealed.id).expect("get"),
             Some(sealed.clone())
         );
-        assert_eq!(database.list_handoff_packages(10).expect("list"), vec![sealed.clone()]);
-        let edge = database.record_relay_edge(&sealed, "workspace:relay").expect("relay edge");
+        assert_eq!(
+            database.list_handoff_packages(10).expect("list"),
+            vec![sealed.clone()]
+        );
+        let edge = database
+            .record_relay_edge(&sealed, "workspace:relay")
+            .expect("relay edge");
         let connection = database.connection().expect("connection");
-        let pending: Option<String> = connection.query_row(
-            "SELECT target_session_id FROM relay_edges WHERE id = ?1",
-            [&edge], |row| row.get(0),
-        ).expect("pending edge");
+        let pending: Option<String> = connection
+            .query_row(
+                "SELECT target_session_id FROM relay_edges WHERE id = ?1",
+                [&edge],
+                |row| row.get(0),
+            )
+            .expect("pending edge");
         assert!(pending.is_none());
         drop(connection);
 
         let mut target = Session {
-            id: "session:relay-target".into(), provider: AgentKind::Claude,
-            provider_session_id: "provider-relay-target".into(), checkout_id: Some("checkout:relay".into()),
-            title: "Continued feature".into(), state: SessionState::Indexed,
-            capabilities: vec![SessionCapability::Inspect], source_path: "target.jsonl".into(),
-            source_available: true, started_at: None, updated_at: Utc::now().to_rfc3339(), metadata: serde_json::json!({}),
+            id: "session:relay-target".into(),
+            provider: AgentKind::Claude,
+            provider_session_id: "provider-relay-target".into(),
+            checkout_id: Some("checkout:relay".into()),
+            title: "Continued feature".into(),
+            state: SessionState::Indexed,
+            capabilities: vec![SessionCapability::Inspect],
+            source_path: "target.jsonl".into(),
+            source_available: true,
+            started_at: None,
+            updated_at: Utc::now().to_rfc3339(),
+            metadata: serde_json::json!({}),
         };
         database.upsert_session(&target).expect("target session");
         let connection = database.connection().expect("connection");
-        let resolved: Option<String> = connection.query_row(
-            "SELECT target_session_id FROM relay_edges WHERE id = ?1",
-            [&edge], |row| row.get(0),
-        ).expect("resolved edge");
-        assert!(resolved.is_none(), "same-provider sessions are not evidence of a handoff");
+        let resolved: Option<String> = connection
+            .query_row(
+                "SELECT target_session_id FROM relay_edges WHERE id = ?1",
+                [&edge],
+                |row| row.get(0),
+            )
+            .expect("resolved edge");
+        assert!(
+            resolved.is_none(),
+            "same-provider sessions are not evidence of a handoff"
+        );
         drop(connection);
         target.metadata = serde_json::json!({"mobius_handoff_id": sealed.id});
-        database.upsert_session(&target).expect("unknown creation time");
-        assert!(database.relay_graph_for_workspace("workspace:relay").unwrap().edges[0].target_session_id.is_none());
+        database
+            .upsert_session(&target)
+            .expect("unknown creation time");
+        assert!(
+            database
+                .relay_graph_for_workspace("workspace:relay")
+                .unwrap()
+                .edges[0]
+                .target_session_id
+                .is_none()
+        );
         target.started_at = Some("2020-01-01T00:00:00Z".into());
-        database.upsert_session(&target).expect("historical copied marker");
-        assert!(database.relay_graph_for_workspace("workspace:relay").unwrap().edges[0].target_session_id.is_none());
+        database
+            .upsert_session(&target)
+            .expect("historical copied marker");
+        assert!(
+            database
+                .relay_graph_for_workspace("workspace:relay")
+                .unwrap()
+                .edges[0]
+                .target_session_id
+                .is_none()
+        );
         target.started_at = Some(Utc::now().to_rfc3339());
-        database.upsert_session(&target).expect("explicit target marker");
-        let graph = database.relay_graph_for_workspace("workspace:relay").expect("graph");
+        database
+            .upsert_session(&target)
+            .expect("explicit target marker");
+        let graph = database
+            .relay_graph_for_workspace("workspace:relay")
+            .expect("graph");
         assert_eq!(graph.chains.len(), 1);
         assert_eq!(graph.handoffs, vec![sealed]);
-        assert_eq!(graph.edges[0].target_session_id.as_deref(), Some(target.id.as_str()));
+        assert_eq!(
+            graph.edges[0].target_session_id.as_deref(),
+            Some(target.id.as_str())
+        );
     }
 
     #[test]

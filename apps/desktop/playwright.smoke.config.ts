@@ -2,7 +2,10 @@ import { defineConfig } from "@playwright/test";
 import { existsSync, statSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
-const verificationRoot = resolve("E:\\Workspaces\\Mobius-Verification-20260907");
+const allowedOperationalRoots = [
+  resolve("E:\\Workspaces\\_verification"),
+  resolve("E:\\Workspaces\\_audits"),
+];
 const testRootInput = process.env.MOBIUS_TEST_ROOT;
 const outputInput = process.env.MOBIUS_PLAYWRIGHT_OUTPUT;
 if (!testRootInput) {
@@ -17,8 +20,8 @@ const within = (candidate: string, parent: string) => {
   const value = relative(parent, candidate);
   return value === "" || (!value.startsWith("..") && !value.includes(":"));
 };
-if (testRoot !== verificationRoot || !existsSync(testRoot) || !statSync(testRoot).isDirectory()) {
-  throw new Error(`MOBIUS_TEST_ROOT must be the isolated verification root: ${verificationRoot}`);
+if (!allowedOperationalRoots.some((root) => within(testRoot, root)) || !existsSync(testRoot) || !statSync(testRoot).isDirectory()) {
+  throw new Error(`MOBIUS_TEST_ROOT must be an existing isolated directory under ${allowedOperationalRoots.join(" or ")}`);
 }
 if (!within(outputDir, testRoot)) {
   throw new Error("MOBIUS_PLAYWRIGHT_OUTPUT must remain inside MOBIUS_TEST_ROOT.");
@@ -26,7 +29,7 @@ if (!within(outputDir, testRoot)) {
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: "mobius.isolated.smoke.spec.ts",
+  testMatch: ["mobius.isolated.smoke.spec.ts", "interaction-regression.spec.ts"],
   timeout: 45_000,
   workers: 1,
   outputDir,

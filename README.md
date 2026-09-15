@@ -4,7 +4,7 @@
 
 **Switch agents. Keep the work.**
 
-A local-first Windows workspace for people who use Codex, Claude Code, and Pi across the same projects. Built with a **Rust core, Tauri 2 desktop shell, React/TypeScript UI and SQLite local index**.
+A Windows workspace for people who use Codex, Claude Code, Pi, Grok, and OMP across the same projects. Built with a **Rust core, Tauri 2 desktop shell, React/TypeScript UI and SQLite local index**.
 
 [简体中文](README.zh-CN.md) · [Live product site](http://8.137.87.76/mobius/?lang=en) · [Watch the film](http://8.137.87.76/mobius/?lang=en#demo) · [Releases](https://github.com/TardisBooo/Mobius/releases) · [Acceptance evidence](docs/acceptance/real-desktop-20260908.md) · [MIT License](LICENSE)
 
@@ -45,7 +45,7 @@ A 76-second English motion-led tour. Real light-mode screenshots move from compl
 | Capability | What you can do |
 | --- | --- |
 | **Rust-powered, local-first** | Rust handles indexing, harness adapters, handoff data and local services; Tauri hosts the desktop UI. Your model accounts remain your own. |
-| **Multi-agent session library** | Aggregate approved Codex, Claude Code, and Pi transcripts by project directory and worktree. |
+| **Multi-agent session library** | Aggregate approved Codex, Claude Code, Pi, Grok, and OMP transcripts by project directory and worktree. |
 | **Precise history lookup** | Find a session by name or native ID, inspect original messages, and copy an exact `@session:provider/id#mN` or `#mN-mM` reference. |
 | **Full-text history search** | Search locally indexed content with SQLite FTS/BM25, inspect matching source text, and explicitly recall bounded excerpts through Mome. |
 | **Cross-agent handoff** | Review a trajectory and launch a new target-agent session in the project directory, without overwriting the source transcript. |
@@ -58,13 +58,13 @@ A 76-second English motion-led tour. Real light-mode screenshots move from compl
 
 - **Precise references — available:** use a known session ID and message range to retrieve the exact evidence.
 - **Keyword/full-text recall — available:** Mome uses a local SQLite FTS/BM25 chunk index, prioritizes the current project/worktree among indexed sources, and returns at most three citable sessions within a 1,200-token output budget.
-- **Semantic/vector or hybrid search — not available in v0.3.14:** no embedding model or vector backend is integrated. This is a future capability, not a hidden setting you can enable today. Mome explicitly reports lexical-only retrieval.
+- **Semantic/vector or hybrid search — not available in v0.3.15:** no embedding model or vector backend is integrated. This is a future capability, not a hidden setting you can enable today. Mome explicitly reports lexical-only retrieval.
 
 Nothing searches other sessions or injects history by default. Local retrieval itself does not call a model; sending selected excerpts to an agent consumes context tokens.
 
 ### 1. Find every session from the project
 
-Möbius detects approved Codex, Claude Code, and Pi roots, reads transcripts without rewriting them, and groups sessions by project directory and worktree.
+Möbius detects approved Codex, Claude Code, Pi, Grok, and OMP roots, reads transcripts without rewriting them, and groups sessions by project directory and worktree. Native resume is exposed only when the installed Harness has a verified resume protocol: OMP uses its documented `--cwd … --resume …` flow; the currently supported Grok history format remains inspect/search/handoff-only.
 
 ![Session library grouped by project and harness](apps/website/public/product/session-library.png)
 
@@ -111,9 +111,9 @@ The source stays read-only. Repeated handoffs form a relay graph so a later agen
 
 ## Install
 
-Download the [v0.3.14 Windows preview](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.14): installer or portable EXE. Check the included SHA-256 sums and known limitations. Development builds may be unsigned and trigger SmartScreen.
+Download the [v0.3.15 Windows preview](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.15): installer or portable EXE. Check the included SHA-256 sums and known limitations. Development builds may be unsigned and trigger SmartScreen.
 
-See the [0.3.14 full desktop acceptance](docs/acceptance/full-desktop-0.3.14.md). MÖBIUS uses each installed harness only through its documented command-line interface; it does not patch or replace Codex, Claude Code, or Pi.
+See the [0.3.15 full desktop acceptance](docs/acceptance/full-desktop-0.3.15.md). MÖBIUS uses each installed harness only through its documented command-line interface; it does not patch or replace Codex, Claude Code, Pi, Grok, or OMP.
 
 ### Build from source
 

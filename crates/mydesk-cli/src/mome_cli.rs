@@ -208,6 +208,20 @@ pub(crate) fn doctor_report() -> DoctorReport {
             true,
             "Official Hook/Extension integration may be enabled only by an explicit installer target.",
         ),
+        provider_capability(
+            AgentKind::Grok,
+            "grok",
+            "mcp_or_explicit_reference",
+            false,
+            "Möbius indexes approved Grok sources without changing Grok configuration.",
+        ),
+        provider_capability(
+            AgentKind::Omp,
+            "omp",
+            "official_extension_after_doctor",
+            true,
+            "OMP extensions may be enabled only by an explicit installer target.",
+        ),
     ];
     DoctorReport {
         kind: "mobius_mome_doctor_report",
@@ -344,7 +358,9 @@ fn known_configuration_paths(provider: &AgentKind) -> Vec<PathBuf> {
         AgentKind::Codex => &[".codex/config.toml", ".codex/config.json"],
         AgentKind::Claude => &[".claude.json", ".claude/settings.json"],
         AgentKind::Pi => &[".pi/config.json", ".pi/settings.json"],
-        AgentKind::Grok | AgentKind::Apodex | AgentKind::Unknown => &[],
+        AgentKind::Grok => &[".grok/config.toml", ".grok/pager.toml"],
+        AgentKind::Omp => &[".omp/agent/config.yml", ".omp/agent/settings.json"],
+        AgentKind::Apodex | AgentKind::Unknown => &[],
     };
     names.iter().map(|name| home.join(name)).collect()
 }
@@ -454,7 +470,7 @@ mod tests {
         let report = doctor_report();
         assert!(report.read_only);
         assert!(!report.writes_harness_configuration);
-        assert_eq!(report.capabilities.len(), 3);
+        assert_eq!(report.capabilities.len(), 5);
         assert!(!report.semantic_retrieval_enabled);
         assert!(!report.local_model_runtime.semantic_retrieval_enabled);
     }

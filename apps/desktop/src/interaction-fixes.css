@@ -322,3 +322,19 @@
 .marketplace-card-v2 footer a {
   text-decoration: none;
 }
+
+/* Match the source manager to the modal content box at every desktop width. */
+.mobius-modal:has(.session-sources-dialog) {
+  width: min(760px, calc(100vw - 36px));
+  overflow-x: hidden;
+}
+
+.mobius-modal:has(.session-sources-dialog) > div,
+.session-sources-dialog,
+.session-sources-dialog .source-add {
+  min-width: 0;
+}
+
+.session-sources-dialog {
+  width: 100%;
+}

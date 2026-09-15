@@ -1,8 +1,9 @@
 use crate::vault::Vault;
 use crate::{
     AgentKind, BoardDocument, Checkout, ContextKind, ContextRecord, Database, HealthStatus,
-    NoteDraft, ProviderIndexReport, ProviderIndexer, SearchRequest, WikiDraft, WikiQueueItem,
-    TrashItem, WorkspaceInspection, WorkspacePaths, WorkspaceStatus, inspect_workspace, mentions,
+    NoteDraft, ProviderIndexReport, ProviderIndexer, SearchRequest, TrashItem, WikiDraft,
+    WikiQueueItem, WorkspaceInspection, WorkspacePaths, WorkspaceStatus, inspect_workspace,
+    mentions,
     sources::{self, SessionIndexReport},
 };
 use anyhow::Result;
@@ -104,6 +105,9 @@ impl MyDesk {
     pub fn refresh_local_harness_sessions(&self) -> Result<ProviderIndexReport> {
         crate::auto_discover_session_sources(&self.paths)?;
         let report = self.index_all_provider_sessions()?;
+        // Build changed Mome chunks inside the explicit background refresh.
+        // Search itself must remain a fast read over the ready FTS index.
+        self.database.sync_mome_chunks()?;
         self.aggregate_sessions_into_workspaces()?;
         Ok(report)
     }
@@ -294,7 +298,10 @@ impl MyDesk {
             .ok_or_else(|| anyhow::anyhow!("note has no stable filename"))?;
         self.database
             .update_context_source_path(&format!("note:{slug}"), &new_path.display().to_string())?;
-        Ok((old_path.display().to_string(), new_path.display().to_string()))
+        Ok((
+            old_path.display().to_string(),
+            new_path.display().to_string(),
+        ))
     }
 
     pub fn trash_note(&self, path: &Path) -> Result<TrashItem> {
@@ -309,7 +316,8 @@ impl MyDesk {
 
     pub fn trash_board(&self, board_id: &str) -> Result<TrashItem> {
         let item = self.vault.trash_board(board_id)?;
-        self.database.soft_delete_context(&format!("board:{board_id}"))?;
+        self.database
+            .soft_delete_context(&format!("board:{board_id}"))?;
         Ok(item)
     }
 
@@ -318,7 +326,12 @@ impl MyDesk {
     }
 
     pub fn restore_trash(&self, id: &str) -> Result<TrashItem> {
-        let item = self.vault.list_trash()?.into_iter().find(|entry| entry.id == id).ok_or_else(|| anyhow::anyhow!("trash item not found"))?;
+        let item = self
+            .vault
+            .list_trash()?
+            .into_iter()
+            .find(|entry| entry.id == id)
+            .ok_or_else(|| anyhow::anyhow!("trash item not found"))?;
         let restored = self.vault.restore_trash(id)?;
         if let Some(context_id) = trash_context_id(&item) {
             self.database.restore_context(&context_id)?;
@@ -327,7 +340,11 @@ impl MyDesk {
     }
 
     pub fn purge_trash(&self, id: &str) -> Result<bool> {
-        let item = self.vault.list_trash()?.into_iter().find(|entry| entry.id == id);
+        let item = self
+            .vault
+            .list_trash()?
+            .into_iter()
+            .find(|entry| entry.id == id);
         let purged = self.vault.purge_trash(id)?;
         if purged {
             if let Some(item) = item {
@@ -395,7 +412,10 @@ impl MyDesk {
         agent: AgentKind,
         project_slug: Option<String>,
     ) -> Result<ContextRecord> {
-        anyhow::ensure!(agent.is_supported(), "Unsupported session provider: {agent}");
+        anyhow::ensure!(
+            agent.is_supported(),
+            "Unsupported session provider: {agent}"
+        );
         let record = sources::record_from_file(path, agent, project_slug)?;
         self.import_session(record.clone())?;
         Ok(record)
@@ -409,7 +429,10 @@ impl MyDesk {
         limit: Option<usize>,
         offset: Option<usize>,
     ) -> Result<SessionIndexReport> {
-        anyhow::ensure!(agent.is_supported(), "Unsupported session provider: {agent}");
+        anyhow::ensure!(
+            agent.is_supported(),
+            "Unsupported session provider: {agent}"
+        );
         let (files, available) = sources::list_session_files(root, limit, offset)?;
         let mut report = SessionIndexReport {
             source_root: root.display().to_string(),
@@ -493,7 +516,10 @@ fn summarize(body: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::MyDesk;
-    use crate::{AgentKind, NoteDraft, SearchRequest, SessionQuery, SessionSourceRoot, WorkspacePaths, inspect_workspace};
+    use crate::{
+        AgentKind, NoteDraft, SearchRequest, SessionQuery, SessionSourceRoot, WorkspacePaths,
+        inspect_workspace,
+    };
     use std::{fs, path::Path};
 
     #[test]
@@ -517,17 +543,37 @@ mod tests {
         let (_, moved) = desk.move_note(source, "archive/notes")?;
         assert!(!source.exists());
         assert!(Path::new(&moved).exists());
-        assert_eq!(desk.database.get_context(&record.id)?.unwrap().source_path.as_deref(), Some(moved.as_str()));
+        assert_eq!(
+            desk.database
+                .get_context(&record.id)?
+                .unwrap()
+                .source_path
+                .as_deref(),
+            Some(moved.as_str())
+        );
 
         let trash = desk.trash_note(Path::new(&moved))?;
         assert!(!Path::new(&moved).exists());
         assert!(desk.database.get_context(&record.id)?.is_none());
-        assert!(desk.search(&SearchRequest { query: "recoverable".into(), ..SearchRequest::default() })?.is_empty());
+        assert!(
+            desk.search(&SearchRequest {
+                query: "recoverable".into(),
+                ..SearchRequest::default()
+            })?
+            .is_empty()
+        );
 
         desk.restore_trash(&trash.id)?;
         assert!(Path::new(&moved).exists());
         assert!(desk.database.get_context(&record.id)?.is_some());
-        assert!(!desk.search(&SearchRequest { query: "recoverable".into(), ..SearchRequest::default() })?.is_empty());
+        assert!(
+            !desk
+                .search(&SearchRequest {
+                    query: "recoverable".into(),
+                    ..SearchRequest::default()
+                })?
+                .is_empty()
+        );
         let second_trash = desk.trash_note(Path::new(&moved))?;
         assert!(desk.purge_trash(&second_trash.id)?);
         assert!(desk.database.get_context(&record.id)?.is_none());
@@ -655,7 +701,8 @@ mod tests {
     }
 
     #[test]
-    fn registering_workspace_preserves_legacy_id_for_the_same_canonical_path() -> anyhow::Result<()> {
+    fn registering_workspace_preserves_legacy_id_for_the_same_canonical_path() -> anyhow::Result<()>
+    {
         let temporary = tempfile::tempdir()?;
         let workspace = temporary.path().join("legacy-workspace-id");
         fs::create_dir_all(&workspace)?;
@@ -672,10 +719,12 @@ mod tests {
 
         let registered = desk.register_workspace(&workspace, None)?;
         assert_eq!(registered.workspace.id, "workspace:legacy-identity");
-        assert!(registered
-            .checkouts
-            .iter()
-            .all(|checkout| checkout.workspace_id == "workspace:legacy-identity"));
+        assert!(
+            registered
+                .checkouts
+                .iter()
+                .all(|checkout| checkout.workspace_id == "workspace:legacy-identity")
+        );
         assert_eq!(desk.database.list_workspaces_v2()?.len(), 1);
         Ok(())
     }

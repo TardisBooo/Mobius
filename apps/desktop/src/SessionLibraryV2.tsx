@@ -7,7 +7,7 @@ import type { AgentKind, ApprovedSessionSources, HealthStatus, LineageManifest, 
 import type { SessionFocus } from "./WorkspaceAtlas";
 
 type Locale = "zh-CN" | "en";
-const agents: AgentKind[] = ["codex", "claude", "pi"];
+const agents: AgentKind[] = ["codex", "claude", "pi", "grok", "omp"];
 
 function labels(locale: Locale) {
   const zh = locale === "zh-CN";
@@ -30,8 +30,16 @@ function labels(locale: Locale) {
   };
 }
 
-function name(provider: AgentKind) { return provider === "pi" ? "Pi" : provider === "grok" ? "Grok" : provider === "claude" ? "Claude" : provider === "codex" ? "Codex" : `Unsupported (${provider})`; }
-function dedupe(hits: SessionSearchHit[]) { const unique = new Map<string, SessionSearchHit>(); for (const hit of hits) if (!unique.has(hit.session.id)) unique.set(hit.session.id, hit); return [...unique.values()].sort((a, b) => b.session.updated_at.localeCompare(a.session.updated_at)); }
+function name(provider: AgentKind) { return provider === "pi" ? "Pi" : provider === "omp" ? "OMP" : provider === "grok" ? "Grok" : provider === "claude" ? "Claude" : provider === "codex" ? "Codex" : `Unsupported (${provider})`; }
+function dedupe(hits: SessionSearchHit[]) {
+  const unique = new Map<string, SessionSearchHit>();
+  for (const hit of hits) {
+    const key = `${hit.session.provider}:${hit.session.provider_session_id}`;
+    const current = unique.get(key);
+    if (!current || hit.session.updated_at > current.session.updated_at) unique.set(key, hit);
+  }
+  return [...unique.values()].sort((a, b) => b.session.updated_at.localeCompare(a.session.updated_at));
+}
 function referenceText(session: SessionSearchHit["session"], message: Message) { return `@session:${session.provider}/${session.provider_session_id}#m${message.ordinal}`; }
 function handoffPackage(session: SessionSearchHit["session"], target: AgentKind) {
   return [
@@ -77,8 +85,8 @@ function HighlightedText({ value, query = "" }: { value: string; query?: string 
   return <>{parts.map((part, index) => part.match ? <mark key={index} className="session-match">{part.value}</mark> : <span key={index}>{part.value}</span>)}</>;
 }
 
-export function SessionLibraryV2({ revision, workspaces, health, attachedSessionIds, openTerminal, onError, onToast, locale, focus, onFocusConsumed }: {
-  revision: number; workspaces: WorkspaceView[]; health: HealthStatus | null; attachedSessionIds: string[]; openTerminal: (terminal: TerminalInfo, sessionId: string | null) => void; onError: (message: string) => void; onToast: (message: string) => void; locale: Locale; focus: SessionFocus | null; onFocusConsumed: () => void;
+export function SessionLibraryV2({ revision, indexing, workspaces, health, attachedSessionIds, openTerminal, onError, onToast, locale, focus, onFocusConsumed }: {
+  revision: number; indexing: boolean; workspaces: WorkspaceView[]; health: HealthStatus | null; attachedSessionIds: string[]; openTerminal: (terminal: TerminalInfo, sessionId: string | null) => void; onError: (message: string) => void; onToast: (message: string) => void; locale: Locale; focus: SessionFocus | null; onFocusConsumed: () => void;
 }) {
   const text = labels(locale);
   const handoffLabel = locale === "zh-CN" ? "交接" : "Hand off";
@@ -95,6 +103,7 @@ export function SessionLibraryV2({ revision, workspaces, health, attachedSession
   const [selectedId, setSelectedId] = useState<string | null>(null); const [loadedMessages, setMessages] = useState<Message[]>([]); const [messageId, setMessageId] = useState<string | null>(null); const [messageLimit, setMessageLimit] = useState(180); const [handoffOpen, setHandoffOpen] = useState(false); const [momeOpen, setMomeOpen] = useState(false); const [sourcesOpen, setSourcesOpen] = useState(false);
   const [lineage, setLineage] = useState<LineageManifest | null>(null);
   const [lineageLoading, setLineageLoading] = useState(false);
+  useEffect(() => { if (indexing && momeOpen) setMomeOpen(false); }, [indexing, momeOpen]);
   const [sessionMenu, setSessionMenu] = useState<{ x: number; y: number; hit: SessionSearchHit } | null>(null);
   // Never offer a previous session's message for copying/handoff during fetch.
   const messages = useMemo(() => loadedMessages.filter((message) => message.session_id === selectedId), [loadedMessages, selectedId]);
@@ -193,7 +202,7 @@ export function SessionLibraryV2({ revision, workspaces, health, attachedSession
       { id: "copy-reference", label: text.copyReference, icon: <Link2 size={14}/>, disabled: !sessionMenu.hit.message, onSelect: () => { if (sessionMenu.hit.message) void copy(referenceText(sessionMenu.hit.session, sessionMenu.hit.message)); } },
     ]}/> : null}
     {handoffOpen && selected ? <HandoffDialog source={selected} locale={locale} onClose={() => setHandoffOpen(false)} onStart={startHandoff}/> : null}
-    {momeOpen ? <MomeDialog text={text} workspaceId={workspaceId} checkoutId={checkoutId} providers={provider === "all" ? [] : [provider]} onClose={() => setMomeOpen(false)} onCopy={copy} onError={onError}/> : null}
+    {momeOpen && !indexing ? <MomeDialog text={text} workspaceId={workspaceId} checkoutId={checkoutId} providers={provider === "all" ? [] : [provider]} onClose={() => setMomeOpen(false)} onCopy={copy} onError={onError}/> : null}
     {sourcesOpen ? <SourcesDialog text={text} onClose={() => setSourcesOpen(false)} onError={onError} onToast={onToast} onRefresh={search}/> : null}
   </div>;
 }
@@ -270,16 +279,25 @@ function MomeDialog({ text, workspaceId, checkoutId, providers, onClose, onCopy,
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<MomeRecallResponse | null>(null);
+  const recallGeneration = useRef(0);
   const recall = async () => {
     if (!query.trim()) return;
+    const generation = ++recallGeneration.current;
     setLoading(true);
-    try { setResult(await desktopApi.momeRecall({ query: query.trim(), workspace_id: workspaceId, checkout_id: checkoutId, providers, max_tokens: 1200 })); }
-    catch (reason) { onError(String(reason)); }
-    finally { setLoading(false); }
+    try {
+      const response = await Promise.race([
+        desktopApi.momeRecall({ query: query.trim(), workspace_id: workspaceId, checkout_id: checkoutId, providers, max_tokens: 1200 }),
+        new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("Mome search timed out after 8 seconds. Refresh the local index and retry.")), 8_000)),
+      ]);
+      if (generation === recallGeneration.current) setResult(response);
+    }
+    catch (reason) { if (generation === recallGeneration.current) onError(String(reason)); }
+    finally { if (generation === recallGeneration.current) setLoading(false); }
   };
-  return <AccessibleDialog title={text.momeTitle} closeLabel={text.close} onClose={onClose}>
+  const close = () => { recallGeneration.current += 1; setLoading(false); onClose(); };
+  return <AccessibleDialog title={text.momeTitle} closeLabel={text.close} onClose={close}>
     <div className="mome-dialog"><p className="context-dialog-hint">{text.momeHint}</p><label className="mome-query"><Search size={17}/><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void recall(); } }} placeholder={text.momePlaceholder}/></label>
-      <div className="modal-actions"><button className="soft-button" type="button" onClick={onClose}>{text.close}</button><button className="primary-button" type="button" disabled={!query.trim() || loading} onClick={() => void recall()}>{loading ? <LoaderCircle className="spin" size={15}/> : <Sparkles size={15}/>} {text.momeRecall}</button></div>
+      <div className="modal-actions"><button className="soft-button" type="button" onClick={close}>{text.close}</button><button className="primary-button" type="button" disabled={!query.trim() || loading} onClick={() => void recall()}>{loading ? <LoaderCircle className="spin" size={15}/> : <Sparkles size={15}/>} {text.momeRecall}</button></div>
       {result ? <section className="mome-result"><header><div><strong>{text.sources} · {result.sources.length}</strong><small>~{result.estimated_tokens} / {result.max_tokens} tokens</small></div>{result.semantic_status === "lexical_only_no_semantic_backend_configured" ? <span>{text.momeFallback}</span> : null}</header>{result.sources.length ? <div className="mome-sources">{result.sources.map((source) => <article key={source.content_hash}><code>{source.citation}</code><small>{name(source.provider)} · m{source.start_ordinal}–m{source.end_ordinal} · ~{source.estimated_tokens}</small><p>{source.text}</p></article>)}</div> : <p className="mome-empty">{text.momeEmpty}</p>}{result.sources.length ? <button className="primary-button" type="button" onClick={() => void onCopy(momePacket(result))}><Copy size={15}/>{text.momeCopy}</button> : null}</section> : null}
     </div>
   </AccessibleDialog>;

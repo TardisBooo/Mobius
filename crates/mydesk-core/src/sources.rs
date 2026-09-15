@@ -154,7 +154,10 @@ pub fn add_manual_session_source(
     agent: AgentKind,
     path: &Path,
 ) -> Result<ApprovedSessionSources> {
-    anyhow::ensure!(agent.is_supported(), "Unsupported session provider: {agent}");
+    anyhow::ensure!(
+        agent.is_supported(),
+        "Unsupported session provider: {agent}"
+    );
     let mut manifest = read_manifest(paths)?;
     let normalized = normalize_approved_roots(vec![SessionSourceRoot {
         agent: agent.clone(),
@@ -365,6 +368,16 @@ fn conventional_session_roots(paths: &WorkspacePaths, probe: bool) -> Vec<Sessio
             user.join(".pi/sessions"),
             "Pi: legacy conventional sessions",
         ),
+        (
+            AgentKind::Grok,
+            user.join(".grok/sessions"),
+            "Grok: conventional sessions",
+        ),
+        (
+            AgentKind::Omp,
+            user.join(".omp/agent/sessions"),
+            "OMP: conventional agent sessions",
+        ),
     ];
     // An explicit CODEX_HOME is a deliberate boundary (and is how isolated
     // test profiles avoid reading a workstation's unrelated archive). When
@@ -378,10 +391,25 @@ fn conventional_session_roots(paths: &WorkspacePaths, probe: bool) -> Vec<Sessio
         ));
     }
     if let Some(path) = env::var_os("PI_CODING_AGENT_DIR") {
+        let path = PathBuf::from(path);
+        let omp_profile = path.components().any(|component| {
+            component
+                .as_os_str()
+                .to_string_lossy()
+                .eq_ignore_ascii_case(".omp")
+        });
         definitions.push((
-            AgentKind::Pi,
-            PathBuf::from(path).join("sessions"),
-            "Pi: PI_CODING_AGENT_DIR",
+            if omp_profile {
+                AgentKind::Omp
+            } else {
+                AgentKind::Pi
+            },
+            path.join("sessions"),
+            if omp_profile {
+                "OMP: PI_CODING_AGENT_DIR"
+            } else {
+                "Pi: PI_CODING_AGENT_DIR"
+            },
         ));
     }
     definitions

@@ -6,7 +6,7 @@ import { useI18n } from "./i18n";
 import type { AgentKind, Message, SessionSearchHit } from "./types";
 
 function providerName(provider: AgentKind) {
-  return provider === "pi" ? "Pi" : provider === "grok" ? "Grok" : provider === "claude" ? "Claude" : "Codex";
+  return provider === "pi" ? "Pi" : provider === "omp" ? "OMP" : provider === "grok" ? "Grok" : provider === "claude" ? "Claude" : "Codex";
 }
 
 type ExactSessionIdentity = {

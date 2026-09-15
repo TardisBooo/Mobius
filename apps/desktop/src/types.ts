@@ -1,5 +1,5 @@
 // "apodex" is retained only to decode legacy catalogues, never as a selectable adapter.
-export type AgentKind = "codex" | "claude" | "pi" | "grok" | "apodex" | "unknown";
+export type AgentKind = "codex" | "claude" | "pi" | "grok" | "omp" | "apodex" | "unknown";
 
 export type ContextKind =
   | "session"

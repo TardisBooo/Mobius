@@ -54,11 +54,17 @@ function words(locale: Locale) {
 }
 
 function providerName(value: string) {
-  return value === "pi" ? "Pi" : value === "grok" ? "Grok" : value === "claude" ? "Claude" : "Codex";
+  return value === "pi" ? "Pi" : value === "omp" ? "OMP" : value === "grok" ? "Grok" : value === "claude" ? "Claude" : "Codex";
 }
 
 function stableUnique(items: SessionSearchHit[]) {
-  return [...new Map(items.map((item) => [item.session.id, item])).values()].sort((left, right) => right.session.updated_at.localeCompare(left.session.updated_at));
+  const unique = new Map<string, SessionSearchHit>();
+  for (const item of items) {
+    const key = `${item.session.provider}:${item.session.provider_session_id}`;
+    const current = unique.get(key);
+    if (!current || item.session.updated_at > current.session.updated_at) unique.set(key, item);
+  }
+  return [...unique.values()].sort((left, right) => right.session.updated_at.localeCompare(left.session.updated_at));
 }
 
 export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onToast, onOpenSessions, locale }: {
