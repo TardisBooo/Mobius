@@ -58,7 +58,7 @@ A 76-second English motion-led tour. Real light-mode screenshots move from compl
 
 - **Precise references — available:** use a known session ID and message range to retrieve the exact evidence.
 - **Keyword/full-text recall — available:** Mome uses a local SQLite FTS/BM25 chunk index, prioritizes the current project/worktree among indexed sources, and returns at most three citable sessions within a 1,200-token output budget.
-- **Semantic/vector or hybrid search — not available in v0.3.15:** no embedding model or vector backend is integrated. This is a future capability, not a hidden setting you can enable today. Mome explicitly reports lexical-only retrieval.
+- **Semantic/vector or hybrid search — not available in v0.3.16:** no embedding model or vector backend is integrated. This is a future capability, not a hidden setting you can enable today. Mome explicitly reports lexical-only retrieval.
 
 Nothing searches other sessions or injects history by default. Local retrieval itself does not call a model; sending selected excerpts to an agent consumes context tokens.
 
@@ -111,9 +111,9 @@ The source stays read-only. Repeated handoffs form a relay graph so a later agen
 
 ## Install
 
-Download the [v0.3.15 Windows preview](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.15): installer or portable EXE. Check the included SHA-256 sums and known limitations. Development builds may be unsigned and trigger SmartScreen.
+Download the [v0.3.16 Windows preview](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.16): installer or portable EXE. Check the included SHA-256 sums and known limitations. Development builds may be unsigned and trigger SmartScreen.
 
-See the [0.3.15 full desktop acceptance](docs/acceptance/full-desktop-0.3.15.md). MÖBIUS uses each installed harness only through its documented command-line interface; it does not patch or replace Codex, Claude Code, Pi, Grok, or OMP.
+See the [0.3.16 drag-demo acceptance](docs/acceptance/drag-demo-0.3.16.md). MÖBIUS uses each installed harness only through its documented command-line interface; it does not patch or replace Codex, Claude Code, Pi, Grok, or OMP.
 
 ### Build from source
 

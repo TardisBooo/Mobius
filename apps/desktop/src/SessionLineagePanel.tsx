@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ReactFlow, Background, Controls, useNodesState, type Node, type Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { desktopApi } from "./api";
@@ -17,6 +17,12 @@ export function SessionLineagePanel({ graph, locale, onOpenSession, workspace, o
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState("");
   const [mode, setMode] = useState<"graph" | "list">("graph");
+  const [direction, setDirection] = useState<"horizontal" | "vertical">(() => localStorage.getItem("mobius.lineage.direction") === "vertical" ? "vertical" : "horizontal");
+  const [compact, setCompact] = useState(() => localStorage.getItem("mobius.lineage.compact") === "1");
+  const [showNativeId, setShowNativeId] = useState(() => localStorage.getItem("mobius.lineage.native-id") !== "0");
+  const [showSourceStatus, setShowSourceStatus] = useState(() => localStorage.getItem("mobius.lineage.source-status") !== "0");
+  const layoutRevision = `${direction}:${compact}`;
+  const previousLayoutRevision = useRef(layoutRevision);
   const [query, setQuery] = useState("");
   const [displayNodes, setDisplayNodes, onNodesChange] = useNodesState<Node>([]);
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
@@ -28,6 +34,12 @@ export function SessionLineagePanel({ graph, locale, onOpenSession, workspace, o
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [aliasDraft, setAliasDraft] = useState("");
+  useEffect(() => {
+    localStorage.setItem("mobius.lineage.direction", direction);
+    localStorage.setItem("mobius.lineage.compact", compact ? "1" : "0");
+    localStorage.setItem("mobius.lineage.native-id", showNativeId ? "1" : "0");
+    localStorage.setItem("mobius.lineage.source-status", showSourceStatus ? "1" : "0");
+  }, [compact, direction, showNativeId, showSourceStatus]);
   const toggleSource = (id: string) => setSources(current => current.includes(id) ? current.filter(s => s !== id) : [...current, id]);
   const prepare = async () => {
     setBusy(true); setConfirmed(false); setError("");
@@ -84,24 +96,28 @@ export function SessionLineagePanel({ graph, locale, onOpenSession, workspace, o
       nodes: [...lineage.nodes].sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? "")).map(n => {
         const column = depth.get(n.session_id) ?? 0; const row = rows.get(column) ?? 0; rows.set(column, row + 1);
         const match = !query || `${n.title} ${n.harness} ${n.native_id}`.toLowerCase().includes(query.toLowerCase());
-        return { id: n.session_id, position: { x: column * 310, y: row * 185 },
-          selected: selected === n.session_id, className: `lineage-node ${ancestors.has(n.session_id) ? "ancestor" : ""} ${match ? "" : "dimmed"}`,
+        const horizontalGap = compact ? 250 : 310; const verticalGap = compact ? 140 : 185;
+        const position = direction === "horizontal" ? { x: column * horizontalGap, y: row * verticalGap } : { x: row * horizontalGap, y: column * verticalGap };
+        return { id: n.session_id, position,
+          selected: selected === n.session_id, className: `lineage-node ${compact ? "compact" : ""} ${ancestors.has(n.session_id) ? "ancestor" : ""} ${match ? "" : "dimmed"}`,
           data: { label: <div><span>{n.harness?.toUpperCase() ?? "?"} · {n.updated_at ? new Date(n.updated_at).toLocaleString(locale) : (zh ? "时间未知" : "Time unknown")}</span>
-            <strong>{n.title || n.native_id || n.session_id}</strong><code>{n.native_id ?? n.session_id}</code>
-            <small>{n.source_status === "available" ? (zh ? "来源可定位" : "Source located") : n.source_status}</small></div> },
-          sourcePosition: "right", targetPosition: "left",
+            <strong>{n.title || n.native_id || n.session_id}</strong>{showNativeId ? <code>{n.native_id ?? n.session_id}</code> : null}
+            {showSourceStatus ? <small>{n.source_status === "available" ? (zh ? "来源可定位" : "Source located") : n.source_status}</small> : null}</div> },
+          sourcePosition: direction === "horizontal" ? "right" : "bottom", targetPosition: direction === "horizontal" ? "left" : "top",
         } as Node;
       }),
       edges: lineage.edges.map(e => ({ ...e, label: zh ? "交接" : "handoff", animated: false,
         style: { stroke: ancestors.has(e.source) && ancestors.has(e.target) ? "var(--m-accent)" : "var(--m-muted)" } })),
     };
-  }, [lineage, selected, query, ancestors, zh, locale]);
+  }, [lineage, selected, query, ancestors, zh, locale, compact, direction, showNativeId, showSourceStatus]);
   useEffect(() => {
+    const layoutChanged = previousLayoutRevision.current !== layoutRevision;
     setDisplayNodes(current => nodes.map(node => {
       const existing = current.find(n => n.id === node.id);
-      return existing ? { ...node, position: existing.position, measured: existing.measured } : node;
+      return existing && !layoutChanged ? { ...node, position: existing.position, measured: existing.measured } : node;
     }));
-  }, [nodes, setDisplayNodes]);
+    previousLayoutRevision.current = layoutRevision;
+  }, [layoutRevision, nodes, setDisplayNodes]);
   const detail = lineage?.nodes.find(n => n.session_id === selected);
   useEffect(() => { setAliasDraft(detail?.title ?? ""); }, [detail?.session_id, detail?.title]);
   const saveAlias = async () => {
@@ -117,12 +133,23 @@ export function SessionLineagePanel({ graph, locale, onOpenSession, workspace, o
       <input className="lineage-search" aria-label={zh ? "定位节点" : "Find a node"} value={query} onChange={e => setQuery(e.target.value)} placeholder={zh ? "标题 / Harness / ID" : "Title / Harness / ID"}/>
       <button className="soft-button" aria-pressed={mode === "graph"} onClick={() => setMode("graph")}>{zh ? "图谱" : "Graph"}</button>
       <button className="soft-button" aria-pressed={mode === "list"} onClick={() => setMode("list")}>{zh ? "列表" : "List"}</button></header>
+    <div className="lineage-summary" role="status"><strong>{lineage?.nodes.length ?? 0}</strong> {zh ? "个会话" : "sessions"}<span>·</span><strong>{lineage?.edges.length ?? 0}</strong> {zh ? "轮交接" : "handoffs"}<span>·</span><strong>{graph.chains.length}</strong> {zh ? "条链路" : graph.chains.length === 1 ? "chain" : "chains"}</div>
+    <details className="lineage-preview-settings">
+      <summary>{zh ? "预览设置" : "Preview settings"}</summary>
+      <div><label>{zh ? "布局" : "Layout"}<select aria-label={zh ? "图谱布局" : "Graph layout"} value={direction} onChange={e => setDirection(e.target.value as "horizontal" | "vertical")}><option value="horizontal">{zh ? "从左到右" : "Left to right"}</option><option value="vertical">{zh ? "从上到下" : "Top to bottom"}</option></select></label>
+        <label><input type="checkbox" checked={compact} onChange={e => setCompact(e.target.checked)}/>{zh ? "紧凑节点" : "Compact nodes"}</label>
+        <label><input type="checkbox" checked={showNativeId} onChange={e => setShowNativeId(e.target.checked)}/>{zh ? "显示原生 Session ID" : "Show native Session ID"}</label>
+        <label><input type="checkbox" checked={showSourceStatus} onChange={e => setShowSourceStatus(e.target.checked)}/>{zh ? "显示来源状态" : "Show source status"}</label>
+      </div>
+    </details>
     <div><button className="soft-button" disabled={!sources.length || busy} onClick={() => void prepare()}>{zh ? `交接选中来源 (${sources.length})` : `Hand off selected sources (${sources.length})`}</button><small> {zh ? "Shift+点击可多选；多个来源会合并其祖先引用，不总结正文。" : "Shift-click to select multiple sources. Merge combines ancestor references, not summaries."}</small></div>
-    <p>{zh ? "点击节点高亮祖先，双击查看会话。横向表示交接层级，不代表耗时。搜索仅淡化节点，不改变交接范围。" : "Select to highlight ancestors; double-click to inspect. Horizontal position means inheritance depth, not elapsed time. Search dims nodes without changing ancestry."}</p>
+    <p>{direction === "horizontal"
+      ? (zh ? "点击节点高亮祖先，双击查看会话。横向表示交接层级，不代表耗时。搜索仅淡化节点，不改变交接范围。" : "Select to highlight ancestors; double-click to inspect. Horizontal position means inheritance depth, not elapsed time. Search dims nodes without changing ancestry.")
+      : (zh ? "点击节点高亮祖先，双击查看会话。纵向表示交接层级，不代表耗时。搜索仅淡化节点，不改变交接范围。" : "Select to highlight ancestors; double-click to inspect. Vertical position means inheritance depth, not elapsed time. Search dims nodes without changing ancestry.")}</p>
     {error && <p role="alert">{error}</p>}
     {!lineage && !error && <p role="status">{zh ? "正在定位来源…" : "Resolving sources…"}</p>}
     <div className="lineage-layout"><div className="lineage-stage">
-      {mode === "graph" ? <ReactFlow key={key} nodes={displayNodes} edges={edges} fitView nodesConnectable={false} deleteKeyCode={null}
+      {mode === "graph" ? <ReactFlow key={`${key}:${layoutRevision}`} nodes={displayNodes} edges={edges} fitView nodesConnectable={false} deleteKeyCode={null}
         onNodesChange={onNodesChange}
         onNodeClick={(event, node) => { setSelected(node.id); if (event.shiftKey) toggleSource(node.id); }} onNodeDoubleClick={(_, node) => onOpenSession(node.id)}
         onNodeContextMenu={(event, node) => { event.preventDefault(); setSelected(node.id); setMenu({ x: event.clientX, y: event.clientY, id: node.id }); }}
@@ -148,7 +175,7 @@ export function SessionLineagePanel({ graph, locale, onOpenSession, workspace, o
     ]}/>}
     {review && <AccessibleDialog title={zh ? "确认图谱交接" : "Review graph handoff"} closeLabel={zh ? "关闭" : "Close"} onClose={() => { if (!busy) setReview(null); }}>
       <div className="lineage-handoff-review"><p>{zh ? "仅传递以下图谱与来源引用。原生会话保持不变。" : "Only this graph and its source references are passed. Native sessions remain unchanged."}</p>
-        <label>Harness<select value={target} disabled={busy} onChange={e => { setTarget(e.target.value as AgentKind); setConfirmed(false); }}>{["codex", "claude", "pi"].map(h => <option key={h} value={h}>{h}</option>)}</select></label>
+        <label>Harness<select value={target} disabled={busy} onChange={e => { setTarget(e.target.value as AgentKind); setConfirmed(false); }}>{["codex", "claude", "pi", "grok", "omp"].map(h => <option key={h} value={h}>{h}</option>)}</select></label>
         <label>{zh ? "目标工作目录" : "Target working directory"}<select value={checkoutId} disabled={busy} onChange={e => { setCheckoutId(e.target.value); setConfirmed(false); }}>{workspace.checkouts.map(c => <option key={c.id} value={c.id}>{c.branch ?? c.kind} · {c.canonical_path}</option>)}</select></label>
         <pre>{review.preview}</pre><label><input type="checkbox" checked={confirmed} disabled={busy} onChange={e => setConfirmed(e.target.checked)}/>{zh ? "确认以上来源与目标，并新建目标会话。" : "Approve these sources and target, and create a new target session."}</label>
         {error && <p role="alert">{error}</p>}<button className="primary-button" disabled={!confirmed || busy} onClick={() => void launch()}>{busy ? (zh ? "启动中…" : "Starting…") : (zh ? "新建会话并交接" : "Create session and hand off")}</button>
