@@ -2,11 +2,13 @@ import { defineConfig } from "@playwright/test";
 import { existsSync, statSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
-const verificationRoot = resolve("E:\\Workspaces\\Mobius-Verification-20260910");
+const verificationRoot = resolve("E:\\Workspaces\\_verification");
 const testRoot = resolve(process.env.MOBIUS_TEST_ROOT ?? "");
 const outputDir = resolve(process.env.MOBIUS_PLAYWRIGHT_OUTPUT ?? "");
 const relativeOutput = relative(testRoot, outputDir);
-if (testRoot !== verificationRoot || !existsSync(testRoot) || !statSync(testRoot).isDirectory()) throw new Error(`MOBIUS_TEST_ROOT must be ${verificationRoot}`);
+const relativeRoot = relative(verificationRoot, testRoot);
+if (!relativeRoot || relativeRoot.startsWith("..") || relativeRoot.includes(":")) throw new Error(`MOBIUS_TEST_ROOT must be a named directory below ${verificationRoot}`);
+if (!existsSync(testRoot) || !statSync(testRoot).isDirectory()) throw new Error("MOBIUS_TEST_ROOT must exist and be a directory");
 if (!outputDir || relativeOutput.startsWith("..") || relativeOutput.includes(":")) throw new Error("MOBIUS_PLAYWRIGHT_OUTPUT must remain inside the isolated verification root");
 
 export default defineConfig({

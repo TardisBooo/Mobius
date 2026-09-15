@@ -103,6 +103,20 @@ export function SessionLibraryV2({ revision, workspaces, health, attachedSession
   });
   const effectiveFocus = focus ?? storedFocus;
   useEffect(() => {
+    const focusSearch = () => window.requestAnimationFrame(() => document.querySelector<HTMLInputElement>(".session-search-v2 input")?.focus());
+    const shortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k" && !(event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)) focusSearch();
+    };
+    const trigger = document.querySelector<HTMLElement>(".global-search");
+    trigger?.addEventListener("click", focusSearch);
+    window.addEventListener("keydown", shortcut);
+    focusSearch();
+    return () => {
+      trigger?.removeEventListener("click", focusSearch);
+      window.removeEventListener("keydown", shortcut);
+    };
+  }, []);
+  useEffect(() => {
     if (scopeInitialized.current || !workspaces.length) return;
     scopeInitialized.current = true;
     setWorkspaceId((current) => current ?? initialWorkspace());

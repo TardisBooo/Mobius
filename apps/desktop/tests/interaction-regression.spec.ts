@@ -46,6 +46,7 @@ test("workspace drag, note save, mount tree and terminal contrast", async () => 
       localStorage.setItem("mobius.workspace.recent.v2.seeded", "1");
     });
     await page.reload();
+    await page.locator(".rail-item").nth(1).click();
     await expect(page.locator(".workspace-atlas")).toBeVisible();
 
     const project = page.locator(".atlas-project-button").filter({ hasText: "drag-demo" }).first();
@@ -65,6 +66,7 @@ test("workspace drag, note save, mount tree and terminal contrast", async () => 
     await project.locator("strong").dragTo(page.locator(".recent-drop-target"));
     await expect(page.locator(".recent-workspace-card", { hasText: "drag-demo" })).toHaveCount(1);
     await page.reload();
+    await page.locator(".rail-item").nth(1).click();
     await expect(page.locator(".recent-workspace-card", { hasText: "drag-demo" })).toHaveCount(1);
 
     // A private note is editable and has an explicit saved state after the
@@ -109,6 +111,13 @@ test("workspace drag, note save, mount tree and terminal contrast", async () => 
     await expect(mount.locator(".library-tree-folder, .library-tree-file")).toHaveCount(0);
     await mount.locator(".library-mount-toggle").click();
 
+    // Keyboard resizing remains discoverable without turning the entire
+    // content boundary into a high-contrast accent stripe.
+    const splitter = page.locator(".notes-library-splitter");
+    await splitter.focus();
+    await expect(splitter).toBeFocused();
+    expect(await splitter.evaluate((node) => getComputedStyle(node, "::after").height)).toBe("48px");
+
     // The terminal deliberately stays dark even while the shell is light.
     const terminal = await invoke<{ id: string }>(page, "terminal_create", { cwd: workspace, title: "interaction-regression", initialCommand: null });
     await invoke(page, "terminal_resize", { id: terminal.id, rows: 24, cols: 100 });
@@ -124,6 +133,16 @@ test("workspace drag, note save, mount tree and terminal contrast", async () => 
       expect(themedColors.background).toMatch(/rgb\(8, 11, 16\)|#080b10/i);
       expect(themedColors.screen).toMatch(/rgb\(8, 11, 16\)|#080b10/i);
     }
+
+    // Primary rail navigation always returns to the workspace atlas. Opening
+    // a terminal again is an explicit action from the atlas/page bar.
+    await page.locator(".rail-item").nth(1).click();
+    await expect(page.locator(".workspace-atlas")).toBeVisible();
+
+    // The top search-shaped control must leave the existing Session search
+    // ready for immediate typing rather than merely changing pages.
+    await page.locator(".global-search").click();
+    await expect(page.locator(".session-search-v2 input")).toBeFocused();
     await invoke(page, "terminal_close", { id: terminal.id });
 
     // A global SKILL.md already present in the isolated Codex home must be
