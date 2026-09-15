@@ -338,3 +338,118 @@
 .session-sources-dialog {
   width: 100%;
 }
+
+/* Distilled desktop shell: content owns the space; chrome stays quiet. */
+.mobius-app {
+  grid-template-rows: 52px minmax(0, 1fr);
+}
+
+.mobius-main {
+  grid-template-rows: 52px minmax(0, 1fr);
+}
+
+.mobius-topbar,
+.pagebar {
+  background: color-mix(in srgb, var(--m-surface) 84%, transparent);
+  backdrop-filter: blur(20px) saturate(145%);
+}
+
+.mobius-topbar {
+  gap: 8px;
+  padding-inline: 14px;
+}
+
+.mobius-brand > span:last-child {
+  display: none;
+}
+
+.global-search {
+  width: 34px;
+  margin-inline: auto 0;
+  padding: 0;
+  justify-content: center;
+  border-color: transparent;
+  background: transparent;
+}
+
+.global-search span,
+.global-search kbd {
+  display: none;
+}
+
+.pagebar {
+  padding-inline: 20px;
+}
+
+.pagebar > div > span {
+  display: none;
+}
+
+.pagebar h1 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.corridor-view {
+  padding: 14px 18px 24px;
+}
+
+.workspace-detail {
+  margin-top: 4px;
+  border-radius: 12px;
+  box-shadow: 0 3px 12px rgb(0 0 0 / .05);
+}
+
+.workspace-detail > header {
+  padding: 12px 16px 10px;
+}
+
+.workspace-detail h2 {
+  margin: 2px 0;
+  font-size: 17px;
+}
+
+.detail-tabs {
+  padding-inline: 10px;
+}
+
+.detail-tabs button {
+  height: 34px;
+  padding-inline: 9px;
+}
+
+.detail-content:has(.session-lineage-panel) {
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.atlas-tree-header,
+.library-nav-header {
+  min-height: 44px;
+  padding: 6px 12px;
+  justify-content: flex-end;
+}
+
+.atlas-tree-header > div:first-child,
+.library-nav-header > div:first-child {
+  display: none;
+}
+
+.atlas-add {
+  width: 32px;
+  height: 32px;
+}
+
+@media (max-width: 780px) {
+  .corridor-view { padding: 10px; }
+  .pagebar { padding-inline: 14px; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .mobius-topbar,
+  .pagebar {
+    background: var(--m-surface);
+    backdrop-filter: none;
+  }
+}

@@ -6,6 +6,7 @@ import type { AgentKind, LineageManifest, Message, RelayGraph, TerminalInfo, Wor
 import "./session-lineage.css";
 import { ContextMenu } from "./ContextMenu";
 import { AccessibleDialog } from "./AccessibleDialog";
+import { ExternalLink, Link2, Plus, SlidersHorizontal } from "lucide-react";
 
 export function SessionLineagePanel({ graph, locale, onOpenSession, workspace, openTerminal }: {
   graph: RelayGraph; locale: "zh-CN" | "en"; onOpenSession: (id: string) => void;
@@ -17,6 +18,7 @@ export function SessionLineagePanel({ graph, locale, onOpenSession, workspace, o
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState("");
   const [mode, setMode] = useState<"graph" | "list">("graph");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [direction, setDirection] = useState<"horizontal" | "vertical">(() => localStorage.getItem("mobius.lineage.direction") === "vertical" ? "vertical" : "horizontal");
   const [compact, setCompact] = useState(() => localStorage.getItem("mobius.lineage.compact") === "1");
   const [showNativeId, setShowNativeId] = useState(() => localStorage.getItem("mobius.lineage.native-id") !== "0");
@@ -129,23 +131,24 @@ export function SessionLineagePanel({ graph, locale, onOpenSession, workspace, o
   };
   if (!ids.length) return <div className="relay-graph-empty">{zh ? "尚无交接关系；在会话中发起交接后将显示在这里。" : "No handoffs yet. Start a session handoff to record its lineage."}</div>;
   return <section className="session-lineage-panel">
-    <header><strong>{zh ? "会话交接图谱" : "Session lineage"}</strong>
-      <input className="lineage-search" aria-label={zh ? "定位节点" : "Find a node"} value={query} onChange={e => setQuery(e.target.value)} placeholder={zh ? "标题 / Harness / ID" : "Title / Harness / ID"}/>
-      <button className="soft-button" aria-pressed={mode === "graph"} onClick={() => setMode("graph")}>{zh ? "图谱" : "Graph"}</button>
-      <button className="soft-button" aria-pressed={mode === "list"} onClick={() => setMode("list")}>{zh ? "列表" : "List"}</button></header>
-    <div className="lineage-summary" role="status"><strong>{lineage?.nodes.length ?? 0}</strong> {zh ? "个会话" : "sessions"}<span>·</span><strong>{lineage?.edges.length ?? 0}</strong> {zh ? "轮交接" : "handoffs"}<span>·</span><strong>{graph.chains.length}</strong> {zh ? "条链路" : graph.chains.length === 1 ? "chain" : "chains"}</div>
-    <details className="lineage-preview-settings">
-      <summary>{zh ? "预览设置" : "Preview settings"}</summary>
-      <div><label>{zh ? "布局" : "Layout"}<select aria-label={zh ? "图谱布局" : "Graph layout"} value={direction} onChange={e => setDirection(e.target.value as "horizontal" | "vertical")}><option value="horizontal">{zh ? "从左到右" : "Left to right"}</option><option value="vertical">{zh ? "从上到下" : "Top to bottom"}</option></select></label>
-        <label><input type="checkbox" checked={compact} onChange={e => setCompact(e.target.checked)}/>{zh ? "紧凑节点" : "Compact nodes"}</label>
-        <label><input type="checkbox" checked={showNativeId} onChange={e => setShowNativeId(e.target.checked)}/>{zh ? "显示原生 Session ID" : "Show native Session ID"}</label>
-        <label><input type="checkbox" checked={showSourceStatus} onChange={e => setShowSourceStatus(e.target.checked)}/>{zh ? "显示来源状态" : "Show source status"}</label>
+    <header>
+      <div className="lineage-heading"><strong>{zh ? "会话交接图谱" : "Session lineage"}</strong>
+        <span className="lineage-metrics" role="status"><b>{lineage?.nodes.length ?? 0}</b> {zh ? "会话" : "sessions"}<i/> <b>{lineage?.edges.length ?? 0}</b> {zh ? "交接" : "handoffs"}<i/> <b>{graph.chains.length}</b> {zh ? "链路" : graph.chains.length === 1 ? "chain" : "chains"}</span>
       </div>
-    </details>
-    <div><button className="soft-button" disabled={!sources.length || busy} onClick={() => void prepare()}>{zh ? `交接选中来源 (${sources.length})` : `Hand off selected sources (${sources.length})`}</button><small> {zh ? "Shift+点击可多选；多个来源会合并其祖先引用，不总结正文。" : "Shift-click to select multiple sources. Merge combines ancestor references, not summaries."}</small></div>
-    <p>{direction === "horizontal"
-      ? (zh ? "点击节点高亮祖先，双击查看会话。横向表示交接层级，不代表耗时。搜索仅淡化节点，不改变交接范围。" : "Select to highlight ancestors; double-click to inspect. Horizontal position means inheritance depth, not elapsed time. Search dims nodes without changing ancestry.")
-      : (zh ? "点击节点高亮祖先，双击查看会话。纵向表示交接层级，不代表耗时。搜索仅淡化节点，不改变交接范围。" : "Select to highlight ancestors; double-click to inspect. Vertical position means inheritance depth, not elapsed time. Search dims nodes without changing ancestry.")}</p>
+      <div className="lineage-toolbar">
+        <input className="lineage-search" aria-label={zh ? "定位节点" : "Find a node"} value={query} onChange={e => setQuery(e.target.value)} placeholder={zh ? "搜索节点" : "Find node"}/>
+        <div className="lineage-view-toggle" role="group" aria-label={zh ? "图谱视图" : "Lineage view"}><button aria-pressed={mode === "graph"} onClick={() => setMode("graph")}>{zh ? "图谱" : "Graph"}</button><button aria-pressed={mode === "list"} onClick={() => setMode("list")}>{zh ? "列表" : "List"}</button></div>
+        <div className="lineage-settings-wrap"><button className="icon-soft" aria-label={zh ? "预览设置" : "Preview settings"} aria-expanded={settingsOpen} onClick={() => setSettingsOpen(open => !open)}><SlidersHorizontal size={16}/></button>
+          {settingsOpen && <div className="lineage-settings-popover" role="group" aria-label={zh ? "预览设置" : "Preview settings"}>
+            <label>{zh ? "布局" : "Layout"}<select aria-label={zh ? "图谱布局" : "Graph layout"} value={direction} onChange={e => setDirection(e.target.value as "horizontal" | "vertical")}><option value="horizontal">{zh ? "从左到右" : "Left to right"}</option><option value="vertical">{zh ? "从上到下" : "Top to bottom"}</option></select></label>
+            <label><input type="checkbox" checked={compact} onChange={e => setCompact(e.target.checked)}/>{zh ? "紧凑节点" : "Compact nodes"}</label>
+            <label><input type="checkbox" checked={showNativeId} onChange={e => setShowNativeId(e.target.checked)}/>{zh ? "原生 Session ID" : "Native Session ID"}</label>
+            <label><input type="checkbox" checked={showSourceStatus} onChange={e => setShowSourceStatus(e.target.checked)}/>{zh ? "来源状态" : "Source status"}</label>
+          </div>}
+        </div>
+      </div>
+    </header>
+    <div className="lineage-selection-bar"><button className="soft-button" disabled={!sources.length || busy} onClick={() => void prepare()}><Plus size={15}/>{zh ? `交接来源 ${sources.length}` : `Handoff sources ${sources.length}`}</button><small title={zh ? "Shift+点击可多选；仅合并祖先引用，不总结或复制正文。" : "Shift-click to select multiple sources. Only ancestor references are merged."}>{zh ? "Shift 多选 · 仅传引用" : "Shift select · references only"}</small></div>
     {error && <p role="alert">{error}</p>}
     {!lineage && !error && <p role="status">{zh ? "正在定位来源…" : "Resolving sources…"}</p>}
     <div className="lineage-layout"><div className="lineage-stage">
@@ -156,15 +159,19 @@ export function SessionLineagePanel({ graph, locale, onOpenSession, workspace, o
         minZoom={0.1} maxZoom={2}><Background/><Controls showInteractive={false}/></ReactFlow> :
         <div className="lineage-list">{lineage?.nodes.map(n => <div key={n.session_id}><input type="checkbox" aria-label={`${zh ? "选择来源" : "Select source"}: ${n.native_id}`} checked={sources.includes(n.session_id)} onChange={() => toggleSource(n.session_id)}/><button className="soft-button" aria-pressed={selected === n.session_id} onClick={() => setSelected(n.session_id)}>{n.harness} · {n.title ?? n.native_id}<small>{n.updated_at}</small></button></div>)}</div>}
     </div><aside className="lineage-detail" aria-label={zh ? "节点详情" : "Node details"}>
-      {detail ? <><strong>{detail.title ?? detail.native_id}</strong>
-        <label className="lineage-alias">{zh ? "显示名称（仅 Möbius）" : "Display name (Mobius only)"}<input className="lineage-search" maxLength={200} value={aliasDraft} onChange={e => setAliasDraft(e.target.value)}/></label>
-        <button className="soft-button" disabled={!aliasDraft.trim() || aliasDraft.trim() === detail.title} onClick={() => void saveAlias()}>{zh ? "保存名称" : "Save name"}</button>
-        <dl><dt>Harness</dt><dd>{detail.harness}</dd><dt>Session ID</dt><dd>{detail.native_id}</dd><dt>{zh ? "创建" : "Created"}</dt><dd>{detail.created_at ?? "—"}</dd><dt>{zh ? "更新" : "Updated"}</dt><dd>{detail.updated_at ?? "—"}</dd><dt>Checkout</dt><dd>{detail.checkout_id ?? "—"}</dd><dt>{zh ? "来源" : "Source"}</dt><dd>{detail.source_path ?? detail.source_status}</dd></dl>
-        <strong>{zh ? "最近已索引片段（非完整性保证）" : "Latest indexed excerpts (coverage not guaranteed)"}</strong>
+      {detail ? <><div className="lineage-detail-head"><strong>{detail.title ?? detail.native_id}</strong><div className="lineage-detail-actions">
+          <button className="icon-soft" aria-label={zh ? "查看会话" : "Inspect session"} title={zh ? "查看会话" : "Inspect session"} onClick={() => onOpenSession(detail.session_id)}><ExternalLink size={15}/></button>
+          <button className="icon-soft" aria-label={sources.includes(detail.session_id) ? (zh ? "移出交接来源" : "Remove from handoff sources") : (zh ? "加入交接来源" : "Add to handoff sources")} title={sources.includes(detail.session_id) ? (zh ? "移出交接来源" : "Remove from handoff sources") : (zh ? "加入交接来源" : "Add to handoff sources")} aria-pressed={sources.includes(detail.session_id)} onClick={() => toggleSource(detail.session_id)}><Plus size={15}/></button>
+          <button className="icon-soft" aria-label={zh ? "复制引用" : "Copy reference"} title={zh ? "复制引用" : "Copy reference"} onClick={() => { void navigator.clipboard.writeText(`@session:${detail.harness}/${detail.native_id}`).catch(reason => setError(String(reason))); }}><Link2 size={15}/></button>
+        </div></div>
+        <details className="lineage-metadata"><summary>{zh ? "会话详情" : "Session details"}</summary><div>
+          <label className="lineage-alias">{zh ? "显示名称（仅 Möbius）" : "Display name (Mobius only)"}<input className="lineage-search" maxLength={200} value={aliasDraft} onChange={e => setAliasDraft(e.target.value)}/></label>
+          <button className="soft-button" disabled={!aliasDraft.trim() || aliasDraft.trim() === detail.title} onClick={() => void saveAlias()}>{zh ? "保存名称" : "Save name"}</button>
+          <dl><dt>Harness</dt><dd>{detail.harness}</dd><dt>Session ID</dt><dd>{detail.native_id}</dd><dt>{zh ? "创建" : "Created"}</dt><dd>{detail.created_at ?? "—"}</dd><dt>{zh ? "更新" : "Updated"}</dt><dd>{detail.updated_at ?? "—"}</dd><dt>Checkout</dt><dd>{detail.checkout_id ?? "—"}</dd><dt>{zh ? "来源" : "Source"}</dt><dd>{detail.source_path ?? detail.source_status}</dd></dl>
+        </div></details>
+        <strong className="lineage-excerpt-title">{zh ? "最近片段" : "Latest excerpts"}</strong>
         {messages.map(m => <blockquote key={m.id}><small>{m.role} · {m.timestamp ?? "—"}</small><p>{m.content.slice(0, 600)}{m.content.length > 600 ? "…" : ""}</p></blockquote>)}
-        <button className="soft-button" onClick={() => onOpenSession(detail.session_id)}>{zh ? "查看会话" : "Inspect session"}</button>
-        <button className="soft-button" aria-pressed={sources.includes(detail.session_id)} onClick={() => toggleSource(detail.session_id)}>{sources.includes(detail.session_id) ? (zh ? "移出交接来源" : "Remove from handoff sources") : (zh ? "加入交接来源" : "Add to handoff sources")}</button>
-        <button className="soft-button" onClick={() => { void navigator.clipboard.writeText(`@session:${detail.harness}/${detail.native_id}`).catch(reason => setError(String(reason))); }}>{zh ? "复制引用" : "Copy reference"}</button></> : <p>{zh ? "选择节点查看身份、时间和对话片段。" : "Select a node to inspect its identity, timestamps and excerpts."}</p>}
+      </> : <p>{zh ? "选择节点查看身份、时间和对话片段。" : "Select a node to inspect its identity, timestamps and excerpts."}</p>}
     </aside></div>
     {graph.edges.some(e => !e.target_session_id) && <p role="status">{zh ? "部分交接尚未识别到真实目标会话；未将其画成已完成关系。" : "Some handoffs have no verified target identity yet; they are not shown as completed edges."}</p>}
     {menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} items={[
