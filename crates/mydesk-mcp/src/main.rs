@@ -99,7 +99,7 @@ fn tool_definitions() -> Vec<Value> {
         tool(
             "list_sessions",
             "List indexed native-session metadata. It never reads transcript messages.",
-            json!({"workspace_id":{"type":"string"},"checkout_id":{"type":"string"},"providers":{"type":"array","items":{"enum":["codex","claude","pi","grok"]}},"limit":{"type":"integer","minimum":1,"maximum":100}}),
+            json!({"workspace_id":{"type":"string"},"checkout_id":{"type":"string"},"providers":{"type":"array","items":{"enum":["codex","claude","pi"]}},"limit":{"type":"integer","minimum":1,"maximum":100}}),
             &[],
         ),
         tool(
@@ -117,13 +117,13 @@ fn tool_definitions() -> Vec<Value> {
         tool(
             "search_sessions",
             "Search message-level history only after a user has granted an exact desktop search approval token.",
-            json!({"approval_token":{"type":"string"},"query":{"type":"string"},"workspace_id":{"type":"string"},"checkout_id":{"type":"string"},"providers":{"type":"array","items":{"enum":["codex","claude","pi","grok"]}},"limit":{"type":"integer","minimum":1,"maximum":100}}),
+            json!({"approval_token":{"type":"string"},"query":{"type":"string"},"workspace_id":{"type":"string"},"checkout_id":{"type":"string"},"providers":{"type":"array","items":{"enum":["codex","claude","pi"]}},"limit":{"type":"integer","minimum":1,"maximum":100}}),
             &["approval_token", "query", "providers"],
         ),
         tool(
             "mome_recall",
             "Recall a bounded, precisely cited local context package only after explicit desktop approval. It searches the regenerable local SQLite FTS/BM25 index; this build does not invoke a semantic model during recall.",
-            json!({"approval_token":{"type":"string"},"query":{"type":"string"},"workspace_id":{"type":"string"},"checkout_id":{"type":"string"},"providers":{"type":"array","minItems":1,"items":{"enum":["codex","claude","pi","grok"]}},"max_tokens":{"type":"integer","minimum":1,"maximum":MAX_MOME_TOKENS}}),
+            json!({"approval_token":{"type":"string"},"query":{"type":"string"},"workspace_id":{"type":"string"},"checkout_id":{"type":"string"},"providers":{"type":"array","minItems":1,"items":{"enum":["codex","claude","pi"]}},"max_tokens":{"type":"integer","minimum":1,"maximum":MAX_MOME_TOKENS}}),
             &["approval_token", "query", "providers"],
         ),
         tool(

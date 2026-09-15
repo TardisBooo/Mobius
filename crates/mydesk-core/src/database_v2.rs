@@ -710,6 +710,17 @@ impl Database {
         Ok(())
     }
 
+    pub fn workspace_id_by_canonical_path(&self, canonical_path: &str) -> Result<Option<String>> {
+        self.connection()?
+            .query_row(
+                "SELECT id FROM workspaces WHERE canonical_path = ?1 LIMIT 1",
+                params![canonical_path],
+                |row| row.get(0),
+            )
+            .optional()
+            .context("looking up workspace identity by canonical path")
+    }
+
     fn search_session_metadata_scoped(
         &self,
         query: &SessionQuery,

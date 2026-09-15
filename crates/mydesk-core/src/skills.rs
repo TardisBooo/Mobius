@@ -89,11 +89,6 @@ pub fn standard_skill_roots(paths: &WorkspacePaths) -> Vec<SkillRoot> {
             scope: "global".to_string(),
             source_kind: "pi".to_string(),
         },
-        SkillRoot {
-            path: user.join(".grok/skills"),
-            scope: "global".to_string(),
-            source_kind: "grok".to_string(),
-        },
     ]
 }
 
@@ -128,7 +123,6 @@ pub fn project_skill_roots(workspace: &Path) -> Vec<SkillRoot> {
         (".codex/skills", "codex"),
         (".claude/skills", "claude"),
         (".pi/skills", "pi"),
-        (".grok/skills", "grok"),
     ]
     .into_iter()
     .map(|(relative, source_kind)| SkillRoot {
@@ -738,9 +732,8 @@ fn target_root_for_harness(
         "codex" => Ok(codex_home.join("skills")),
         "claude" => Ok(user.join(".claude/skills")),
         "pi" => Ok(user.join(".pi/skills")),
-        "grok" => Ok(user.join(".grok/skills")),
         _ => bail!(
-            "Unsupported skill target {target}. Use global, project:<registered-checkout>, codex, claude, pi, or grok."
+            "Unsupported skill target {target}. Use global, project:<registered-checkout>, codex, claude, or pi."
         ),
     }
 }

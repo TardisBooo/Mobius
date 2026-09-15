@@ -126,7 +126,6 @@ export const demoAgents: AgentStatus[] = [
   { id: "codex", label: "Codex", status: "connected", sessions: 37, detail: "MCP ready · direct local adapter" },
   { id: "claude", label: "Claude", status: "connected", sessions: 28, detail: "MCP ready · external session index" },
   { id: "pi", label: "Pi", status: "needs_setup", sessions: 0, detail: "Add MyDesk MCP command" },
-  { id: "grok", label: "Grok", status: "needs_setup", sessions: 0, detail: "Add MyDesk MCP command" },
 ];
 
 export const demoWikiQueue: WikiQueueItem[] = [

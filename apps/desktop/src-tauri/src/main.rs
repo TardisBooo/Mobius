@@ -1869,13 +1869,6 @@ fn resume_session(
         // CODEX_HOME or provider configuration, and restore the shell afterward.
         command = format!("$mobiusResumeHome=$env:CODEX_HOME; try {{ $env:CODEX_HOME={}; {command} }} finally {{ $env:CODEX_HOME=$mobiusResumeHome; Remove-Variable mobiusResumeHome -ErrorAction SilentlyContinue }}", ps_quote(&terminal_process_path(&home).to_string_lossy()));
     }
-    if provider == mydesk_core::AgentKind::Grok {
-        let source = Path::new(&session.source_path);
-        let sessions_root = source.ancestors().nth(3).filter(|path| path.file_name().is_some_and(|name| name == "sessions"))
-            .ok_or("Grok source is not in a verified sessions directory")?;
-        let home = sessions_root.parent().ok_or("Grok home is missing")?;
-        command = format!("$env:GROK_HOME={}; {command}", ps_quote(&home.to_string_lossy()));
-    }
     create_terminal_inner(
         &app,
         &state,
@@ -1893,7 +1886,6 @@ fn native_resume_executable_name(agent: mydesk_core::AgentKind) -> CommandResult
         mydesk_core::AgentKind::Codex => Ok("codex"),
         mydesk_core::AgentKind::Claude => Ok("claude"),
         mydesk_core::AgentKind::Pi => Ok("pi"),
-        mydesk_core::AgentKind::Grok => Ok("grok"),
         _ => Err("native resume is not verified for this provider".into()),
     }
 }
@@ -1918,7 +1910,6 @@ fn native_resume_command(
         mydesk_core::AgentKind::Pi => {
             Ok(format!("{}{executable} --session {native_session_id}", launch.setup))
         }
-        mydesk_core::AgentKind::Grok => Ok(format!("{}{executable} --resume {native_session_id}", launch.setup)),
         _ => Err("native resume is not verified for this provider".into()),
     }
 }

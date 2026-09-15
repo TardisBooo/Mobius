@@ -58,6 +58,19 @@ impl MyDesk {
         display_name: Option<&str>,
     ) -> Result<WorkspaceInspection> {
         let mut inspection = inspect_workspace(path, display_name)?;
+        // Older catalogues may contain the same canonical directory under an
+        // identity derived by a previous release. Preserve that row and its
+        // relationships instead of violating the canonical-path uniqueness
+        // constraint when the current identity algorithm inspects it again.
+        if let Some(existing_id) = self
+            .database
+            .workspace_id_by_canonical_path(&inspection.workspace.canonical_path)?
+        {
+            inspection.workspace.id = existing_id.clone();
+            for checkout in &mut inspection.checkouts {
+                checkout.workspace_id = existing_id.clone();
+            }
+        }
         self.database.upsert_workspace(&inspection.workspace)?;
         self.database
             .reconcile_checkouts(&inspection.workspace.id, &inspection.checkouts)?;
@@ -154,6 +167,16 @@ impl MyDesk {
                     .set_session_checkout(&session.id, Some(&checkout_id))?;
             }
         }
+        // Reconcile once against the complete checkout catalogue. Registering
+        // another CWD for the same Git repository can refresh that repository's
+        // checkout rows after an earlier session was visited. The final pass is
+        // deliberately unbounded so every indexed Session whose recorded CWD
+        // still exists receives the deepest matching checkout.
+        let mut all_checkouts = Vec::new();
+        for workspace in self.database.list_workspaces_v2()? {
+            all_checkouts.extend(self.database.list_checkouts(&workspace.id)?);
+        }
+        self.associate_sessions_with_checkouts(&all_checkouts)?;
         Ok(())
     }
 
@@ -470,7 +493,7 @@ fn summarize(body: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::MyDesk;
-    use crate::{AgentKind, NoteDraft, SearchRequest, SessionQuery, SessionSourceRoot, WorkspacePaths};
+    use crate::{AgentKind, NoteDraft, SearchRequest, SessionQuery, SessionSourceRoot, WorkspacePaths, inspect_workspace};
     use std::{fs, path::Path};
 
     #[test]
@@ -628,6 +651,32 @@ mod tests {
             hits[0].session.checkout_id.as_deref(),
             Some(inspection.checkouts[0].id.as_str())
         );
+        Ok(())
+    }
+
+    #[test]
+    fn registering_workspace_preserves_legacy_id_for_the_same_canonical_path() -> anyhow::Result<()> {
+        let temporary = tempfile::tempdir()?;
+        let workspace = temporary.path().join("legacy-workspace-id");
+        fs::create_dir_all(&workspace)?;
+        let paths = WorkspacePaths {
+            workspace_root: temporary.path().join("workspace-root"),
+            data_root: temporary.path().join("data"),
+            artifacts_root: temporary.path().join("artifacts"),
+            catalog_root: temporary.path().join("catalog"),
+        };
+        let desk = MyDesk::open(paths)?;
+        let mut legacy = inspect_workspace(&workspace, None)?.workspace;
+        legacy.id = "workspace:legacy-identity".to_string();
+        desk.database.upsert_workspace(&legacy)?;
+
+        let registered = desk.register_workspace(&workspace, None)?;
+        assert_eq!(registered.workspace.id, "workspace:legacy-identity");
+        assert!(registered
+            .checkouts
+            .iter()
+            .all(|checkout| checkout.workspace_id == "workspace:legacy-identity"));
+        assert_eq!(desk.database.list_workspaces_v2()?.len(), 1);
         Ok(())
     }
 }

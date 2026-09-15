@@ -208,13 +208,6 @@ pub(crate) fn doctor_report() -> DoctorReport {
             true,
             "Official Hook/Extension integration may be enabled only by an explicit installer target.",
         ),
-        provider_capability(
-            AgentKind::Grok,
-            "grok",
-            "mcp_or_copy_packet",
-            false,
-            "Use explicit MCP recall or copy the packet; no prompt hook is installed.",
-        ),
     ];
     DoctorReport {
         kind: "mobius_mome_doctor_report",
@@ -351,8 +344,7 @@ fn known_configuration_paths(provider: &AgentKind) -> Vec<PathBuf> {
         AgentKind::Codex => &[".codex/config.toml", ".codex/config.json"],
         AgentKind::Claude => &[".claude.json", ".claude/settings.json"],
         AgentKind::Pi => &[".pi/config.json", ".pi/settings.json"],
-        AgentKind::Grok => &[".grok/config.json", ".config/grok/config.json"],
-        AgentKind::Apodex | AgentKind::Unknown => &[],
+        AgentKind::Grok | AgentKind::Apodex | AgentKind::Unknown => &[],
     };
     names.iter().map(|name| home.join(name)).collect()
 }
@@ -462,7 +454,7 @@ mod tests {
         let report = doctor_report();
         assert!(report.read_only);
         assert!(!report.writes_harness_configuration);
-        assert_eq!(report.capabilities.len(), 4);
+        assert_eq!(report.capabilities.len(), 3);
         assert!(!report.semantic_retrieval_enabled);
         assert!(!report.local_model_runtime.semantic_retrieval_enabled);
     }

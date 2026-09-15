@@ -29,7 +29,7 @@ pub fn resolve(agent: &AgentKind, executable: &Path) -> Result<LaunchPrefix, Str
         setup: String::new(),
         command: format!("& {}", ps_quote(&executable.to_string_lossy())),
     };
-    if !matches!(agent, AgentKind::Pi | AgentKind::Grok)
+    if !matches!(agent, AgentKind::Pi)
         || !executable
             .extension()
             .is_some_and(|extension| extension.eq_ignore_ascii_case("cmd"))
@@ -71,17 +71,6 @@ pub fn resolve(agent: &AgentKind, executable: &Path) -> Result<LaunchPrefix, Str
                 "& {} {} --provider deepseek --model {}",
                 ps_quote(&node.to_string_lossy()),
                 ps_quote(&cli.to_string_lossy()),
-                ps_quote(&model)
-            )
-        }
-        AgentKind::Grok if script.contains("target\\release\\xai-grok-pager.exe") => {
-            let binary = root.join("target/release/xai-grok-pager.exe");
-            if !binary.is_file() {
-                return Err("Grok native runtime is missing".into());
-            }
-            format!(
-                "& {} --model {}",
-                ps_quote(&binary.to_string_lossy()),
                 ps_quote(&model)
             )
         }

@@ -365,11 +365,6 @@ fn conventional_session_roots(paths: &WorkspacePaths, probe: bool) -> Vec<Sessio
             user.join(".pi/sessions"),
             "Pi: legacy conventional sessions",
         ),
-        (
-            AgentKind::Grok,
-            user.join(".grok/sessions"),
-            "Grok: conventional sessions",
-        ),
     ];
     // An explicit CODEX_HOME is a deliberate boundary (and is how isolated
     // test profiles avoid reading a workstation's unrelated archive). When
@@ -387,13 +382,6 @@ fn conventional_session_roots(paths: &WorkspacePaths, probe: bool) -> Vec<Sessio
             AgentKind::Pi,
             PathBuf::from(path).join("sessions"),
             "Pi: PI_CODING_AGENT_DIR",
-        ));
-    }
-    if let Some(path) = env::var_os("GROK_HOME") {
-        definitions.push((
-            AgentKind::Grok,
-            PathBuf::from(path).join("sessions"),
-            "Grok: GROK_HOME",
         ));
     }
     definitions

@@ -121,12 +121,6 @@ impl SessionAdapterRegistry {
                 coverage: "partial",
                 native_resume: true,
             },
-            SessionAdapter {
-                provider: AgentKind::Grok,
-                version: "grok-history-v3",
-                coverage: "partial",
-                native_resume: true,
-            },
         ]
     }
 
@@ -147,16 +141,12 @@ impl SessionAdapterRegistry {
             return false;
         }
         match provider {
-            AgentKind::Grok => path
-                .file_name()
-                .and_then(|value| value.to_str())
-                .is_some_and(|name| name.eq_ignore_ascii_case("chat_history.jsonl")),
             AgentKind::Codex => path
                 .extension()
                 .and_then(|value| value.to_str())
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("jsonl")),
             AgentKind::Claude | AgentKind::Pi => true,
-            AgentKind::Apodex | AgentKind::Unknown => false,
+            AgentKind::Grok | AgentKind::Apodex | AgentKind::Unknown => false,
         }
     }
 }
@@ -221,12 +211,7 @@ impl<'a> ProviderIndexer<'a> {
                 self.database.update_session_source(&session)?;
             }
         }
-        let providers = [
-            AgentKind::Codex,
-            AgentKind::Claude,
-            AgentKind::Pi,
-            AgentKind::Grok,
-        ];
+        let providers = [AgentKind::Codex, AgentKind::Claude, AgentKind::Pi];
         let mut reports = providers
             .iter()
             .cloned()
@@ -238,7 +223,7 @@ impl<'a> ProviderIndexer<'a> {
             .collect::<Vec<_>>();
 
         // Keep the manifest's source order instead of exhausting every Codex
-        // root before beginning Claude, Pi, or Grok. A large portable
+        // root before beginning Claude or Pi. A large portable
         // Codex archive is often present beside small active roots; preserving
         // discovery order lets each configured Harness become visible during a
         // single refresh rather than making the smaller sources wait behind a
@@ -1593,8 +1578,8 @@ mod tests {
         let report = ProviderIndexer::new(&database, &paths)
             .index_approved_roots()
             .expect("approved refresh");
-        assert_eq!(report.roots, 5);
-        assert_eq!(report.indexed, 5, "{report:#?}");
+        assert_eq!(report.roots, 4);
+        assert_eq!(report.indexed, 4, "{report:#?}");
         assert!(
             report
                 .by_provider
@@ -1612,7 +1597,7 @@ mod tests {
                 ..SessionQuery::default()
             })
             .expect("sessions");
-        assert_eq!(sessions.len(), 5);
+        assert_eq!(sessions.len(), 4);
         let same_native = sessions
             .iter()
             .filter(|hit| hit.session.provider_session_id == "same-native-id")
@@ -1645,15 +1630,9 @@ mod tests {
             sampled_message_session.session.metadata["catalogue_coverage"],
             "partial"
         );
-        let grok = sessions
-            .iter()
-            .find(|hit| hit.session.provider == AgentKind::Grok)
-            .expect("grok session");
-        assert!(
-            grok
-                .session
-                .capabilities
-                .contains(&SessionCapability::NativeResume)
-        );
+        assert!(sessions.iter().all(|hit| !matches!(
+            hit.session.provider,
+            AgentKind::Grok | AgentKind::Apodex
+        )));
     }
 }

@@ -17,16 +17,15 @@ pub enum AgentKind {
 }
 
 impl AgentKind {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 4] = [
         Self::Codex,
         Self::Claude,
         Self::Pi,
-        Self::Grok,
         Self::Unknown,
     ];
 
     pub fn is_supported(&self) -> bool {
-        matches!(self, Self::Codex | Self::Claude | Self::Pi | Self::Grok)
+        matches!(self, Self::Codex | Self::Claude | Self::Pi)
     }
 
     pub fn as_str(&self) -> &'static str {

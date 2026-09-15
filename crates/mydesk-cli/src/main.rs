@@ -306,7 +306,7 @@ struct MomeRecallArgs {
 
 #[derive(Debug, Args)]
 struct MomeHookArgs {
-    /// Harness invoking the hook: codex, claude, pi, or grok.
+    /// Harness invoking the hook: codex, claude, or pi.
     #[arg(long)]
     provider: String,
     /// Complete user prompt as received by the Harness hook.
@@ -604,7 +604,7 @@ fn mome_request_from_args(arguments: MomeRecallArgs) -> Result<MomeRecallRequest
 fn parse_mome_provider(value: &str) -> Result<AgentKind> {
     let provider = value.parse::<AgentKind>()?;
     if !provider.is_supported() {
-        anyhow::bail!("Unsupported Mome provider {value}. Use codex, claude, pi, or grok.");
+        anyhow::bail!("Unsupported Mome provider {value}. Use codex, claude, or pi.");
     }
     Ok(provider)
 }
@@ -618,7 +618,7 @@ fn validate_skill_scope(scope: &str) -> Result<()> {
 
 fn require_supported_agent(agent: &AgentKind) -> Result<()> {
     if !agent.is_supported() {
-        anyhow::bail!("Choose codex, claude, pi, or grok.")
+        anyhow::bail!("Choose codex, claude, or pi.")
     }
     Ok(())
 }
@@ -628,8 +628,7 @@ fn print_agent_connection(agent: AgentKind) -> Result<()> {
         AgentKind::Codex => "codex mcp add mydesk -- mydesk-mcp",
         AgentKind::Claude => "claude mcp add mydesk -- mydesk-mcp",
         AgentKind::Pi => "Add mydesk-mcp to the Pi MCP extension configuration.",
-        AgentKind::Grok => "Add mydesk-mcp to the Grok MCP configuration.",
-        AgentKind::Apodex | AgentKind::Unknown => "Choose a supported agent: codex, claude, pi, grok.",
+        AgentKind::Grok | AgentKind::Apodex | AgentKind::Unknown => "Choose a supported agent: codex, claude, or pi.",
     };
     println!("{command}");
     Ok(())
