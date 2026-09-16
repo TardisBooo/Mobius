@@ -311,9 +311,13 @@ export function NotesLibraryV2({ onError, onToast, locale, onOpenCanvas }: { onE
     }
     selectedRef.current = nextSelected;
     setSelected(nextSelected);
-    const changedReadOnlySource = current.read_only
-      && (current.id !== nextSelected.id || current.modified_at !== nextSelected.modified_at || current.title !== nextSelected.title);
-    if (changedReadOnlySource) void select(nextSelected);
+    const sourceChanged = current.id !== nextSelected.id
+      || current.modified_at !== nextSelected.modified_at
+      || current.title !== nextSelected.title;
+    // Match editor expectations: clean documents follow disk immediately;
+    // an unsaved editable working copy is never overwritten by a watch event.
+    const editorIsClean = `${titleValueRef.current}\u0000${bodyValueRef.current}` === lastSaved.current;
+    if (sourceChanged && (current.read_only || editorIsClean)) void select(nextSelected);
   }, [create, select]);
   const reload = useCallback(async () => {
     const request = ++latestLibraryRequest.current;
@@ -335,6 +339,26 @@ export function NotesLibraryV2({ onError, onToast, locale, onOpenCanvas }: { onE
   }, [onError, reconcileSnapshot]);
   useEffect(() => { reloadRef.current = reload; }, [reload]);
   useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    let debounceTimer: number | null = null;
+    void desktopApi.onNoteLibraryChanged(() => {
+      if (disposed) return;
+      if (debounceTimer !== null) window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(() => {
+        debounceTimer = null;
+        void reload();
+      }, 180);
+    }).then((stop) => {
+      if (disposed) stop(); else unlisten = stop;
+    }).catch((reason) => { if (!disposed) onError(String(reason)); });
+    return () => {
+      disposed = true;
+      if (debounceTimer !== null) window.clearTimeout(debounceTimer);
+      unlisten?.();
+    };
+  }, [onError, reload]);
   const draftKey = `${title}\u0000${body}`;
   useEffect(() => {
     if (restoredSelection.current || library.snapshot_id === "initial-library") return;

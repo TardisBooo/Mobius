@@ -183,6 +183,11 @@ export const desktopApi = {
       ? invoke<NoteLibrarySnapshot>("note_library_snapshot_command")
       : { snapshot_id: "demo-library", scanned_at: new Date(0).toISOString(), mounts: [], files: [], mount_statuses: [] };
   },
+  async onNoteLibraryChanged(handler: () => void): Promise<() => void> {
+    if (!inTauri()) return () => undefined;
+    const { listen } = await import("@tauri-apps/api/event");
+    return listen("mobius://note-library-changed", () => handler());
+  },
   async readNoteFile(path: string): Promise<string> { return invoke<string>("read_note_file_command", { path }); },
   async revealNoteSource(path: string): Promise<void> {
     if (!inTauri()) return;

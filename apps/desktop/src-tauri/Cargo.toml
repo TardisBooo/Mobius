@@ -10,6 +10,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 mydesk-core = { path = "../../../crates/mydesk-core" }
 chrono.workspace = true
+notify.workspace = true
 parking_lot.workspace = true
 portable-pty.workspace = true
 regex.workspace = true

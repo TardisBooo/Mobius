@@ -14,13 +14,14 @@ use mydesk_core::{
         write_managed_skill as write_managed_skill_file,
     },
 };
+use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use parking_lot::Mutex;
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use regex::Regex;
 use reqwest::{Client, header};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     io::{Read, Write},
     net::IpAddr,
@@ -45,6 +46,80 @@ struct DesktopState {
     /// guessing from a timer or relying only on an event it could miss.
     refresh_pending: Arc<Mutex<usize>>,
     terminals: Mutex<HashMap<String, TerminalProcess>>,
+    library_watcher: Mutex<Option<LibraryWatcher>>,
+}
+
+const NOTE_LIBRARY_CHANGED_EVENT: &str = "mobius://note-library-changed";
+
+/// One native recursive watcher owns every user-approved Library source.
+/// The renderer receives only a change signal and rebuilds its authoritative
+/// snapshot, so bursty or duplicated OS events cannot become UI state.
+struct LibraryWatcher {
+    watcher: RecommendedWatcher,
+    roots: HashSet<PathBuf>,
+}
+
+impl LibraryWatcher {
+    fn new(app: AppHandle) -> notify::Result<Self> {
+        let watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+            match event {
+                Ok(event) if !matches!(event.kind, EventKind::Access(_)) => {
+                    if let Err(error) = app.emit(NOTE_LIBRARY_CHANGED_EVENT, ()) {
+                        tracing::warn!("could not emit Library change event: {error}");
+                    }
+                }
+                Ok(_) => {}
+                Err(error) => tracing::warn!("Library file watcher reported an error: {error}"),
+            }
+        })?;
+        Ok(Self {
+            watcher,
+            roots: HashSet::new(),
+        })
+    }
+
+    fn sync_roots(&mut self, desired: HashSet<PathBuf>) {
+        let stale = self
+            .roots
+            .iter()
+            .filter(|root| !desired.contains(*root) || !root.is_dir())
+            .cloned()
+            .collect::<Vec<_>>();
+        for root in stale {
+            if let Err(error) = self.watcher.unwatch(&root) {
+                tracing::debug!("Library source was already unwatched ({}): {error}", root.display());
+            }
+            self.roots.remove(&root);
+        }
+
+        for root in desired {
+            if self.roots.contains(&root) || !root.is_dir() {
+                continue;
+            }
+            match self.watcher.watch(&root, RecursiveMode::Recursive) {
+                Ok(()) => {
+                    self.roots.insert(root);
+                }
+                Err(error) => tracing::warn!("could not watch Library source ({}): {error}", root.display()),
+            }
+        }
+    }
+}
+
+fn library_watch_roots(desk: &MyDesk) -> HashSet<PathBuf> {
+    let mut roots = HashSet::from([desk.paths.notes_dir()]);
+    match desk.database.list_note_mounts() {
+        Ok(mounts) => roots.extend(mounts.into_iter().map(|mount| PathBuf::from(mount.real_path))),
+        Err(error) => tracing::warn!("could not list Library sources for watching: {error}"),
+    }
+    roots
+}
+
+fn sync_library_watcher(state: &DesktopState) {
+    let roots = library_watch_roots(&state.desk);
+    if let Some(watcher) = state.library_watcher.lock().as_mut() {
+        watcher.sync_roots(roots);
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -685,6 +760,10 @@ fn list_note_files_command(state: State<'_, DesktopState>) -> CommandResult<Vec<
 fn note_library_snapshot_command(
     state: State<'_, DesktopState>,
 ) -> CommandResult<NoteLibrarySnapshot> {
+    // Re-arm a source that disappeared and later returned. Native events are
+    // the fast path; the existing periodic snapshot remains the fallback for
+    // filesystems that do not reliably surface watch events.
+    sync_library_watcher(&state);
     let mounts = state
         .desk
         .database
@@ -806,19 +885,23 @@ fn add_note_mount(
     virtual_path: String,
     access: String,
 ) -> CommandResult<mydesk_core::MountInfo> {
-    state
+    let mount = state
         .desk
         .database
         .add_note_mount(Path::new(&path), &virtual_path, &access)
-        .map_err(command_error)
+        .map_err(command_error)?;
+    sync_library_watcher(&state);
+    Ok(mount)
 }
 #[tauri::command]
 fn remove_note_mount(state: State<'_, DesktopState>, id: String) -> CommandResult<bool> {
-    state
+    let removed = state
         .desk
         .database
         .remove_note_mount(&id)
-        .map_err(command_error)
+        .map_err(command_error)?;
+    sync_library_watcher(&state);
+    Ok(removed)
 }
 
 #[tauri::command]
@@ -2494,6 +2577,7 @@ fn main() {
             refresh_gate: Arc::new(tokio::sync::Mutex::new(())),
             refresh_pending: Arc::new(Mutex::new(0)),
             terminals: Mutex::new(HashMap::new()),
+            library_watcher: Mutex::new(None),
         })
         .setup(|app| {
             // Setup runs after the native window has been constructed. Keep
@@ -2504,6 +2588,13 @@ fn main() {
             let desk = state.desk.clone();
             let refresh_gate = state.refresh_gate.clone();
             let refresh_pending = state.refresh_pending.clone();
+            match LibraryWatcher::new(app.handle().clone()) {
+                Ok(mut watcher) => {
+                    watcher.sync_roots(library_watch_roots(&state.desk));
+                    *state.library_watcher.lock() = Some(watcher);
+                }
+                Err(error) => tracing::warn!("native Library watcher could not start: {error}"),
+            }
             // Mark work as pending before spawning, so a renderer which opens
             // immediately after setup can query an authoritative status even
             // if it has not registered the completion-event listener yet.
