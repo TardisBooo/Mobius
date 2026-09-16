@@ -453,3 +453,152 @@
     backdrop-filter: none;
   }
 }
+
+/* v0.3.18 — stateful, content-first navigation. */
+.mobius-main.page-notes {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.pagebar-notes {
+  display: none;
+}
+
+.mobius-main.page-workbench,
+.mobius-main.page-sessions,
+.mobius-main.page-skills {
+  grid-template-rows: 44px minmax(0, 1fr);
+}
+
+.pagebar {
+  min-height: 44px;
+  padding-inline: 18px;
+}
+
+.pagebar h1 {
+  font-size: 16px;
+  letter-spacing: -.025em;
+}
+
+.atlas-tree-header {
+  display: none;
+}
+
+.atlas-tree-tools {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--m-line);
+}
+
+.atlas-tree-tools .atlas-filter {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  margin: 0;
+}
+
+.atlas-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 34px;
+  padding: 0 5px;
+  border: 1px solid var(--m-line);
+  border-radius: 8px;
+  background: var(--m-raised);
+  color: var(--m-muted);
+}
+
+.atlas-sort select {
+  width: 48px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--m-text);
+  font-size: 10px;
+}
+
+.atlas-workarea {
+  padding: 14px 18px 24px;
+}
+
+.atlas-recent-header {
+  min-height: 38px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.atlas-recent-header h2 {
+  margin: 0;
+  font-size: 17px;
+  letter-spacing: -.025em;
+}
+
+.recent-workspace-grid {
+  gap: 10px;
+  padding-bottom: 14px;
+}
+
+.recent-drop-target {
+  min-height: 86px;
+}
+
+.library-nav-header > div.library-create-wrap:first-child {
+  display: block;
+}
+
+.library-nav-header {
+  min-height: 42px;
+  padding: 6px 9px 4px;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--m-line);
+}
+
+.library-nav-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.library-nav-tools .icon-soft {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+
+.library-create-button {
+  min-height: 29px;
+  padding-inline: 9px;
+}
+
+.notes-nav-v2 {
+  gap: 8px;
+  padding: 9px;
+}
+
+.notes-search-v2 {
+  height: 34px;
+}
+
+.library-tree-v2 {
+  padding-bottom: 7px;
+}
+
+.library-tree-section > header {
+  min-height: 34px;
+}
+
+.library-tree-section > header > button:first-child {
+  min-height: 31px;
+}
+
+@media (max-width: 780px) {
+  .mobius-main.page-workbench,
+  .mobius-main.page-sessions,
+  .mobius-main.page-skills {
+    grid-template-rows: 42px minmax(0, 1fr);
+  }
+
+  .atlas-tree-tools { padding-inline: 9px; }
+}

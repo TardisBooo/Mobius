@@ -94,17 +94,38 @@ export function SessionLibraryV2({ revision, indexing, workspaces, health, attac
     ? "交接会自动携带当前 Session 已确认的历史来路。原始记录保持只读，不会被总结、压缩或复制。"
     : "Handoff automatically carries this Session's confirmed history by reference. Source transcripts stay read-only and are never summarized, compressed, or copied.";
   const initialWorkspace = () => { try { const id = localStorage.getItem("mobius.workspace.current"); return workspaces.some((item) => item.workspace.id === id) ? id : workspaces[0]?.workspace.id ?? null; } catch { return workspaces[0]?.workspace.id ?? null; } };
-  const [query, setQuery] = useState(""); const [provider, setProvider] = useState<AgentKind | "all">("all"); const [workspaceId, setWorkspaceId] = useState<string | null>(initialWorkspace); const [checkoutId, setCheckoutId] = useState<string | null>(null);
+  const [query, setQuery] = useState(() => localStorage.getItem("mobius.sessions.query") ?? "");
+  const [provider, setProvider] = useState<AgentKind | "all">(() => {
+    const stored = localStorage.getItem("mobius.sessions.provider");
+    return agents.includes(stored as AgentKind) ? stored as AgentKind : "all";
+  });
+  const [workspaceId, setWorkspaceId] = useState<string | null>(() => {
+    const stored = localStorage.getItem("mobius.sessions.workspace");
+    return stored === "__all__" ? null : stored ?? initialWorkspace();
+  });
+  const [checkoutId, setCheckoutId] = useState<string | null>(() => {
+    const stored = localStorage.getItem("mobius.sessions.checkout");
+    return stored === "__all__" ? null : stored;
+  });
   // Workspaces arrive asynchronously on first entry. Initialise the initial
   // project once, but do not treat a later explicit global scope (`null`) as
   // an uninitialised value and immediately overwrite the user's choice.
   const scopeInitialized = useRef(false);
+  const explicitGlobalScope = useRef(localStorage.getItem("mobius.sessions.workspace") === "__all__");
   const [hits, setHits] = useState<SessionSearchHit[]>([]); const [loading, setLoading] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null); const [loadedMessages, setMessages] = useState<Message[]>([]); const [messageId, setMessageId] = useState<string | null>(null); const [messageLimit, setMessageLimit] = useState(180); const [handoffOpen, setHandoffOpen] = useState(false); const [momeOpen, setMomeOpen] = useState(false); const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(() => localStorage.getItem("mobius.sessions.selected")); const [loadedMessages, setMessages] = useState<Message[]>([]); const [messageId, setMessageId] = useState<string | null>(() => localStorage.getItem("mobius.sessions.message")); const [messageLimit, setMessageLimit] = useState(180); const [handoffOpen, setHandoffOpen] = useState(false); const [momeOpen, setMomeOpen] = useState(false); const [sourcesOpen, setSourcesOpen] = useState(false);
+  const messageStreamRef = useRef<HTMLDivElement>(null);
+  const restoreMessageScroll = useRef<number | null>(null);
   const [lineage, setLineage] = useState<LineageManifest | null>(null);
   const [lineageLoading, setLineageLoading] = useState(false);
   useEffect(() => { if (indexing && momeOpen) setMomeOpen(false); }, [indexing, momeOpen]);
   const [sessionMenu, setSessionMenu] = useState<{ x: number; y: number; hit: SessionSearchHit } | null>(null);
+  useEffect(() => { localStorage.setItem("mobius.sessions.query", query); }, [query]);
+  useEffect(() => { localStorage.setItem("mobius.sessions.provider", provider); }, [provider]);
+  useEffect(() => { localStorage.setItem("mobius.sessions.workspace", workspaceId ?? "__all__"); }, [workspaceId]);
+  useEffect(() => { localStorage.setItem("mobius.sessions.checkout", checkoutId ?? "__all__"); }, [checkoutId]);
+  useEffect(() => { if (selectedId) localStorage.setItem("mobius.sessions.selected", selectedId); }, [selectedId]);
+  useEffect(() => { if (messageId) localStorage.setItem("mobius.sessions.message", messageId); }, [messageId]);
   // Never offer a previous session's message for copying/handoff during fetch.
   const messages = useMemo(() => loadedMessages.filter((message) => message.session_id === selectedId), [loadedMessages, selectedId]);
   const [storedFocus, setStoredFocus] = useState<SessionFocus | null>(() => {
@@ -128,7 +149,7 @@ export function SessionLibraryV2({ revision, indexing, workspaces, health, attac
   useEffect(() => {
     if (scopeInitialized.current || !workspaces.length) return;
     scopeInitialized.current = true;
-    setWorkspaceId((current) => current ?? initialWorkspace());
+    setWorkspaceId((current) => current ?? (explicitGlobalScope.current ? null : initialWorkspace()));
   }, [workspaces]);
   useEffect(() => { if (!effectiveFocus) return; setWorkspaceId(effectiveFocus.workspaceId); setCheckoutId(effectiveFocus.checkoutId); setSelectedId(effectiveFocus.sessionId ?? null); setStoredFocus(null); onFocusConsumed(); }, [effectiveFocus, onFocusConsumed]);
   const search = useCallback(async () => { setLoading(true); try { const next = await desktopApi.querySessions({ query, workspace_id: workspaceId, checkout_id: checkoutId, providers: provider === "all" ? agents : [provider], limit: 240 }); const unique = dedupe(next.filter((hit) => agents.includes(hit.session.provider))); setHits(unique); setSelectedId((current) => unique.some((item) => item.session.id === current) ? current : unique[0]?.session.id ?? null); } catch (reason) { onError(String(reason)); } finally { setLoading(false); } }, [checkoutId, onError, provider, query, revision, workspaceId]);
@@ -146,7 +167,25 @@ export function SessionLibraryV2({ revision, indexing, workspaces, health, attac
       .finally(() => { if (active) setLineageLoading(false); });
     return () => { active = false; };
   }, [onError, selectedId]);
-  useEffect(() => { if (!messageId) return; const frame = window.requestAnimationFrame(() => document.querySelector<HTMLElement>(".message-stream-v2 article.selected")?.scrollIntoView({ block: "center", behavior: "smooth" })); return () => window.cancelAnimationFrame(frame); }, [messageId, messages.length, selectedId]);
+  useEffect(() => {
+    if (!selectedId) return;
+    const saved = Number(localStorage.getItem(`mobius.sessions.scroll.${selectedId}`));
+    restoreMessageScroll.current = Number.isFinite(saved) && saved > 0 ? saved : null;
+  }, [selectedId]);
+  useEffect(() => {
+    if (!messageId) return;
+    const frame = window.requestAnimationFrame(() => {
+      const stream = messageStreamRef.current;
+      if (!stream) return;
+      if (restoreMessageScroll.current !== null) {
+        stream.scrollTop = restoreMessageScroll.current;
+        restoreMessageScroll.current = null;
+      } else {
+        stream.querySelector<HTMLElement>("article.selected")?.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [messageId, messages.length, selectedId]);
   const selectedMessage = messages.find((message) => message.id === messageId) ?? null; const visibleMessages = messages.slice(Math.max(0, messages.length - messageLimit)); const activeWorkspace = workspaces.find((item) => item.workspace.id === workspaceId) ?? null;
   const copy = async (value: string) => { try { await navigator.clipboard.writeText(value); onToast(text.copied); } catch (reason) { onError(String(reason)); } };
   const [resumingId, setResumingId] = useState<string | null>(null);
@@ -172,6 +211,14 @@ export function SessionLibraryV2({ revision, indexing, workspaces, health, attac
     } catch (reason) { onError(String(reason)); }
   };
   const selectScope = (nextWorkspace: string | null, nextCheckout: string | null) => { setWorkspaceId(nextWorkspace); setCheckoutId(nextCheckout); if (nextWorkspace) localStorage.setItem("mobius.workspace.current", nextWorkspace); };
+  const selectSession = (sessionId: string, nextMessageId: string | null = null) => {
+    // Keep the identity synchronously so rapid navigation cannot race React's
+    // persistence effect and lose the Session the person was reading.
+    localStorage.setItem("mobius.sessions.selected", sessionId);
+    if (nextMessageId) localStorage.setItem("mobius.sessions.message", nextMessageId);
+    setSelectedId(sessionId);
+    setMessageId(nextMessageId);
+  };
   const activityGroups = useMemo(() => {
     const groups: Record<AgentActivityBucket, SessionSearchHit[]> = { needs_attention: [], running: [], recent: [] };
     for (const hit of hits) groups[activityBucket(hit)].push(hit);
@@ -180,7 +227,7 @@ export function SessionLibraryV2({ revision, indexing, workspaces, health, attac
   const activityLabels: Record<AgentActivityBucket, string> = locale === "zh-CN"
     ? { needs_attention: "需要处理", running: "正在运行", recent: "最近会话" }
     : { needs_attention: "Needs attention", running: "Running", recent: "Recent" };
-  const renderSessionRow = (hit: SessionSearchHit) => <button key={hit.session.id} className={hit.session.id === selectedId ? "session-list-row active" : "session-list-row"} onContextMenu={(event) => { event.preventDefault(); setSessionMenu({ x: event.clientX, y: event.clientY, hit }); }} onClick={() => { setSelectedId(hit.session.id); setMessageId(hit.message?.id ?? null); }}><span className={`provider-pill ${hit.session.provider}`}>{name(hit.session.provider)}</span><div><strong>{hit.session.title}</strong><SessionActivityPreview hit={hit} query={query}/><small>{hit.session.updated_at.slice(0, 16).replace("T", " · ")} · {hit.session.state}</small></div>{hit.message ? <span className="match-marker">m{hit.message.ordinal}<ChevronRight size={13}/></span> : null}</button>;
+  const renderSessionRow = (hit: SessionSearchHit) => <button key={hit.session.id} className={hit.session.id === selectedId ? "session-list-row active" : "session-list-row"} onContextMenu={(event) => { event.preventDefault(); setSessionMenu({ x: event.clientX, y: event.clientY, hit }); }} onClick={() => selectSession(hit.session.id, hit.message?.id ?? null)}><span className={`provider-pill ${hit.session.provider}`}>{name(hit.session.provider)}</span><div><strong>{hit.session.title}</strong><SessionActivityPreview hit={hit} query={query}/><small>{hit.session.updated_at.slice(0, 16).replace("T", " · ")} · {hit.session.state}</small></div>{hit.message ? <span className="match-marker">m{hit.message.ordinal}<ChevronRight size={13}/></span> : null}</button>;
 
   return <div className="session-library-v2">
     <section className="session-results-v2" aria-label={locale === "zh-CN" ? "Agent 会话" : "Agent sessions"}><header><div className="session-search-v2"><Search size={17}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={text.search}/></div><label className="session-workspace-filter"><span>{locale === "zh-CN" ? "工作区" : "Workspace"}</span><select aria-label={locale === "zh-CN" ? "筛选工作区" : "Filter workspace"} value={workspaceId ?? ""} onChange={(event) => selectScope(event.target.value || null, null)}><option value="">{text.all}</option>{workspaces.map((workspace) => <option key={workspace.workspace.id} value={workspace.workspace.id}>{workspace.workspace.display_name}</option>)}</select></label>{activeWorkspace?.checkouts.length ? <label className="session-workspace-filter"><span>{locale === "zh-CN" ? "检出目录" : "Checkout"}</span><select aria-label={locale === "zh-CN" ? "筛选检出目录" : "Filter checkout"} value={checkoutId ?? ""} onChange={(event) => selectScope(activeWorkspace.workspace.id, event.target.value || null)}><option value="">{locale === "zh-CN" ? "全部检出目录" : "All checkouts"}</option>{activeWorkspace.checkouts.map((checkout) => <option key={checkout.id} value={checkout.id}>{checkout.canonical_path}</option>)}</select></label> : null}<div className="session-filter-v2"><button className={provider === "all" ? "active" : ""} onClick={() => setProvider("all")}>{text.all}</button>{agents.map((agent) => <button key={agent} className={provider === agent ? "active" : ""} onClick={() => setProvider(agent)}>{name(agent)}</button>)}</div><div className="session-library-actions"><button className="soft-button" type="button" onClick={() => setSourcesOpen(true)}><FolderCog size={15}/>{text.sources}</button><button className="soft-button session-mome-trigger" type="button" onClick={() => setMomeOpen(true)}><Sparkles size={15}/>{text.mome}</button></div></header><div className="session-result-list-v2">{loading ? <div className="session-loading"><LoaderCircle className="spin" size={18}/>{text.loading}</div> : hits.length ? (["needs_attention", "running", "recent"] as AgentActivityBucket[]).map((bucket) => activityGroups[bucket].length ? <section className="agent-activity-group" key={bucket}><header><span>{activityLabels[bucket]}</span><small>{activityGroups[bucket].length}</small></header>{activityGroups[bucket].map(renderSessionRow)}</section> : null) : <div className="session-empty"><Archive size={27}/><strong>{text.empty}</strong></div>}</div></section>
@@ -192,11 +239,11 @@ export function SessionLibraryV2({ revision, indexing, workspaces, health, attac
         <button className="icon-soft" aria-label={text.copyReference} title={text.copyReference} disabled={!selectedMessage} onClick={() => selectedMessage && void copy(referenceText(selected.session, selectedMessage))}><Link2 size={16}/></button>
       </div></header>
       <div className="message-toolbar"><span>{text.messages}</span><small>{messages.length}</small></div>
-      <div className="message-stream-v2">{messages.length > visibleMessages.length ? <button className="earlier-messages" onClick={() => setMessageLimit((current) => current + 180)}>{text.loadEarlier}</button> : null}{visibleMessages.map((message) => { const matched = selected.message?.id === message.id; return <article key={message.id} className={`${message.id === messageId ? "selected" : ""} ${matched ? "has-search-match" : ""} ${message.role}`} onClick={() => setMessageId(message.id)} tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setMessageId(message.id); } }}><header><span>{message.role}</span><small>m{message.ordinal}</small></header><p>{matched ? <HighlightedText value={message.content} query={query}/> : message.content}</p></article>; })}</div>
+      <div ref={messageStreamRef} className="message-stream-v2" onScroll={(event) => { if (selectedId) localStorage.setItem(`mobius.sessions.scroll.${selectedId}`, String(event.currentTarget.scrollTop)); }}>{messages.length > visibleMessages.length ? <button className="earlier-messages" onClick={() => setMessageLimit((current) => current + 180)}>{text.loadEarlier}</button> : null}{visibleMessages.map((message) => { const matched = selected.message?.id === message.id; return <article key={message.id} className={`${message.id === messageId ? "selected" : ""} ${matched ? "has-search-match" : ""} ${message.role}`} onClick={() => setMessageId(message.id)} tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setMessageId(message.id); } }}><header><span>{message.role}</span><small>m{message.ordinal}</small></header><p>{matched ? <HighlightedText value={message.content} query={query}/> : message.content}</p></article>; })}</div>
     </> : <div className="session-empty reader"><PanelRight size={28}/><strong>{text.empty}</strong></div>}</main>
     <aside className="session-context-v2" aria-label={locale === "zh-CN" ? "会话上下文" : "Session context"}>{selected ? <><header><strong>{locale === "zh-CN" ? "上下文" : "Context"}</strong></header><div className="reader-explanation"><ShieldCheck size={14}/><span>{referenceHint}</span></div><dl><dt>Harness</dt><dd>{name(selected.session.provider)}</dd><dt>{locale === "zh-CN" ? "工作区" : "Workspace"}</dt><dd>{activeWorkspace?.workspace.display_name ?? text.unassigned}</dd><dt>Checkout</dt><dd>{selected.session.checkout_id ?? text.unassigned}</dd><dt>{text.source}</dt><dd>{selected.session.provider_session_id}</dd><dt>{locale === "zh-CN" ? "原始记录" : "Transcript"}</dt><dd><code>{selected.session.source_path}</code><small>{locale === "zh-CN" ? "只读" : "read-only"}</small></dd></dl><SessionMemoryPath lineage={lineage} currentSessionId={selected.session.id} loading={lineageLoading} locale={locale}/></> : null}</aside>
     {sessionMenu ? <ContextMenu x={sessionMenu.x} y={sessionMenu.y} onClose={() => setSessionMenu(null)} items={[
-      { id: "open-session", label: text.openSession, icon: <PanelRight size={14}/>, onSelect: () => { setSelectedId(sessionMenu.hit.session.id); setMessageId(sessionMenu.hit.message?.id ?? null); } },
+      { id: "open-session", label: text.openSession, icon: <PanelRight size={14}/>, onSelect: () => selectSession(sessionMenu.hit.session.id, sessionMenu.hit.message?.id ?? null) },
       { id: "resume-session", label: text.resume, icon: <CirclePlay size={14}/>, disabled: !sessionMenu.hit.session.capabilities.includes("native_resume"), onSelect: () => { const id = sessionMenu.hit.session.id; void desktopApi.resumeSession(id).then((terminal) => openTerminal(terminal, id)).catch((reason) => onError(String(reason))); } },
       { id: "copy-source", label: text.copySource, icon: <Copy size={14}/>, onSelect: () => void copy(sessionMenu.hit.session.source_path) },
       { id: "copy-reference", label: text.copyReference, icon: <Link2 size={14}/>, disabled: !sessionMenu.hit.message, onSelect: () => { if (sessionMenu.hit.message) void copy(referenceText(sessionMenu.hit.session, sessionMenu.hit.message)); } },

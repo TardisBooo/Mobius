@@ -33,8 +33,11 @@ function language(locale: "zh-CN" | "en") {
 export function App() {
   const { locale, setLocale } = useI18n();
   const text = language(locale);
-  const [page, setPage] = useState<Page>("sessions");
-  const [workbenchPanel, setWorkbenchPanel] = useState<"workspaces" | "terminal">("workspaces");
+  const [page, setPage] = useState<Page>(() => {
+    const saved = localStorage.getItem("mobius.page");
+    return saved === "workbench" || saved === "notes" || saved === "skills" ? saved : "sessions";
+  });
+  const [workbenchPanel, setWorkbenchPanel] = useState<"workspaces" | "terminal">(() => localStorage.getItem("mobius.workbench.panel") === "terminal" ? "terminal" : "workspaces");
   const [libraryMode, setLibraryMode] = useState<"documents" | "canvas">("documents");
   // The Library is the only catalog for documents *and* boards.  This value
   // is deliberately navigation state rather than a separate canvas-library
@@ -75,6 +78,8 @@ export function App() {
     return () => window.cancelAnimationFrame(frame);
   }, [theme]);
   useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => { localStorage.setItem("mobius.page", page); }, [page]);
+  useEffect(() => { localStorage.setItem("mobius.workbench.panel", workbenchPanel); }, [workbenchPanel]);
   useEffect(() => {
     if (page !== "sessions" || !Object.keys(attachedSessions).length) return;
     let active = true;
@@ -174,7 +179,7 @@ export function App() {
       }}
       title={item.label}
     >{item.icon}<span>{item.label}</span></button>)}<div className="rail-bottom"><i/><small>{desktopApi.runtime === "desktop" ? text.desktop : text.browser}</small></div></aside>
-    <main className="mobius-main"><header className="pagebar"><div><span>{page === "workbench" ? workbenchPanel === "terminal" ? "WORKSPACE / POWERSHELL" : "PROJECTS / WORKSPACES" : page === "notes" ? "WORKSPACE / LIBRARY" : "AGENTS / RECENT ACTIVITY"}</span><h1>{title}</h1></div>{page === "workbench" ? <div className="pagebar-actions">{workbenchPanel === "terminal" ? <><button className="soft-button" type="button" onClick={() => { setTerminalFocus(false); setWorkbenchPanel("workspaces"); }}><FolderGit2 size={16}/>{text.showWorkspaces}</button><button className="soft-button" type="button" onClick={() => setTerminalFocus((value) => !value)}>{terminalFocus ? <ChevronDown size={16}/> : <PanelRight size={16}/>} {terminalFocus ? text.exitFocus : text.focus}</button></> : <><button className="soft-button" type="button" onClick={() => setWorkbenchPanel("terminal")}><TerminalSquare size={16}/>{locale === "zh-CN" ? `终端 ${terminalCount}` : `Terminals ${terminalCount}`}</button><button className="primary-button" type="button" onClick={() => void createFreeTerminal()}><Plus size={16}/>{locale === "zh-CN" ? "新建 PowerShell" : "New PowerShell"}</button></>}</div> : page === "sessions" ? <button className="primary-button" type="button" onClick={() => void refresh()} disabled={scanning}>{scanning ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>} {text.scan}</button> : page === "skills" ? <button className="soft-button" type="button" onClick={() => setPage("workbench")}><TerminalSquare size={16}/>{text.workbench}</button> : null}</header><section className="mobius-page-host">
+    <main className={`mobius-main page-${page}`}><header className={`pagebar pagebar-${page}`}><div><span>{page === "workbench" ? workbenchPanel === "terminal" ? "WORKSPACE / POWERSHELL" : "PROJECTS / WORKSPACES" : page === "notes" ? "WORKSPACE / LIBRARY" : "AGENTS / RECENT ACTIVITY"}</span><h1>{title}</h1></div>{page === "workbench" ? <div className="pagebar-actions">{workbenchPanel === "terminal" ? <><button className="soft-button" type="button" onClick={() => { setTerminalFocus(false); setWorkbenchPanel("workspaces"); }}><FolderGit2 size={16}/>{text.showWorkspaces}</button><button className="soft-button" type="button" onClick={() => setTerminalFocus((value) => !value)}>{terminalFocus ? <ChevronDown size={16}/> : <PanelRight size={16}/>} {terminalFocus ? text.exitFocus : text.focus}</button></> : <><button className="soft-button" type="button" onClick={() => setWorkbenchPanel("terminal")}><TerminalSquare size={16}/>{locale === "zh-CN" ? `终端 ${terminalCount}` : `Terminals ${terminalCount}`}</button><button className="primary-button" type="button" onClick={() => void createFreeTerminal()}><Plus size={16}/>{locale === "zh-CN" ? "新建 PowerShell" : "New PowerShell"}</button></>}</div> : page === "sessions" ? <button className="primary-button" type="button" onClick={() => void refresh()} disabled={scanning}>{scanning ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>} {text.scan}</button> : page === "skills" ? <button className="soft-button" type="button" onClick={() => setPage("workbench")}><TerminalSquare size={16}/>{text.workbench}</button> : null}</header><section className="mobius-page-host">
       {page === "workbench" && workbenchPanel === "workspaces" ? <Suspense fallback={<Loading label={text.loading}/>}><WorkspaceAtlas workspaces={workspaces} reload={reload} openTerminal={openTerminal} onError={setError} onToast={setToast} locale={locale} onOpenSessions={(focus) => { sessionStorage.setItem("mobius.session.focus", JSON.stringify(focus)); setPage("sessions"); }}/></Suspense> : null}
       {page === "workbench" && workbenchPanel === "terminal" ? <div className="mobius-terminal"><Suspense fallback={<Loading label={text.loading}/> }><TerminalPage workspaces={workspaces} requestedTerminal={requestedTerminal} onConsumed={() => setRequestedTerminal(null)} onError={setError} focusMode={terminalFocus} onExitFocus={() => setTerminalFocus(false)}/></Suspense></div> : null}
       {page === "sessions" ? <Suspense fallback={<Loading label={text.loading}/>}><SessionLibraryV2 revision={sessionRevision} indexing={indexing} workspaces={workspaces} health={health} attachedSessionIds={Object.keys(attachedSessions)} openTerminal={(terminal, sessionId) => { if (sessionId) setAttachedSessions((current) => ({ ...current, [sessionId]: terminal.id })); openTerminal(terminal); }} onError={setError} onToast={setToast} locale={locale} focus={null} onFocusConsumed={() => undefined}/></Suspense> : null}

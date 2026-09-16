@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
-import { Archive, ArrowRight, Braces, ChevronDown, ChevronRight, CirclePlay, File, Folder, FolderGit2, FolderOpen, FolderPlus, GitBranch, GripVertical, LoaderCircle, PanelRight, Pin, Plus, Search, TerminalSquare, Workflow, X } from "lucide-react";
+import { Archive, ArrowDownAZ, ArrowRight, Braces, ChevronDown, ChevronRight, CirclePlay, Clock3, File, Folder, FolderGit2, FolderOpen, FolderPlus, GitBranch, GripVertical, LoaderCircle, PanelRight, Pin, Plus, Search, TerminalSquare, Workflow, X } from "lucide-react";
 import { AccessibleDialog } from "./AccessibleDialog";
 import { ContextMenu } from "./ContextMenu";
 import { SessionLineagePanel } from "./SessionLineagePanel";
@@ -9,6 +9,18 @@ import type { Checkout, DirectoryEntry, RelayGraph, SessionSearchHit, SkillInfo,
 export type SessionFocus = { workspaceId: string; checkoutId: string | null; sessionId?: string };
 
 type Locale = "zh-CN" | "en";
+type WorkspaceSort = "updated" | "name";
+
+function storedStringSet(key: string) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(key) ?? "[]") as unknown;
+    return new Set(Array.isArray(raw) ? raw.filter((value): value is string => typeof value === "string") : []);
+  } catch { return new Set<string>(); }
+}
+
+function storedWorkspaceSort(): WorkspaceSort {
+  return localStorage.getItem("mobius.workspace.tree.sort") === "name" ? "name" : "updated";
+}
 
 function words(locale: Locale) {
   const zh = locale === "zh-CN";
@@ -78,9 +90,10 @@ export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onTo
 }) {
   const text = words(locale);
   const [query, setQuery] = useState("");
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selectedCheckoutId, setSelectedCheckoutId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(() => storedStringSet("mobius.workspace.tree.expanded"));
+  const [selectedId, setSelectedId] = useState<string | null>(() => localStorage.getItem("mobius.workspace.current"));
+  const [selectedCheckoutId, setSelectedCheckoutId] = useState<string | null>(() => localStorage.getItem("mobius.workspace.checkout"));
+  const [sort, setSort] = useState<WorkspaceSort>(storedWorkspaceSort);
   const [workspaceMenu, setWorkspaceMenu] = useState<{ x: number; y: number; workspaceId: string } | null>(null);
   const [adding, setAdding] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -89,6 +102,8 @@ export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onTo
   // the state update has committed in a WebView. This gives the drop target a
   // reliable fallback when DataTransfer#getData is empty during drop.
   const dragPayload = useRef<string | null>(null);
+  const treeScrollRef = useRef<HTMLDivElement>(null);
+  const workareaScrollRef = useRef<HTMLElement>(null);
   const [path, setPath] = useState("E:\\Workspaces\\");
   const addPathRef = useRef<HTMLInputElement>(null);
   const [pins, setPins] = useState<string[]>(() => {
@@ -99,6 +114,19 @@ export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onTo
   });
 
   useEffect(() => { localStorage.setItem("mobius.workspace.recent.v2", JSON.stringify(pins)); }, [pins]);
+  useEffect(() => { localStorage.setItem("mobius.workspace.tree.expanded", JSON.stringify([...expanded])); }, [expanded]);
+  useEffect(() => { localStorage.setItem("mobius.workspace.tree.sort", sort); }, [sort]);
+  useEffect(() => {
+    const restore = (element: HTMLElement | null, key: string) => {
+      const value = Number(localStorage.getItem(key));
+      if (element && Number.isFinite(value) && value > 0) element.scrollTop = value;
+    };
+    const frame = window.requestAnimationFrame(() => {
+      restore(treeScrollRef.current, "mobius.workspace.tree.scroll-top");
+      restore(workareaScrollRef.current, "mobius.workspace.workarea.scroll-top");
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
   useEffect(() => {
     const marker = "mobius.workspace.recent.v2.seeded";
     if (localStorage.getItem(marker) || !workspaces.length) return;
@@ -112,8 +140,11 @@ export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onTo
 
   const filtered = useMemo(() => {
     const value = query.trim().toLocaleLowerCase();
-    return value ? workspaces.filter((item) => `${item.workspace.display_name} ${item.workspace.canonical_path} ${item.checkouts.map((checkout) => checkout.branch ?? checkout.kind).join(" ")}`.toLocaleLowerCase().includes(value)) : workspaces;
-  }, [query, workspaces]);
+    const matching = value ? workspaces.filter((item) => `${item.workspace.display_name} ${item.workspace.canonical_path} ${item.checkouts.map((checkout) => checkout.branch ?? checkout.kind).join(" ")}`.toLocaleLowerCase().includes(value)) : workspaces;
+    return [...matching].sort((left, right) => sort === "name"
+      ? left.workspace.display_name.localeCompare(right.workspace.display_name, locale, { sensitivity: "base" })
+      : right.workspace.updated_at.localeCompare(left.workspace.updated_at) || left.workspace.display_name.localeCompare(right.workspace.display_name, locale, { sensitivity: "base" }));
+  }, [locale, query, sort, workspaces]);
   const recent = pins.map((id) => workspaces.find((item) => item.workspace.id === id)).filter((item): item is WorkspaceView => Boolean(item));
   const selected = workspaces.find((item) => item.workspace.id === selectedId) ?? recent[0] ?? filtered[0] ?? null;
   const pin = (id: string) => setPins((current) => current.includes(id) ? current : [id, ...current]);
@@ -124,6 +155,8 @@ export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onTo
     // The session library deliberately opens in the same workspace the person
     // was just inspecting; this is a local UI preference, never transcript data.
     localStorage.setItem("mobius.workspace.current", id);
+    if (checkoutId) localStorage.setItem("mobius.workspace.checkout", checkoutId);
+    else localStorage.removeItem("mobius.workspace.checkout");
     setExpanded((current) => new Set(current).add(id));
   };
   const beginDrag = (event: DragEvent<HTMLElement>, id: string) => {
@@ -166,9 +199,8 @@ export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onTo
 
   return <div className="workspace-atlas">
     <aside className="atlas-project-tree" aria-label={text.tree}>
-      <header className="atlas-tree-header"><div><span>WORKSPACE MAP</span><strong>{text.tree}</strong></div><button className="icon-soft atlas-add" type="button" onClick={() => setAdding(true)} title={text.add}><FolderPlus size={17}/></button></header>
-      <label className="atlas-filter"><Search size={15}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={locale === "zh-CN" ? "查找工程或分支" : "Find a project or branch"}/></label>
-      <div className="atlas-tree-scroll">{filtered.map((item) => {
+      <div className="atlas-tree-tools"><label className="atlas-filter"><Search size={15}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={locale === "zh-CN" ? "查找工程或分支" : "Find a project or branch"}/></label><label className="atlas-sort" title={locale === "zh-CN" ? "工程树排序" : "Project tree sort"}>{sort === "updated" ? <Clock3 size={14}/> : <ArrowDownAZ size={14}/>}<select aria-label={locale === "zh-CN" ? "工程树排序" : "Project tree sort"} value={sort} onChange={(event) => setSort(event.target.value as WorkspaceSort)}><option value="updated">{locale === "zh-CN" ? "最近" : "Recent"}</option><option value="name">{locale === "zh-CN" ? "名称" : "Name"}</option></select></label></div>
+      <div ref={treeScrollRef} className="atlas-tree-scroll" onScroll={(event) => localStorage.setItem("mobius.workspace.tree.scroll-top", String(event.currentTarget.scrollTop))}>{filtered.map((item) => {
         const isOpen = expanded.has(item.workspace.id);
         const isSelected = selected?.workspace.id === item.workspace.id;
         return <section key={item.workspace.id} className={`atlas-tree-item ${isSelected ? "selected" : ""}`}>
@@ -181,8 +213,8 @@ export function WorkspaceAtlas({ workspaces, reload, openTerminal, onError, onTo
         </section>;
       })}{!filtered.length ? <div className="atlas-tree-empty">{text.noWorkspace}</div> : null}</div>
     </aside>
-    <section className="atlas-workarea">
-      <header className="atlas-recent-header"><div><span>YOUR WORKBENCH</span><h2>{text.recent}</h2><p>{text.recentHint}</p></div><button className="primary-button" type="button" onClick={() => setAdding(true)}><FolderPlus size={16}/>{text.add}</button></header>
+    <section ref={workareaScrollRef} className="atlas-workarea" onScroll={(event) => localStorage.setItem("mobius.workspace.workarea.scroll-top", String(event.currentTarget.scrollTop))}>
+      <header className="atlas-recent-header"><div><h2>{text.recent}</h2></div><button className="primary-button" type="button" onClick={() => setAdding(true)}><FolderPlus size={16}/>{text.add}</button></header>
       <section className={`recent-workspace-grid ${dropActive ? "drop-active" : ""}`} onDragEnter={(event) => { const types = [...event.dataTransfer.types]; if (dragPayload.current || draggingId || types.length === 0 || types.includes("application/x-mobius-workspace") || types.includes("text/plain")) setDropActive(true); }} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setDropActive(true); }} onDragLeave={(event) => { const nextTarget = event.relatedTarget as Node | null; if (!nextTarget || !event.currentTarget.contains(nextTarget)) setDropActive(false); }} onDrop={dropProject} aria-label={text.recent}>
         {recent.map((item) => <RecentWorkspaceCard key={item.workspace.id} item={item} selected={selected?.workspace.id === item.workspace.id} onSelect={() => select(item.workspace.id)} onRemove={() => unpin(item.workspace.id)} onOpen={() => { const checkout = item.checkouts[0]; if (checkout) void desktopApi.createTerminal(checkout.canonical_path, `PowerShell · ${item.workspace.display_name}`).then(openTerminal).catch((reason) => onError(String(reason))); }} onContextMenu={(event) => { event.preventDefault(); setWorkspaceMenu({ x: event.clientX, y: event.clientY, workspaceId: item.workspace.id }); }} text={text}/>) }
         <div className="recent-drop-target" aria-label={text.drop}><Plus size={18}/><span>{text.drop}</span></div>
@@ -210,14 +242,24 @@ function RecentWorkspaceCard({ item, selected, onSelect, onRemove, onOpen, onCon
 
 function WorkspaceInspector({ item, initialCheckoutId, openTerminal, onError, onOpenSessions, locale }: { item: WorkspaceView; initialCheckoutId: string | null; openTerminal: (terminal: TerminalInfo) => void; onError: (message: string) => void; onOpenSessions: (focus: SessionFocus) => void; locale: Locale }) {
   const text = words(locale);
-  const [tab, setTab] = useState<"sessions" | "files" | "worktrees" | "skills" | "handoffs">("sessions");
+  type InspectorTab = "sessions" | "files" | "worktrees" | "skills" | "handoffs";
+  const tabKey = `mobius.workspace.inspector.${item.workspace.id}.tab`;
+  const [tab, setTab] = useState<InspectorTab>(() => {
+    const stored = localStorage.getItem(tabKey);
+    return stored === "files" || stored === "worktrees" || stored === "skills" || stored === "handoffs" ? stored : "sessions";
+  });
   // A project opens at its aggregate scope. Selecting the first worktree by
   // default hid valid sessions belonging to sibling worktrees.
   const [checkoutId, setCheckoutId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionSearchHit[]>([]);
   const [relayGraph, setRelayGraph] = useState<RelayGraph>({ chains: [], edges: [], handoffs: [] });
   const [loading, setLoading] = useState(false);
-  useEffect(() => { setCheckoutId(initialCheckoutId); setTab("sessions"); }, [initialCheckoutId, item.workspace.id]);
+  useEffect(() => {
+    setCheckoutId(initialCheckoutId);
+    const stored = localStorage.getItem(`mobius.workspace.inspector.${item.workspace.id}.tab`);
+    setTab(stored === "files" || stored === "worktrees" || stored === "skills" || stored === "handoffs" ? stored : "sessions");
+  }, [initialCheckoutId, item.workspace.id]);
+  useEffect(() => { localStorage.setItem(tabKey, tab); }, [tab, tabKey]);
   const checkout = item.checkouts.find((candidate) => candidate.id === checkoutId) ?? item.checkouts[0];
   const loadSessions = useCallback(async () => {
     setLoading(true);
@@ -258,18 +300,39 @@ function WorkspaceRelayGraph({ graph, loading, locale, onOpenSession, workspace,
 
 function DirectoryExplorer({ checkout, onError, text }: { checkout: Checkout; onError: (message: string) => void; text: ReturnType<typeof words> }) {
   const [entries, setEntries] = useState<Record<string, DirectoryEntry[]>>({});
-  const [open, setOpen] = useState<Set<string>>(() => new Set([""]));
+  const storageKey = `mobius.directory.${checkout.id}`;
+  const [open, setOpen] = useState<Set<string>>(() => {
+    const saved = storedStringSet(`${storageKey}.open`);
+    saved.add("");
+    return saved;
+  });
   const [loading, setLoading] = useState<Set<string>>(() => new Set());
+  const explorerRef = useRef<HTMLDivElement>(null);
   const load = useCallback(async (relativePath: string) => {
     setLoading((current) => new Set(current).add(relativePath));
     try { const next = await desktopApi.listWorkspaceDirectory(checkout.id, relativePath); setEntries((current) => ({ ...current, [relativePath]: next })); }
     catch (reason) { onError(String(reason)); }
     finally { setLoading((current) => { const next = new Set(current); next.delete(relativePath); return next; }); }
   }, [checkout.id, onError]);
-  useEffect(() => { setEntries({}); setOpen(new Set([""])); void load(""); }, [checkout.id, load]);
+  useEffect(() => {
+    setEntries({});
+    const saved = storedStringSet(`mobius.directory.${checkout.id}.open`);
+    saved.add("");
+    setOpen(saved);
+    void load("");
+  }, [checkout.id, load]);
+  useEffect(() => { localStorage.setItem(`${storageKey}.open`, JSON.stringify([...open])); }, [open, storageKey]);
+  useEffect(() => {
+    if (!entries[""]) return;
+    const frame = window.requestAnimationFrame(() => {
+      const scrollTop = Number(localStorage.getItem(`${storageKey}.scroll-top`));
+      if (explorerRef.current && Number.isFinite(scrollTop) && scrollTop > 0) explorerRef.current.scrollTop = scrollTop;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [entries, storageKey]);
   const toggle = (entry: DirectoryEntry) => { if (entry.kind !== "directory") return; setOpen((current) => { const next = new Set(current); next.has(entry.relative_path) ? next.delete(entry.relative_path) : next.add(entry.relative_path); return next; }); if (!entries[entry.relative_path]) void load(entry.relative_path); };
   const render = (parent: string, depth: number): ReactNode => loading.has(parent) && !entries[parent] ? <div className="directory-loading" style={{ paddingInlineStart: 16 + depth * 18 }}><LoaderCircle className="spin" size={14}/>{text.loading}</div> : entries[parent]?.map((entry) => <div key={entry.relative_path}><button className="directory-explorer-row" style={{ paddingInlineStart: 14 + depth * 18 }} disabled={entry.kind !== "directory"} onClick={() => toggle(entry)}>{entry.kind === "directory" ? entry.has_children ? open.has(entry.relative_path) ? <ChevronDown size={14}/> : <ChevronRight size={14}/> : <span/> : <span/>}{entry.kind === "directory" ? open.has(entry.relative_path) ? <FolderOpen size={15}/> : <Folder size={15}/> : <File size={15}/>}<span>{entry.name}</span></button>{entry.kind === "directory" && open.has(entry.relative_path) ? render(entry.relative_path, depth + 1) : null}</div>);
-  return <div className="directory-explorer"><header><FolderGit2 size={15}/><code>{checkout.canonical_path}</code></header>{render("", 0) ?? <div className="atlas-empty compact"><Folder size={22}/><strong>{text.noFiles}</strong></div>}</div>;
+  return <div ref={explorerRef} className="directory-explorer" onScroll={(event) => localStorage.setItem(`${storageKey}.scroll-top`, String(event.currentTarget.scrollTop))}><header><FolderGit2 size={15}/><code>{checkout.canonical_path}</code></header>{render("", 0) ?? <div className="atlas-empty compact"><Folder size={22}/><strong>{text.noFiles}</strong></div>}</div>;
 }
 
 function WorkspaceSkills({ checkouts, checkoutId, onError, locale }: { checkouts: Checkout[]; checkoutId: string | null; onError: (message: string) => void; locale: Locale }) {
