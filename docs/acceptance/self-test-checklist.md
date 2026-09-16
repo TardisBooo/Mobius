@@ -4,6 +4,7 @@ Revision **0.3.19**. Updated 2026-09-16.
 
 JSON is the source of truth: `docs/acceptance/self-test-checklist.json`.
 Regenerate this file with `node apps/desktop/scripts/sync-self-test-checklist.mjs`.
+Verify with `node apps/desktop/scripts/sync-self-test-checklist.mjs --check`.
 
 ## Update policy
 
@@ -11,6 +12,8 @@ Regenerate this file with `node apps/desktop/scripts/sync-self-test-checklist.mj
 - After any UI label, aria-label, dialog, or navigation change, update locators in the matching row.
 - A smoke run that writes ui-smoke-consolidated.json may refresh last_result fields only.
 - Do not delete a row because a test timed out. Mark last_result and keep the expected product contract.
+- Keep revision equal to the Cargo workspace version.
+- Run `pnpm --dir apps/desktop check:checklist` after locator edits and before a release commit.
 
 ## Fixture
 

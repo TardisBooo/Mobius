@@ -15,7 +15,9 @@
     "JSON is the source of truth. Regenerating markdown never invents rows.",
     "After any UI label, aria-label, dialog, or navigation change, update locators in the matching row.",
     "A smoke run that writes ui-smoke-consolidated.json may refresh last_result fields only.",
-    "Do not delete a row because a test timed out. Mark last_result and keep the expected product contract."
+    "Do not delete a row because a test timed out. Mark last_result and keep the expected product contract.",
+    "Keep revision equal to the Cargo workspace version.",
+    "Run `pnpm --dir apps/desktop check:checklist` after locator edits and before a release commit."
   ],
   "groups": [
     {

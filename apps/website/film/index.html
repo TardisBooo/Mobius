@@ -61,14 +61,23 @@
           <p class="lede" id="p4">A project graph records who continued the work, and from which session.</p>
         </div>
       </section>
-      <section id="s5" class="clip" data-start="23.8" data-duration="8.2" data-track-index="5">
+      <section id="s5" class="clip" data-start="23.8" data-duration="5.2" data-track-index="5">
         <div class="shot" style="background-image:url('assets/multimedia-canvas.png')"></div>
         <div class="veil"></div>
         <div class="copy">
           <p class="kicker">04 / LIBRARY</p>
           <h2 id="h5">Notes, canvas, mounts, skills.</h2>
           <p class="lede" id="p5">Keep supporting work local. Search is FTS/BM25, not a vector backend.</p>
-          <p><span class="chip">Windows preview</span><span class="chip">MIT</span><span class="chip">Local-first</span></p>
+        </div>
+      </section>
+      <section id="s6" class="clip" data-start="28.6" data-duration="3.4" data-track-index="6">
+        <div class="end fill">
+          <div>
+            <p class="kicker">TARDISBOOO / MOBIUS · v0.3.19</p>
+            <h1 id="end1">Switch agents.</h1>
+            <h1 id="end2">Keep the work.</h1>
+            <p class="lede" id="end3">Windows preview · MIT · local-first</p>
+          </div>
         </div>
       </section>
     </div>
@@ -86,6 +95,9 @@
       tl.from("#p4", { y: 16, opacity: 0, duration: 0.45, ease: "power2.out" }, 17.85);
       tl.from("#h5", { y: 28, opacity: 0, duration: 0.55, ease: "power3.out" }, 23.8);
       tl.from("#p5", { y: 16, opacity: 0, duration: 0.45, ease: "power2.out" }, 24.05);
+      tl.from("#end1", { y: 28, opacity: 0, duration: 0.5, ease: "power3.out" }, 28.75);
+      tl.from("#end2", { y: 28, opacity: 0, duration: 0.5, ease: "power3.out" }, 28.95);
+      tl.from("#end3", { y: 14, opacity: 0, duration: 0.4, ease: "power2.out" }, 29.2);
       window.__timelines["mobius-film"] = tl;
     </script>
   </body>

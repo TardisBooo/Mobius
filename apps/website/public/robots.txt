@@ -7,6 +7,9 @@ Allow: /
 User-agent: ChatGPT-User
 Allow: /
 
+User-agent: OAI-SearchBot
+Allow: /
+
 User-agent: PerplexityBot
 Allow: /
 
@@ -16,10 +19,37 @@ Allow: /
 User-agent: anthropic-ai
 Allow: /
 
+User-agent: Claude-User
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
 User-agent: Google-Extended
 Allow: /
 
+User-agent: Googlebot
+Allow: /
+
 User-agent: Bingbot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: meta-externalagent
+Allow: /
+
+User-agent: FacebookBot
 Allow: /
 
 Sitemap: http://8.137.87.76/mobius/sitemap.xml

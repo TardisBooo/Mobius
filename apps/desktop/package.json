@@ -10,7 +10,8 @@
     "check": "tsc --noEmit",
     "test:window-drag": "node --test tests/window-drag-config.test.mjs",
     "test:smoke": "playwright test --config playwright.smoke.config.ts",
-    "sync:checklist": "node scripts/sync-self-test-checklist.mjs"
+    "sync:checklist": "node scripts/sync-self-test-checklist.mjs",
+    "check:checklist": "node scripts/sync-self-test-checklist.mjs --check"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

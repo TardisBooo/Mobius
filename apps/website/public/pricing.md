@@ -1,6 +1,6 @@
 # Pricing — MÖBIUS
 
-Möbius is open-source desktop software under the MIT License.
+Möbius is open-source desktop software under the MIT License. There is no paid plan in v0.3.19.
 
 ## Preview build
 
@@ -8,6 +8,7 @@ Möbius is open-source desktop software under the MIT License.
 - Platform: Windows
 - Includes: local session index, PowerShell workbench, handoff graph, Markdown library, canvas, managed skills
 - Does not include: model accounts, subscriptions, or API credits
+- Distinct from: Microsoft Mobius, ControlTheory Möbius, Circular Labs Mobius
 
 ## Source
 

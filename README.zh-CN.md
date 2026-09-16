@@ -25,11 +25,11 @@ Agent CLI 各自记得自己的会话，却不会提供一张以项目为中心�
 
 [![动态预览：工作区、Agent 交接图与多媒体画布。点击播放完整有声视频。](apps/website/public/product/product-teaser.gif)](http://8.137.87.76/mobius/?lang=zh#demo)
 
-**[▶ 播放完整 76 秒有声视频](http://8.137.87.76/mobius/?lang=zh#demo)** · [直接打开 MP4](http://8.137.87.76/mobius/media/mobius-product-film.mp4)
+**[▶ 播放 32 秒 v0.3.19 演示](http://8.137.87.76/mobius/?lang=zh#demo)** · [直接打开 MP4](http://8.137.87.76/mobius/media/mobius-product-film.mp4)
 
 上方是 GIF 动态预览，完整播放器在产品页中打开；仓库 MP4 链接不等于 GitHub 内嵌播放器。
 
-76 秒英文动效演示。真实日间模式截图从完整上下文推近到功能特写。项目和对话使用虚构演示数据，Agent 输出为脚本演示，不作为真实 Agent 验收证据；不包含个人会话。参见[素材授权说明](licenses/MEDIA-CREDITS.md)。
+32 秒英文演示：会话库、按引用交接、项目图谱与本地资料库。真实界面截图，虚构演示数据，Agent 输出为脚本演示，不作为真实 Agent 验收证据；不包含个人会话。参见[素材授权说明](licenses/MEDIA-CREDITS.md)。
 
 ## 核心功能
 
@@ -51,7 +51,7 @@ Agent CLI 各自记得自己的会话，却不会提供一张以项目为中心�
 
 - **精准引用：已支持。** 已知 session ID 和消息范围时，直接定位对应证据。
 - **关键词／全文检索：已支持。** Mome 使用本地 SQLite FTS/BM25 分块索引，在已索引来源中优先排序当前项目／worktree，每次最多返回三个可引用会话，输出预算上限为 1,200 token。
-- **语义／向量与混合检索：v0.3.17 尚未提供。** 当前未接入 embedding 模型或向量后端，这是后续能力，不是可在设置中开启的现成功能；Mome 会明确显示当前仅为词法检索。
+- **语义／向量与混合检索：v0.3.19 尚未提供。** 当前未接入 embedding 模型或向量后端，这是后续能力，不是可在设置中开启的现成功能；Mome 会明确显示当前仅为词法检索。
 
 默认不搜索其他会话，也不自动注入历史。本地检索不调用模型；将选中的片段发给 Agent 后，会占用上下文 token。
 
@@ -95,9 +95,9 @@ Agent CLI 各自记得自己的会话，却不会提供一张以项目为中心�
 
 ## 安装
 
-从 [GitHub Releases](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.17) 下载 v0.3.17 Windows 预览版安装包或便携 EXE，并核对 SHA-256 和已知限制。构建尚未签名，可能触发 SmartScreen。
+从 [GitHub Releases](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.19) 下载 v0.3.19 Windows 预览版安装包或便携 EXE，并核对 SHA-256 和已知限制。构建尚未签名，可能触发 SmartScreen。
 
-参见 [0.3.17 UI 验收](docs/acceptance/ui-distillation-0.3.17.md)。MÖBIUS 只通过各 Harness 公开的命令行接口调用已安装程序，不会修改或替换 Codex、Claude Code、Pi、Grok 与 OMP。
+参见 [自测清单](docs/acceptance/self-test-checklist.md) 与 [0.3.18 Library 实时同步验收](docs/acceptance/library-live-sync-0.3.18.md)。MÖBIUS 只通过各 Harness 公开的命令行接口调用已安装程序，不会修改或替换 Codex、Claude Code、Pi、Grok 与 OMP。
 
 ### 从源码构建
 

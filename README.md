@@ -32,11 +32,11 @@ Agent CLIs remember their own sessions. They do not give you one project-shaped 
 
 [![Animated preview: workspace, agent handoff graph and multimedia canvas. Click for the full film with sound.](apps/website/public/product/product-teaser.gif)](http://8.137.87.76/mobius/?lang=en#demo)
 
-**[▶ Play the complete 76-second film with sound](http://8.137.87.76/mobius/?lang=en#demo)** · [Direct MP4](http://8.137.87.76/mobius/media/mobius-product-film.mp4)
+**[▶ Play the 32-second v0.3.19 tour](http://8.137.87.76/mobius/?lang=en#demo)** · [Direct MP4](http://8.137.87.76/mobius/media/mobius-product-film.mp4)
 
 The preview above is an animated GIF. The full video player opens on the product site; a repository MP4 link is not an inline GitHub player.
 
-A 76-second English motion-led tour. Real light-mode screenshots move from complete context into focused feature close-ups. Projects and conversations use fictional demo data; agent output is scripted. This film is not native-agent acceptance evidence, and no personal sessions are shown. See the [media credits](licenses/MEDIA-CREDITS.md).
+A 32-second English tour of sessions, reference-only handoff, the project graph and the local library. Real UI screenshots; fictional demo data; agent output is scripted. This film is not native-agent acceptance evidence, and no personal sessions are shown. See the [media credits](licenses/MEDIA-CREDITS.md).
 
 ## Core workflows
 
@@ -58,7 +58,7 @@ A 76-second English motion-led tour. Real light-mode screenshots move from compl
 
 - **Precise references — available:** use a known session ID and message range to retrieve the exact evidence.
 - **Keyword/full-text recall — available:** Mome uses a local SQLite FTS/BM25 chunk index, prioritizes the current project/worktree among indexed sources, and returns at most three citable sessions within a 1,200-token output budget.
-- **Semantic/vector or hybrid search — not available in v0.3.17:** no embedding model or vector backend is integrated. This is a future capability, not a hidden setting you can enable today. Mome explicitly reports lexical-only retrieval.
+- **Semantic/vector or hybrid search — not available in v0.3.19:** no embedding model or vector backend is integrated. This is a future capability, not a hidden setting you can enable today. Mome explicitly reports lexical-only retrieval.
 
 Nothing searches other sessions or injects history by default. Local retrieval itself does not call a model; sending selected excerpts to an agent consumes context tokens.
 

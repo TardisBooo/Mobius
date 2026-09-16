@@ -24,9 +24,12 @@ JSON is the source of truth. After a label or locator change, edit `self-test-ch
 
 ```powershell
 pnpm --dir apps/desktop sync:checklist
+pnpm --dir apps/desktop check:checklist
 ```
 
-The generated Markdown never invents rows.
+`check:checklist` fails if Markdown is stale, IDs collide, the revision drifts from `Cargo.toml`, or the Playwright spec lost the locators that close the 0.3.19 T/G rows. Regenerating Markdown never invents rows.
+
+The smoke config already includes `tests/self-test-checklist.spec.ts`, so later isolated smoke runs keep those rows without a separate command.
 
 ## Checks
 

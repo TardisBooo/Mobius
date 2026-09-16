@@ -1,12 +1,23 @@
 # MÖBIUS
 
-> A local-first Windows workspace for people who use Codex, Claude Code, Pi, Grok, and OMP on the same projects.
+> A local-first Windows workspace for Codex, Claude Code, Pi, Grok, and OMP. It groups sessions by project, resumes the original harness, and hands off references rather than summaries.
 
-Möbius is open-source desktop software. It groups approved local agent transcripts by project directory, resumes the original harness in real PowerShell, and creates explicit cross-agent handoffs without rewriting source history.
+Möbius is open-source desktop software by Tardis. It is not Microsoft Mobius, ControlTheory Möbius, or Circular Labs Mobius. Current preview: v0.3.19 for Windows, MIT licensed, $0. It does not sell model accounts.
+
+## Docs
+
+- [Product page](http://8.137.87.76/mobius/): bilingual landing page for the Windows preview, install steps, FAQ, and product film.
+- [Chinese product page](http://8.137.87.76/mobius/?lang=zh): the same page with Simplified Chinese copy.
+- [Pricing](http://8.137.87.76/mobius/pricing.md): MIT, $0 preview; no model credits included.
+- [Source](https://github.com/TardisBooo/Mobius): Rust/Tauri 2/React/SQLite repository.
+- [Releases](https://github.com/TardisBooo/Mobius/releases): Windows installer and portable EXE with SHA-256 sums.
+- [English README](https://github.com/TardisBooo/Mobius/blob/main/README.md): capabilities, search limits, and build instructions.
+- [Chinese README](https://github.com/TardisBooo/Mobius/blob/main/README.zh-CN.md): the same facts in Simplified Chinese.
+- [Self-test checklist](https://github.com/TardisBooo/Mobius/blob/main/docs/acceptance/self-test-checklist.md): living UI contract used before a release.
 
 ## What Möbius is
 
-Möbius is a Rust/Tauri workspace that reconnects sessions from multiple coding agents. Native resume stays with the original harness. Switching agents starts a new target session and carries confirmed Session references, not a generated summary.
+Möbius indexes approved local agent transcripts by project directory and worktree. Native resume stays with the original harness. Switching agents starts a new target session and carries confirmed Session references, not a generated summary.
 
 ## What Möbius is not
 
@@ -33,16 +44,24 @@ Möbius is a Rust/Tauri workspace that reconnects sessions from multiple coding 
 
 Codex, Claude Code, Pi, Grok, and OMP. Native resume is shown only when the installed harness has a verified resume protocol. Current Grok history remains inspect/search/handoff-only.
 
-## Links
+## Key facts
 
-- Product site: http://8.137.87.76/mobius/
-- Source: https://github.com/TardisBooo/Mobius
-- Releases: https://github.com/TardisBooo/Mobius/releases
-- Chinese README: https://github.com/TardisBooo/Mobius/blob/main/README.zh-CN.md
-- Acceptance evidence: https://github.com/TardisBooo/Mobius/blob/main/docs/acceptance/self-test-checklist.md
+- Author: Tardis
 - License: MIT
+- Price: $0
+- Platform: Windows preview
+- Version: 0.3.19
+- Search: local SQLite FTS/BM25; no embeddings
+- Handoff: reference-only; source transcripts stay read-only
+- Distinct from: Microsoft Mobius, ControlTheory Möbius, Circular Labs Mobius
+
+## Contact
+
+- Website: http://8.137.87.76/mobius/
+- Source: https://github.com/TardisBooo/Mobius
+- Portfolio: https://tardisbooo.github.io/portfolio/
 
 ## Optional
 
-- [Product film](https://tardisbooo.github.io/Mobius/#demo): a scripted English tour of the real UI with fictional demo data.
-- [Portfolio](https://tardisbooo.github.io/portfolio/): other public projects by Tardis.
+- [Product film](http://8.137.87.76/mobius/#demo): a scripted English tour of the real UI with fictional demo data.
+- [Media credits](https://github.com/TardisBooo/Mobius/blob/main/licenses/MEDIA-CREDITS.md): third-party media used in the film.
