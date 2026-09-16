@@ -33,7 +33,7 @@ pub use mcp_approvals::{
 };
 pub use model::*;
 pub use mome::MomeRecall;
-pub use note_mounts::{MountInfo, NoteFileInfo};
+pub use note_mounts::{MountInfo, MountScanStatus, NoteFileInfo, NoteLibrarySnapshot};
 pub use paths::WorkspacePaths;
 pub use providers::{
     ProviderIndexProviderReport, ProviderIndexReport, ProviderIndexRootReport, ProviderIndexer,

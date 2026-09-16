@@ -37,6 +37,21 @@
   font: 9px ui-monospace, monospace;
 }
 
+.library-mount-toggle small.partial {
+  color: var(--m-warn, #b7791f);
+}
+
+.library-mount-toggle small.unavailable {
+  color: var(--m-danger, #c2413b);
+}
+
+.library-mount-state {
+  margin: 0;
+  padding: 8px 11px 9px 39px;
+  color: var(--m-muted);
+  font-size: 10px;
+}
+
 .library-board-row {
   display: flex;
   align-items: center;

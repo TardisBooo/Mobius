@@ -48,7 +48,18 @@ The smallest transport for a Handoff: source Session identities, graph revision 
 
 A read-only adapter that discovers and projects native Harness history. It never rewrites a Harness session or configuration.
 
+## Mounted Library Source
+
+A user-authorized, persistent registration of one local directory in the Library. It remains registered until the user explicitly unmounts it; it is not a cache, a recent-directory entry or a copy of the source files.
+
+## Library Snapshot
+
+One complete, immutable projection of the private vault and every Mounted Library Source at a scan boundary. It carries the configured mounts, discovered files and per-mount scan status together. A newer Snapshot replaces an older Snapshot as a whole; clients never merge files from one Snapshot with mounts from another.
+
+## Mount Scan Status
+
+Transient evidence about a Mounted Library Source in one Library Snapshot: ready, partial or unavailable. It does not alter the user's persistent mount registration. An unavailable source exposes no retained file list.
+
 ## Provider Adapter
 
 An adapter that uses an official Harness API or process interface to create, resume or control a managed Agent. Capabilities are explicit; missing capabilities disable only the corresponding action.
-

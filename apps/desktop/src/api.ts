@@ -28,6 +28,7 @@ import type {
   Message,
   MountInfo,
   NoteFileInfo,
+  NoteLibrarySnapshot,
   NoteDraft,
   ProjectSummary,
   SearchRequest,
@@ -177,6 +178,11 @@ export const desktopApi = {
   async closeTerminal(id: string): Promise<void> { await invoke("terminal_close", { id }); },
 
   async listNoteFiles(): Promise<NoteFileInfo[]> { return inTauri() ? invoke<NoteFileInfo[]>("list_note_files_command") : []; },
+  async noteLibrarySnapshot(): Promise<NoteLibrarySnapshot> {
+    return inTauri()
+      ? invoke<NoteLibrarySnapshot>("note_library_snapshot_command")
+      : { snapshot_id: "demo-library", scanned_at: new Date(0).toISOString(), mounts: [], files: [], mount_statuses: [] };
+  },
   async readNoteFile(path: string): Promise<string> { return invoke<string>("read_note_file_command", { path }); },
   async revealNoteSource(path: string): Promise<void> {
     if (!inTauri()) return;

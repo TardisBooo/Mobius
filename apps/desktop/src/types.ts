@@ -213,6 +213,8 @@ export interface TerminalOutput { terminal_id: string; sequence: number; data: s
 export interface TerminalSnapshot { terminal_id: string; sequence: number; data: string; }
 export interface NoteFileInfo { id: string; mount_id: string | null; title: string; virtual_path: string; real_path: string; read_only: boolean; modified_at: string | null; }
 export interface MountInfo { id: string; library_id: string; virtual_path: string; real_path: string; access: "read_only" | "read_write"; watcher_mode: string; state: string; created_at: string; updated_at: string; }
+export interface MountScanStatus { mount_id: string; state: "ready" | "partial" | "unavailable"; file_count: number; truncated: boolean; unreadable_entries: number; }
+export interface NoteLibrarySnapshot { snapshot_id: string; scanned_at: string; mounts: MountInfo[]; files: NoteFileInfo[]; mount_statuses: MountScanStatus[]; }
 export interface SessionReference {
   session_id: string;
   harness: string | null;

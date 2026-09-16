@@ -8,6 +8,11 @@ use std::{
     io::{BufRead, BufReader},
     path::Path,
 };
+
+// A single unusually large source must not silently starve every source that
+// follows it in the library.  The status returned with a snapshot makes a
+// limit visible to the UI instead of leaving a plausible-but-incomplete tree.
+const MAX_FILES_PER_SOURCE: usize = 5_000;
 use walkdir::WalkDir;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -34,6 +39,30 @@ pub struct NoteFileInfo {
     pub modified_at: Option<String>,
 }
 
+/// Runtime-only result of scanning one persisted mount.  `MountInfo` is the
+/// user's configuration; this describes what was actually observable during
+/// one scan and is deliberately not written back into that configuration.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct MountScanStatus {
+    pub mount_id: String,
+    pub state: String,
+    pub file_count: usize,
+    pub truncated: bool,
+    pub unreadable_entries: usize,
+}
+
+/// A coherent library projection.  Mount registration and discovered files
+/// always come from the same scan, so a UI never has to combine one request's
+/// mount list with another request's file list.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct NoteLibrarySnapshot {
+    pub snapshot_id: String,
+    pub scanned_at: String,
+    pub mounts: Vec<MountInfo>,
+    pub files: Vec<NoteFileInfo>,
+    pub mount_statuses: Vec<MountScanStatus>,
+}
+
 impl Database {
     pub fn add_note_mount(
         &self,
@@ -54,11 +83,28 @@ impl Database {
         if virtual_path.is_empty() {
             anyhow::bail!("Library name cannot be empty");
         }
-        if let Some(existing) = self.list_note_mounts()?.into_iter().find(|mount| mount.virtual_path == virtual_path) {
-            if Path::new(&existing.real_path) == canonical && existing.access == access {
-                return Ok(existing);
+        let existing_mounts = self.list_note_mounts()?;
+        if let Some(existing) = existing_mounts
+            .iter()
+            .find(|mount| mount.virtual_path.eq_ignore_ascii_case(virtual_path))
+        {
+            if same_mount_path(Path::new(&existing.real_path), &canonical)
+                && existing.access == access
+            {
+                return Ok(existing.clone());
             }
-            anyhow::bail!("A different folder already uses this library name. Choose another name.");
+            anyhow::bail!(
+                "A different folder already uses this library name. Choose another name."
+            );
+        }
+        if let Some(existing) = existing_mounts
+            .iter()
+            .find(|mount| mount_paths_overlap(Path::new(&mount.real_path), &canonical))
+        {
+            anyhow::bail!(
+                "This folder overlaps with the existing '{}' library. A source can appear only once; unmount the existing source before mounting a nested folder.",
+                existing.virtual_path
+            );
         }
         let now = Utc::now().to_rfc3339();
         let library_id = "note-library:default";
@@ -109,16 +155,31 @@ impl Database {
 }
 
 pub fn list_note_files(paths: &WorkspacePaths, mounts: &[MountInfo]) -> Result<Vec<NoteFileInfo>> {
+    Ok(list_note_library_snapshot(paths, mounts)?.files)
+}
+
+pub fn list_note_library_snapshot(
+    paths: &WorkspacePaths,
+    mounts: &[MountInfo],
+) -> Result<NoteLibrarySnapshot> {
     let mut files = Vec::new();
     collect_note_root(&paths.notes_dir(), None, "MyDesk", false, &mut files);
+    let mut mount_statuses = Vec::with_capacity(mounts.len());
     for mount in mounts {
-        collect_note_root(
+        let scan = collect_note_root(
             Path::new(&mount.real_path),
             Some(&mount.id),
             &mount.virtual_path,
             mount.access == "read_only",
             &mut files,
         );
+        mount_statuses.push(MountScanStatus {
+            mount_id: mount.id.clone(),
+            state: scan.state().to_string(),
+            file_count: scan.file_count,
+            truncated: scan.truncated,
+            unreadable_entries: scan.unreadable_entries,
+        });
     }
     files.sort_by(|left, right| {
         right
@@ -126,8 +187,33 @@ pub fn list_note_files(paths: &WorkspacePaths, mounts: &[MountInfo]) -> Result<V
             .cmp(&left.modified_at)
             .then_with(|| left.virtual_path.cmp(&right.virtual_path))
     });
-    files.truncate(5000);
-    Ok(files)
+    Ok(NoteLibrarySnapshot {
+        snapshot_id: format!("library-snapshot:{}", uuid::Uuid::new_v4()),
+        scanned_at: Utc::now().to_rfc3339(),
+        mounts: mounts.to_vec(),
+        files,
+        mount_statuses,
+    })
+}
+
+#[derive(Default)]
+struct RootScan {
+    source_available: bool,
+    file_count: usize,
+    truncated: bool,
+    unreadable_entries: usize,
+}
+
+impl RootScan {
+    fn state(&self) -> &'static str {
+        if !self.source_available {
+            "unavailable"
+        } else if self.truncated || self.unreadable_entries > 0 {
+            "partial"
+        } else {
+            "ready"
+        }
+    }
 }
 
 fn collect_note_root(
@@ -136,16 +222,21 @@ fn collect_note_root(
     prefix: &str,
     read_only: bool,
     output: &mut Vec<NoteFileInfo>,
-) {
+) -> RootScan {
+    let mut scan = RootScan::default();
     if !root.is_dir() {
-        return;
+        return scan;
     }
-    for entry in WalkDir::new(root)
-        .follow_links(false)
-        .into_iter()
-        .filter_map(Result::ok)
-    {
-        if output.len() >= 5000 || !entry.file_type().is_file() || entry.file_type().is_symlink() {
+    scan.source_available = true;
+    for candidate in WalkDir::new(root).follow_links(false).into_iter() {
+        let entry = match candidate {
+            Ok(entry) => entry,
+            Err(_) => {
+                scan.unreadable_entries += 1;
+                continue;
+            }
+        };
+        if !entry.file_type().is_file() || entry.file_type().is_symlink() {
             continue;
         }
         let extension = entry
@@ -156,6 +247,10 @@ fn collect_note_root(
             .to_ascii_lowercase();
         if !matches!(extension.as_str(), "md" | "markdown" | "txt") {
             continue;
+        }
+        if scan.file_count >= MAX_FILES_PER_SOURCE {
+            scan.truncated = true;
+            break;
         }
         let relative = entry.path().strip_prefix(root).unwrap_or(entry.path());
         let virtual_path = format!(
@@ -168,7 +263,14 @@ fn collect_note_root(
             .and_then(|metadata| metadata.modified().ok())
             .map(|time| chrono::DateTime::<Utc>::from(time).to_rfc3339());
         output.push(NoteFileInfo {
-            id: format!("note-file:{}", stable_path(entry.path())),
+            // The source identity is part of the note identity.  A stale or
+            // overlapping mount must never collide with a tab from another
+            // source merely because both happen to expose the same file.
+            id: format!(
+                "note-file:{}:{}",
+                mount_id.unwrap_or("private"),
+                stable_path(entry.path())
+            ),
             mount_id: mount_id.map(str::to_string),
             // The editor treats the title field as the user-facing filename.
             // Reading the frontmatter here keeps the tree and open tabs in
@@ -180,7 +282,32 @@ fn collect_note_root(
             read_only,
             modified_at,
         });
+        scan.file_count += 1;
     }
+    scan
+}
+
+fn mount_path_key(path: &Path) -> String {
+    path.to_string_lossy()
+        .replace('/', "\\")
+        .trim_end_matches('\\')
+        .to_ascii_lowercase()
+}
+
+fn same_mount_path(left: &Path, right: &Path) -> bool {
+    mount_path_key(left) == mount_path_key(right)
+}
+
+fn mount_paths_overlap(left: &Path, right: &Path) -> bool {
+    let left = mount_path_key(left);
+    let right = mount_path_key(right);
+    left == right
+        || left
+            .strip_prefix(&right)
+            .is_some_and(|suffix| suffix.starts_with('\\'))
+        || right
+            .strip_prefix(&left)
+            .is_some_and(|suffix| suffix.starts_with('\\'))
 }
 
 fn note_title(path: &Path) -> String {
@@ -219,4 +346,78 @@ pub fn read_note_file(path: &Path, known: &[NoteFileInfo]) -> Result<String> {
         anyhow::bail!("note path is outside configured libraries");
     }
     fs::read_to_string(&canonical).with_context(|| format!("reading {}", canonical.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Database, WorkspacePaths};
+
+    fn paths(root: &Path) -> WorkspacePaths {
+        WorkspacePaths {
+            workspace_root: root.join("workspace"),
+            data_root: root.join("data"),
+            artifacts_root: root.join("artifacts"),
+            catalog_root: root.join("catalog"),
+        }
+    }
+
+    fn mount(id: &str, root: &Path) -> MountInfo {
+        MountInfo {
+            id: id.to_string(),
+            library_id: "note-library:default".to_string(),
+            virtual_path: "Reference".to_string(),
+            real_path: root.canonicalize().unwrap().display().to_string(),
+            access: "read_only".to_string(),
+            watcher_mode: "auto".to_string(),
+            state: "connected".to_string(),
+            created_at: "2026-09-16T00:00:00Z".to_string(),
+            updated_at: "2026-09-16T00:00:00Z".to_string(),
+        }
+    }
+
+    #[test]
+    fn a_snapshot_replaces_removed_mount_files_and_reports_unavailable_sources() -> Result<()> {
+        let temporary = tempfile::tempdir()?;
+        let paths = paths(temporary.path());
+        paths.ensure_layout()?;
+        let source = temporary.path().join("source");
+        fs::create_dir_all(&source)?;
+        fs::write(source.join("old.md"), "# old")?;
+        let configured = mount("mount:fixture", &source);
+
+        let first = list_note_library_snapshot(&paths, &[configured.clone()])?;
+        assert!(first.files.iter().any(|file| file.title == "old"));
+        assert_eq!(first.mount_statuses[0].state, "ready");
+
+        fs::remove_file(source.join("old.md"))?;
+        fs::write(source.join("new.md"), "# new")?;
+        let second = list_note_library_snapshot(&paths, &[configured.clone()])?;
+        assert!(second.files.iter().any(|file| file.title == "new"));
+        assert!(!second.files.iter().any(|file| file.title == "old"));
+        assert_ne!(first.snapshot_id, second.snapshot_id);
+
+        fs::remove_dir_all(&source)?;
+        let unavailable = list_note_library_snapshot(&paths, &[configured])?;
+        assert!(unavailable.files.is_empty());
+        assert_eq!(unavailable.mount_statuses[0].state, "unavailable");
+        Ok(())
+    }
+
+    #[test]
+    fn overlapping_source_roots_are_rejected() -> Result<()> {
+        let temporary = tempfile::tempdir()?;
+        let paths = paths(temporary.path());
+        let database = Database::open(&paths)?;
+        let parent = temporary.path().join("source");
+        let child = parent.join("nested");
+        fs::create_dir_all(&child)?;
+        database.add_note_mount(&parent, "Reference", "read_only")?;
+
+        let error = database
+            .add_note_mount(&child, "Nested", "read_only")
+            .expect_err("a nested mount duplicates content from its parent");
+        assert!(error.to_string().contains("overlaps"));
+        Ok(())
+    }
 }

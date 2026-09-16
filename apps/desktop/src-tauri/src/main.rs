@@ -2,10 +2,10 @@ use mydesk_core::harness_launch;
 use mydesk_core::{
     AgentSummary, BoardDocument, ContextRecord, HandoffDraft, HealthStatus, McpApprovalGrant,
     McpApprovalRequest, McpApprovalStore, Message, MomeRecallRequest, MomeRecallResponse, MyDesk,
-    NoteDraft, NoteFileInfo, ProjectSummary, ProviderIndexReport, RelayGraph, RelayMode,
-    SearchRequest, SessionQuery, SessionSearchHit, SessionSourceRoot, SkillInfo, TrashItem,
-    WikiDraft, WikiQueueItem, Workspace, WorkspaceInspection, WorkspaceStatus,
-    note_mounts::{list_note_files, read_note_file},
+    NoteDraft, NoteFileInfo, NoteLibrarySnapshot, ProjectSummary, ProviderIndexReport, RelayGraph,
+    RelayMode, SearchRequest, SessionQuery, SessionSearchHit, SessionSourceRoot, SkillInfo,
+    TrashItem, WikiDraft, WikiQueueItem, Workspace, WorkspaceInspection, WorkspaceStatus,
+    note_mounts::{list_note_files, list_note_library_snapshot, read_note_file},
     skills::{
         ManagedSkillInstall, SkillDeployment, SkillHistoryEntry, discover_project_skills,
         discover_standard_skills, install_marketplace_skill, install_skill_from_catalogue,
@@ -675,6 +675,22 @@ fn list_note_files_command(state: State<'_, DesktopState>) -> CommandResult<Vec<
         .list_note_mounts()
         .map_err(command_error)?;
     list_note_files(&state.desk.paths, &mounts).map_err(command_error)
+}
+
+/// Returns the configured mounts and their discovered files as one coherent
+/// scan. The desktop must not combine independent mount and file requests:
+/// doing so can transiently render a source from one refresh with files from
+/// another refresh after a user mounts, unmounts or changes a directory.
+#[tauri::command]
+fn note_library_snapshot_command(
+    state: State<'_, DesktopState>,
+) -> CommandResult<NoteLibrarySnapshot> {
+    let mounts = state
+        .desk
+        .database
+        .list_note_mounts()
+        .map_err(command_error)?;
+    list_note_library_snapshot(&state.desk.paths, &mounts).map_err(command_error)
 }
 #[tauri::command]
 fn read_note_file_command(state: State<'_, DesktopState>, path: String) -> CommandResult<String> {
@@ -2537,6 +2553,7 @@ fn main() {
             create_note,
             update_note_file_command,
             list_note_files_command,
+            note_library_snapshot_command,
             read_note_file_command,
             reveal_note_source,
             read_note_asset_command,
