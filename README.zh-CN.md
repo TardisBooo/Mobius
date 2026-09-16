@@ -6,7 +6,7 @@
 
 面向同时在同一项目中使用 Codex、Claude Code、Pi、Grok 与 OMP 的 Windows 工作台。采用 **Rust 核心、Tauri 2 桌面外壳、React/TypeScript 界面与 SQLite 本地索引**。
 
-[English](README.md) · [在线产品页](http://8.137.87.76/mobius/?lang=zh) · [播放产品视频](http://8.137.87.76/mobius/?lang=zh#demo) · [下载](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.17) · [完整验收记录](docs/acceptance/ui-distillation-0.3.17.md) · [MIT License](LICENSE)
+[English](README.md) · [在线产品页](http://8.137.87.76/mobius/?lang=zh) · [播放产品视频](http://8.137.87.76/mobius/?lang=zh#demo) · [下载](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.19) · [自测清单](docs/acceptance/self-test-checklist.md) · [MIT License](LICENSE)
 
 > 当前为开发预览版。兼容性按 Harness 逐项验证并附证据发布。莫比乌斯不提供模型账号、订阅或 API 额度。
 

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>MÖBIUS 0.3.19 — Switch agents. Keep the work.</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      html, body { margin: 0; height: 100%; background: #081018; color: #e8eee8; font-family: "Segoe UI", Inter, system-ui, sans-serif; }
+      #root { position: relative; width: 1920px; height: 1080px; overflow: hidden; }
+      .fill { position: absolute; inset: 0; }
+      .clip { position: absolute; inset: 0; overflow: hidden; }
+      .shot { position: absolute; inset: 0; background: #0b141c center/cover no-repeat; }
+      .veil { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8,16,24,.92) 0%, rgba(8,16,24,.55) 42%, rgba(8,16,24,.18) 100%); }
+      .copy { position: absolute; left: 88px; top: 160px; width: 820px; }
+      .kicker { margin: 0 0 18px; letter-spacing: .28em; font-size: 18px; color: #b8efe4; }
+      h1, h2, p { margin: 0; }
+      h1 { font-size: 78px; line-height: 1.05; font-weight: 650; }
+      h2 { font-size: 58px; line-height: 1.12; font-weight: 620; }
+      .lede { margin-top: 22px; font-size: 28px; line-height: 1.4; color: #c7d4d0; max-width: 760px; }
+      .chip { display: inline-block; margin: 18px 10px 0 0; padding: 8px 14px; border: 1px solid #2c4a52; border-radius: 999px; font-size: 18px; color: #d7ece6; }
+      .end { display: grid; place-items: center; text-align: center; }
+      .end h1 { font-size: 72px; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="mobius-film" data-start="0" data-width="1920" data-height="1080" data-duration="32">
+      <div class="fill" style="background:#081018"></div>
+      <section id="s1" class="clip" data-start="0" data-duration="5.2" data-track-index="1">
+        <div class="copy" style="top:340px">
+          <p class="kicker">LOCAL AGENT WORKSPACE · v0.3.19</p>
+          <h1 id="t1">Switch agents.</h1>
+          <h1 id="t2">Keep the work.</h1>
+          <p class="lede" id="t3">Codex, Claude Code, Pi, Grok, and OMP in one Windows project.</p>
+        </div>
+      </section>
+      <section id="s2" class="clip" data-start="5" data-duration="6.2" data-track-index="2">
+        <div class="shot" style="background-image:url('assets/session-library.png')"></div>
+        <div class="veil"></div>
+        <div class="copy">
+          <p class="kicker">01 / SESSIONS</p>
+          <h2 id="h2">Find every session from the project.</h2>
+          <p class="lede" id="p2">Approved local transcripts stay read-only. Copy an exact @session reference.</p>
+        </div>
+      </section>
+      <section id="s3" class="clip" data-start="11.4" data-duration="6.0" data-track-index="3">
+        <div class="shot" style="background-image:url('assets/handoff-review.png')"></div>
+        <div class="veil"></div>
+        <div class="copy">
+          <p class="kicker">02 / HANDOFF</p>
+          <h2 id="h3">Hand off references, not a summary.</h2>
+          <p class="lede" id="p3">The target agent reads confirmed ancestors. Source history is never rewritten.</p>
+        </div>
+      </section>
+      <section id="s4" class="clip" data-start="17.6" data-duration="6.0" data-track-index="4">
+        <div class="shot" style="background-image:url('assets/handoff-graph.png')"></div>
+        <div class="veil"></div>
+        <div class="copy">
+          <p class="kicker">03 / GRAPH</p>
+          <h2 id="h4">Follow the chain back to evidence.</h2>
+          <p class="lede" id="p4">A project graph records who continued the work, and from which session.</p>
+        </div>
+      </section>
+      <section id="s5" class="clip" data-start="23.8" data-duration="8.2" data-track-index="5">
+        <div class="shot" style="background-image:url('assets/multimedia-canvas.png')"></div>
+        <div class="veil"></div>
+        <div class="copy">
+          <p class="kicker">04 / LIBRARY</p>
+          <h2 id="h5">Notes, canvas, mounts, skills.</h2>
+          <p class="lede" id="p5">Keep supporting work local. Search is FTS/BM25, not a vector backend.</p>
+          <p><span class="chip">Windows preview</span><span class="chip">MIT</span><span class="chip">Local-first</span></p>
+        </div>
+      </section>
+    </div>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      tl.from("#t1", { y: 36, opacity: 0, duration: 0.7, ease: "power3.out" }, 0.2);
+      tl.from("#t2", { y: 36, opacity: 0, duration: 0.7, ease: "power3.out" }, 0.45);
+      tl.from("#t3", { y: 18, opacity: 0, duration: 0.55, ease: "power2.out" }, 0.85);
+      tl.from("#h2", { y: 28, opacity: 0, duration: 0.55, ease: "power3.out" }, 5.2);
+      tl.from("#p2", { y: 16, opacity: 0, duration: 0.45, ease: "power2.out" }, 5.45);
+      tl.from("#h3", { y: 28, opacity: 0, duration: 0.55, ease: "power3.out" }, 11.4);
+      tl.from("#p3", { y: 16, opacity: 0, duration: 0.45, ease: "power2.out" }, 11.65);
+      tl.from("#h4", { y: 28, opacity: 0, duration: 0.55, ease: "power3.out" }, 17.6);
+      tl.from("#p4", { y: 16, opacity: 0, duration: 0.45, ease: "power2.out" }, 17.85);
+      tl.from("#h5", { y: 28, opacity: 0, duration: 0.55, ease: "power3.out" }, 23.8);
+      tl.from("#p5", { y: 16, opacity: 0, duration: 0.45, ease: "power2.out" }, 24.05);
+      window.__timelines["mobius-film"] = tl;
+    </script>
+  </body>
+</html>

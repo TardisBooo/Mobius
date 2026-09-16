@@ -137,7 +137,7 @@ export function SessionLineagePanel({ graph, locale, onOpenSession, workspace, o
       </div>
       <div className="lineage-toolbar">
         <input className="lineage-search" aria-label={zh ? "定位节点" : "Find a node"} value={query} onChange={e => setQuery(e.target.value)} placeholder={zh ? "搜索节点" : "Find node"}/>
-        <div className="lineage-view-toggle" role="group" aria-label={zh ? "图谱视图" : "Lineage view"}><button aria-pressed={mode === "graph"} onClick={() => setMode("graph")}>{zh ? "图谱" : "Graph"}</button><button aria-pressed={mode === "list"} onClick={() => setMode("list")}>{zh ? "列表" : "List"}</button></div>
+        <div className="lineage-view-toggle" role="group" aria-label={zh ? "图谱视图" : "Lineage view"}><button type="button" aria-pressed={mode === "graph"} aria-label={zh ? "图谱" : "Graph"} onClick={() => setMode("graph")}>{zh ? "图谱" : "Graph"}</button><button type="button" aria-pressed={mode === "list"} aria-label={zh ? "列表" : "List"} onClick={() => setMode("list")}>{zh ? "列表" : "List"}</button></div>
         <div className="lineage-settings-wrap"><button className="icon-soft" aria-label={zh ? "预览设置" : "Preview settings"} aria-expanded={settingsOpen} onClick={() => setSettingsOpen(open => !open)}><SlidersHorizontal size={16}/></button>
           {settingsOpen && <div className="lineage-settings-popover" role="group" aria-label={zh ? "预览设置" : "Preview settings"}>
             <label>{zh ? "布局" : "Layout"}<select aria-label={zh ? "图谱布局" : "Graph layout"} value={direction} onChange={e => setDirection(e.target.value as "horizontal" | "vertical")}><option value="horizontal">{zh ? "从左到右" : "Left to right"}</option><option value="vertical">{zh ? "从上到下" : "Top to bottom"}</option></select></label>
@@ -148,7 +148,7 @@ export function SessionLineagePanel({ graph, locale, onOpenSession, workspace, o
         </div>
       </div>
     </header>
-    <div className="lineage-selection-bar"><button className="soft-button" disabled={!sources.length || busy} onClick={() => void prepare()}><Plus size={15}/>{zh ? `交接来源 ${sources.length}` : `Handoff sources ${sources.length}`}</button><small title={zh ? "Shift+点击可多选；仅合并祖先引用，不总结或复制正文。" : "Shift-click to select multiple sources. Only ancestor references are merged."}>{zh ? "Shift 多选 · 仅传引用" : "Shift select · references only"}</small></div>
+    <div className="lineage-selection-bar"><button className="soft-button" type="button" disabled={!sources.length || busy} aria-label={zh ? `交接来源 ${sources.length}` : `Handoff sources ${sources.length}`} onClick={() => void prepare()}><Plus size={15}/>{zh ? `交接来源 ${sources.length}` : `Handoff sources ${sources.length}`}</button><small title={zh ? "Shift+点击可多选；仅合并祖先引用，不总结或复制正文。" : "Shift-click to select multiple sources. Only ancestor references are merged."}>{zh ? "Shift 多选 · 仅传引用" : "Shift select · references only"}</small></div>
     {error && <p role="alert">{error}</p>}
     {!lineage && !error && <p role="status">{zh ? "正在定位来源…" : "Resolving sources…"}</p>}
     <div className="lineage-layout"><div className="lineage-stage">

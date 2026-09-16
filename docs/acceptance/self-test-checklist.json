@@ -1,0 +1,140 @@
+{
+  "id": "MOBIUS-DESKTOP-SELFTEST",
+  "product": "MÖBIUS",
+  "revision": "0.3.19",
+  "updated": "2026-09-16",
+  "source_of_truth": "docs/acceptance/self-test-checklist.json",
+  "generated_markdown": "docs/acceptance/self-test-checklist.md",
+  "sync_script": "apps/desktop/scripts/sync-self-test-checklist.mjs",
+  "fixture": {
+    "workspace": "E:/Workspaces/_verification/mobius-full-20260915/runs/provider-001/drag-demo",
+    "harness_home": "E:/Workspaces/_verification/mobius-full-20260915/runs/drag-demo-lineage-001/harness",
+    "run_root": "E:/Workspaces/_verification/mobius-full-20260915/runs/drag-demo-ui-smoke-20260916"
+  },
+  "update_policy": [
+    "JSON is the source of truth. Regenerating markdown never invents rows.",
+    "After any UI label, aria-label, dialog, or navigation change, update locators in the matching row.",
+    "A smoke run that writes ui-smoke-consolidated.json may refresh last_result fields only.",
+    "Do not delete a row because a test timed out. Mark last_result and keep the expected product contract."
+  ],
+  "groups": [
+    {
+      "id": "OB",
+      "title": "Onboarding",
+      "items": [
+        { "id": "OB-01", "name": "First launch shows six-step guide", "expect": "`.onboarding` dialog with six progress steps", "locator": ".onboarding .onboarding-progress button" },
+        { "id": "OB-04", "name": "Finish guide opens workspaces", "expect": "`.workspace-atlas` after completing or skipping", "locator": ".workspace-atlas" },
+        { "id": "OB-06", "name": "Completion persists across reload", "expect": "`mobius.onboarding.complete=1` and guide absent", "locator": null },
+        { "id": "OB-07", "name": "Help reopens the guide", "expect": "Top-bar sparkles button opens `.onboarding`", "locator": "button[aria-label='Open Möbius guide']" },
+        { "id": "OB-08", "name": "Escape closes the guide", "expect": "Guide dismissed, focus restored", "locator": ".onboarding" }
+      ]
+    },
+    {
+      "id": "W",
+      "title": "Shell / window / i18n / theme",
+      "items": [
+        { "id": "W-01", "name": "Custom title bar and brand", "expect": "`.mobius-topbar` shows MÖBIUS", "locator": ".mobius-topbar .mobius-brand strong" },
+        { "id": "W-02", "name": "Window controls exist", "expect": "Minimize, Maximize, Close", "locator": ".window-controls [aria-label]" },
+        { "id": "W-04", "name": "Theme switch persists", "expect": "`html[data-theme]` and `mobius.theme`", "locator": "button[aria-label='Switch theme']" },
+        { "id": "W-05", "name": "Language switch persists", "expect": "Rail labels update; `mydesk.locale.v2` saved", "locator": "button[aria-label='Switch language']" },
+        { "id": "W-06", "name": "Ctrl+K focuses session search", "expect": "Agents page with caret in `.session-search-v2 input`", "locator": ".session-search-v2 input" },
+        { "id": "W-07", "name": "Rail Workspaces always opens atlas", "expect": "From terminal, Workspaces rail shows `.workspace-atlas`", "locator": ".mobius-rail .rail-item" }
+      ]
+    },
+    {
+      "id": "WB",
+      "title": "Workspaces",
+      "items": [
+        { "id": "WB-01", "name": "drag-demo appears in project tree", "expect": "`.atlas-project-button` contains drag-demo", "locator": ".atlas-project-button" },
+        { "id": "WB-02", "name": "Selecting a project expands checkouts", "expect": "`.atlas-checkouts button` visible after select", "locator": ".atlas-checkouts button" },
+        { "id": "WB-03", "name": "Inspector has five named tabs", "expect": "Sessions, Files, Worktrees, Project skills, Handoff graph", "locator": ".inspector-tabs button" },
+        { "id": "WB-05", "name": "Sessions tab lists five fixture sessions", "expect": "`.project-session-row` count is 5", "locator": ".project-session-row" },
+        { "id": "WB-09", "name": "Recent workspaces pin/unpin", "expect": "Context menu Add to recent / Remove from recent", "locator": ".recent-workspace-card" },
+        { "id": "WB-13", "name": "Workspaces rail returns to atlas", "expect": "Never restores last terminal subpage", "locator": ".workspace-atlas" },
+        { "id": "WB-16", "name": "Add workspace dialog cancel is unique", "expect": "Header close is Close dialog; footer is Cancel", "locator": ".mobius-modal" },
+        { "id": "WB-18", "name": "Invalid path is recoverable", "expect": "Error notice + dialog remains editable", "locator": ".mobius-notice.error" }
+      ]
+    },
+    {
+      "id": "SE",
+      "title": "Sessions / handoff / Mome",
+      "items": [
+        { "id": "SE-01", "name": "Session library lists five sessions", "expect": "Five unique fixture titles", "locator": ".session-list-row" },
+        { "id": "SE-02", "name": "Search filters the list", "expect": "Query reduces visible rows", "locator": ".session-search-v2 input" },
+        { "id": "SE-10", "name": "Handoff dialog lists five harnesses", "expect": "Codex Claude Pi Grok OMP", "locator": "[role=dialog][aria-labelledby] select" },
+        { "id": "SE-13", "name": "Mome search is explicit and bounded", "expect": "Dialog titled Mome · Find related memory", "locator": ".mome-query input" },
+        { "id": "SE-14", "name": "Sources dialog lists approved roots", "expect": "Five approved fixture roots", "locator": ".session-sources-dialog .source-list article" },
+        { "id": "SE-17", "name": "Removing a source updates the list", "expect": "Approved count decreases by one", "locator": "[aria-label^='Remove source']" },
+        { "id": "SE-18", "name": "Re-adding a source restores the list", "expect": "Approved count returns to five", "locator": "button:has-text('Add source')" },
+        { "id": "SE-20", "name": "Resume without harness is recoverable", "expect": "Actionable error or Native resume unavailable", "locator": ".reader-actions-v2" }
+      ]
+    },
+    {
+      "id": "LG",
+      "title": "Handoff graph",
+      "items": [
+        { "id": "LG-01", "name": "Graph renders 5 nodes and 4 edges", "expect": "One chain Codex→Claude→Pi→OMP plus Codex→Grok", "locator": ".react-flow__node.lineage-node" },
+        { "id": "LG-03", "name": "OMP selection highlights four ancestors", "expect": "`.ancestor` count is 4", "locator": ".react-flow__node.lineage-node.ancestor" },
+        { "id": "LG-06", "name": "Preview settings apply compact layout", "expect": "`.lineage-node.compact` after compact checkbox", "locator": "button[aria-label='Preview settings']" },
+        { "id": "LG-07", "name": "Preview settings persist across reload", "expect": "`mobius.lineage.*` localStorage keys", "locator": "button[aria-label='Handoff graph']" },
+        { "id": "LG-09", "name": "Multi-source preview is references-only", "expect": "Review dialog preview contains references", "locator": "button[aria-label^='Handoff sources']" },
+        { "id": "LG-12", "name": "1100px graph has no horizontal overflow", "expect": "panel scrollWidth <= clientWidth + 2", "locator": ".session-lineage-panel" }
+      ]
+    },
+    {
+      "id": "TM",
+      "title": "Terminal",
+      "items": [
+        { "id": "TM-01", "name": "New PowerShell opens a tab", "expect": "`.terminal-tab` count >= 1", "locator": ".terminal-tab" },
+        { "id": "TM-02", "name": "cwd is the drag-demo checkout", "expect": "snapshot contains drag-demo", "locator": ".xterm-helper-textarea" },
+        { "id": "TM-06", "name": "Ctrl+C recovers input", "expect": "later command still echoes", "locator": ".xterm-helper-textarea" },
+        { "id": "TM-07", "name": "Focus mode exits with Escape", "expect": "`.terminal-focus` removed", "locator": ".mobius-app" },
+        { "id": "TM-10", "name": "Session reference picker copies a packet", "expect": "Copied status after selecting a message", "locator": ".session-reference-picker" }
+      ]
+    },
+    {
+      "id": "LI",
+      "title": "Library",
+      "items": [
+        { "id": "LI-01", "name": "Four library sections exist", "expect": "Canvases, Notes, Mounts, Trash", "locator": ".library-tree-section header strong" },
+        { "id": "LI-02", "name": "New note autosaves", "expect": "`.note-save-state` includes Saved", "locator": ".note-save-state" },
+        { "id": "LI-08", "name": "Mount dialog cancel is unique", "expect": "Header Close dialog; footer Cancel", "locator": "button[title='Mount folder']" },
+        { "id": "LI-09", "name": "Read-only mount appears in the tree", "expect": "`.library-mount-branch` count is 1", "locator": ".library-mount-branch" },
+        { "id": "LI-11", "name": "Mounted document is read-only", "expect": "Save state is Read-only mount", "locator": ".note-save-state" },
+        { "id": "LI-15", "name": "Trash restore returns the note", "expect": "Note row reappears", "locator": ".library-trash-item" }
+      ]
+    },
+    {
+      "id": "CA",
+      "title": "Canvas",
+      "items": [
+        { "id": "CA-01", "name": "New canvas opens the board", "expect": "`.mobius-board` visible", "locator": ".library-create-button" },
+        { "id": "CA-02", "name": "Toolbar creates objects", "expect": "At least one `.react-flow__node`", "locator": ".board-toolbar" },
+        { "id": "CA-04", "name": "Undo/redo restore object count", "expect": "Count returns after redo", "locator": "[aria-label='Undo']" },
+        { "id": "CA-07", "name": "Saved canvas appears in Library", "expect": "Tree row with canvas title", "locator": ".library-tree-file" },
+        { "id": "CA-08", "name": "Reopening restores objects", "expect": "Node count >= objects created before leave", "locator": ".react-flow__node" }
+      ]
+    },
+    {
+      "id": "SK",
+      "title": "Skills",
+      "items": [
+        { "id": "SK-01", "name": "Skills page opens", "expect": "Skill market / Installed segments", "locator": ".skills-library-v2" },
+        { "id": "SK-02", "name": "Marketplace catalogue loads", "expect": "`.skill-card-v2` count > 0 or explicit empty/error", "locator": "button:has-text('Skill market')" },
+        { "id": "SK-04", "name": "Project-private skill is discoverable", "expect": "drag-private-source in project Installed view", "locator": ".skill-card-v2" },
+        { "id": "SK-06", "name": "Managed install targets drag-demo only", "expect": "`list_managed_skills` destination under drag-demo", "locator": "button:has-text('Create editable copy')" },
+        { "id": "SK-10", "name": "Uninstall removes the managed copy", "expect": "Destination gone; source hash unchanged", "locator": "button:has-text('Uninstall managed copy')" }
+      ]
+    },
+    {
+      "id": "UX",
+      "title": "Geometry / a11y / boundary",
+      "items": [
+        { "id": "UX-01", "name": "Minimum viewport has no body overflow", "expect": "1100×720 overflowX <= 1", "locator": ".mobius-app" },
+        { "id": "UX-02", "name": "Visible controls are named", "expect": "aria-label, title, placeholder, or text", "locator": "button, input, select" },
+        { "id": "BP-01", "name": "Harness fixtures are unchanged", "expect": "SHA-256 of fixture transcripts unchanged", "locator": null },
+        { "id": "BP-02", "name": "No leftover managed skill", "expect": "drag-demo/.agents/skills/drag-private-source absent", "locator": null }
+      ]
+    }
+  ]
+}

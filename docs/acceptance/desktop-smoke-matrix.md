@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Plan ID | MOBIUS-DESKTOP-SMOKE-001 |
-| Contract / revision | Möbius 0.3.7+ desktop UX |
+| Contract / revision | Möbius 0.3.19 desktop UX; living checklist in [self-test-checklist.json](self-test-checklist.json) |
 | Runtime | Windows 11, Tauri 2, WebView2, PowerShell/ConPTY |
 | Data boundary | Fresh E: verification workspace; isolated D: vault/artifact/catalog roots |
 | Overall status | IN_PROGRESS until every row has automated or recorded manual evidence |

@@ -1,0 +1,48 @@
+# MÖBIUS
+
+> A local-first Windows workspace for people who use Codex, Claude Code, Pi, Grok, and OMP on the same projects.
+
+Möbius is open-source desktop software. It groups approved local agent transcripts by project directory, resumes the original harness in real PowerShell, and creates explicit cross-agent handoffs without rewriting source history.
+
+## What Möbius is
+
+Möbius is a Rust/Tauri workspace that reconnects sessions from multiple coding agents. Native resume stays with the original harness. Switching agents starts a new target session and carries confirmed Session references, not a generated summary.
+
+## What Möbius is not
+
+- It does not provide model accounts, subscriptions, or API credits.
+- It does not rewrite Codex, Claude Code, Pi, Grok, or OMP transcripts.
+- It does not inject other sessions into context by default.
+- Semantic / vector search is not available in v0.3.19. Local recall is FTS/BM25 only.
+
+## Core workflows
+
+1. Find sessions from the project and worktree, then inspect the exact source message.
+2. Resume the original agent in an interactive PowerShell tab, or open a blank terminal.
+3. Hand off a reviewable reference envelope to another agent in the same checkout.
+4. Follow the project handoff graph back to confirmed ancestors.
+5. Keep Markdown notes, a multimedia canvas, read-only folder mounts, and managed skills beside the workbench.
+
+## Precise search vs full-text vs semantic
+
+- Precise references: copy `@session:provider/id#mN` when the source is known.
+- Full-text recall: Mome uses local SQLite FTS/BM25, returns at most three citable sessions, and caps output at about 1,200 tokens.
+- Semantic / vector / hybrid search: not available in this release.
+
+## Supported harnesses
+
+Codex, Claude Code, Pi, Grok, and OMP. Native resume is shown only when the installed harness has a verified resume protocol. Current Grok history remains inspect/search/handoff-only.
+
+## Links
+
+- Product site: http://8.137.87.76/mobius/
+- Source: https://github.com/TardisBooo/Mobius
+- Releases: https://github.com/TardisBooo/Mobius/releases
+- Chinese README: https://github.com/TardisBooo/Mobius/blob/main/README.zh-CN.md
+- Acceptance evidence: https://github.com/TardisBooo/Mobius/blob/main/docs/acceptance/self-test-checklist.md
+- License: MIT
+
+## Optional
+
+- [Product film](https://tardisbooo.github.io/Mobius/#demo): a scripted English tour of the real UI with fictional demo data.
+- [Portfolio](https://tardisbooo.github.io/portfolio/): other public projects by Tardis.

@@ -235,7 +235,7 @@ export function SessionLibraryV2({ revision, indexing, workspaces, health, attac
       <header><div><span className={`provider-pill ${selected.session.provider}`}>{name(selected.session.provider)}</span><h2>{selected.session.title}</h2><small>{activeWorkspace?.workspace.display_name ?? text.unassigned}</small></div>
       <div className="reader-actions-v2">
         {attachedSessionIds.includes(selected.session.id) ? <span className="session-connected" role="status"><CheckCircle2 size={16}/>{text.connected}</span> : selected.session.capabilities.includes("native_resume") ? <button className="primary-button" disabled={resumingId === selected.session.id} onClick={() => void resume()}>{resumingId === selected.session.id ? <LoaderCircle className="spin" size={16}/> : <CirclePlay size={16}/>} {text.resume}</button> : <button className="soft-button" disabled>{text.noNative}</button>}
-        <button className="soft-button" onClick={() => setHandoffOpen(true)}><Send size={16}/>{handoffLabel}</button>
+        <button className="soft-button" onClick={() => setHandoffOpen(true)} aria-label={handoffLabel}><Send size={16}/>{handoffLabel}</button>
         <button className="icon-soft" aria-label={text.copyReference} title={text.copyReference} disabled={!selectedMessage} onClick={() => selectedMessage && void copy(referenceText(selected.session, selectedMessage))}><Link2 size={16}/></button>
       </div></header>
       <div className="message-toolbar"><span>{text.messages}</span><small>{messages.length}</small></div>

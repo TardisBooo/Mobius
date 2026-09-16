@@ -241,6 +241,10 @@ export function BoardPage({ onToast, initialBoardId, onBackToLibrary }: {
     try { const scene: Scene = { version: 4, nodes: serializableNodes(), edges, viewport, parentId }; await desktopApi.saveBoard({ id: boardId, title: boardTitle.trim() || label("未命名画布", "Untitled canvas"), project_slug: null, data: { version: 4, scene }, updated_at: new Date().toISOString() }); setDirty(false); await reloadBoards(); if (!quiet) onToast(label("画布已保存，媒体仅保存本地资产引用。", "Canvas saved; media are stored as local asset references.")); }
     catch (error) { onToast(String(error)); } finally { setSaving(false); }
   }, [boardId, boardTitle, edges, label, onToast, parentId, reloadBoards, serializableNodes, viewport]);
+  const leaveToLibrary = useCallback(async () => {
+    if (dirty) await save(true);
+    onBackToLibrary();
+  }, [dirty, onBackToLibrary, save]);
 
   // Keep a synchronous snapshot for the unmount path. React may remove the
   // canvas immediately when the user changes a rail section; invoking the
@@ -413,7 +417,7 @@ export function BoardPage({ onToast, initialBoardId, onBackToLibrary }: {
   }, [label, onToast]);
 
   return <section className="mobius-board page-fill" aria-label={label("无限画布", "Infinite canvas")}>
-    <div className="board-topbar"><div className="board-breadcrumb"><button onClick={onBackToLibrary} aria-label={label("返回资料库", "Back to Library")} title={label("返回资料库", "Back to Library")}><ChevronLeft/>{label("资料库", "Library")}</button>{breadcrumb ? <><span>/</span><button onClick={() => openBoardById(breadcrumb.id)}>{breadcrumb.title}</button></> : null}<span>/</span><input value={boardTitle} onChange={(event) => { setBoardTitle(event.target.value); setDirty(true); }} aria-label={label("画布标题", "Canvas title")}/></div><div className="board-top-actions"><span className={dirty ? "board-state dirty" : "board-state"}>{saving ? label("保存中", "Saving") : dirty ? label("待保存", "Unsaved") : label("已保存", "Saved")}</span><button className="board-icon-button" onClick={toggleFullscreen} aria-pressed={isFullscreen} aria-label={label("全屏", "Fullscreen")} title={label("全屏", "Fullscreen")}>{isFullscreen ? <Minimize2/> : <Maximize2/>}</button><button className="board-save" onClick={() => void save()} disabled={saving}><Save/>{t("Save")}</button></div></div>
+    <div className="board-topbar"><div className="board-breadcrumb"><button onClick={() => void leaveToLibrary()} aria-label={label("返回资料库", "Back to Library")} title={label("返回资料库", "Back to Library")}><ChevronLeft/>{label("资料库", "Library")}</button>{breadcrumb ? <><span>/</span><button onClick={() => openBoardById(breadcrumb.id)}>{breadcrumb.title}</button></> : null}<span>/</span><input value={boardTitle} onChange={(event) => { setBoardTitle(event.target.value); setDirty(true); }} aria-label={label("画布标题", "Canvas title")}/></div><div className="board-top-actions"><span className={dirty ? "board-state dirty" : "board-state"}>{saving ? label("保存中", "Saving") : dirty ? label("待保存", "Unsaved") : label("已保存", "Saved")}</span><button className="board-icon-button" onClick={toggleFullscreen} aria-pressed={isFullscreen} aria-label={label("全屏", "Fullscreen")} title={label("全屏", "Fullscreen")}>{isFullscreen ? <Minimize2/> : <Maximize2/>}</button><button className="board-save" onClick={() => void save()} disabled={saving}><Save/>{t("Save")}</button></div></div>
     <div ref={stageRef} className="board-stage" data-tool={tool} tabIndex={0} onKeyDown={handleStageKeyDown} onPaste={handlePaste} onPointerDownCapture={(event) => {
       lastPointer.current = { x: event.clientX, y: event.clientY };
       if (!isEditableTarget(event.target) && !(event.target as Element).closest("button, a, video, audio, select")) event.currentTarget.focus({ preventScroll: true });

@@ -111,9 +111,9 @@ The source stays read-only. Repeated handoffs form a relay graph so a later agen
 
 ## Install
 
-Download the [v0.3.17 Windows preview](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.17): installer or portable EXE. Check the included SHA-256 sums and known limitations. Development builds may be unsigned and trigger SmartScreen.
+Download the [v0.3.19 Windows preview](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.19): installer or portable EXE. Check the included SHA-256 sums and known limitations. Development builds may be unsigned and trigger SmartScreen.
 
-See the [0.3.17 UI acceptance](docs/acceptance/ui-distillation-0.3.17.md). MÖBIUS uses each installed harness only through its documented command-line interface; it does not patch or replace Codex, Claude Code, Pi, Grok, or OMP.
+See the [self-test checklist](docs/acceptance/self-test-checklist.md) and the [0.3.18 Library live-sync acceptance](docs/acceptance/library-live-sync-0.3.18.md). MÖBIUS uses each installed harness only through its documented command-line interface; it does not patch or replace Codex, Claude Code, Pi, Grok, or OMP.
 
 ### Build from source
 

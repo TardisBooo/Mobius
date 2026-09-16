@@ -14,7 +14,7 @@ function focusableElements(container: HTMLElement) {
   return [...container.querySelectorAll<HTMLElement>(focusableSelector)].filter((element) => !element.hidden && element.getAttribute("aria-hidden") !== "true");
 }
 
-export function AccessibleDialog({ title, closeLabel = "Close", children, onClose, initialFocusRef }: {
+export function AccessibleDialog({ title, closeLabel = "Close dialog", children, onClose, initialFocusRef }: {
   title: ReactNode;
   closeLabel?: string;
   children: ReactNode;

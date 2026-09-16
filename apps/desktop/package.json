@@ -1,6 +1,6 @@
 {
   "name": "mobius-desktop",
-  "version": "0.3.18",
+  "version": "0.3.19",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,8 @@
     "build:desktop": "tauri build --debug --no-bundle",
     "check": "tsc --noEmit",
     "test:window-drag": "node --test tests/window-drag-config.test.mjs",
-    "test:smoke": "playwright test --config playwright.smoke.config.ts"
+    "test:smoke": "playwright test --config playwright.smoke.config.ts",
+    "sync:checklist": "node scripts/sync-self-test-checklist.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

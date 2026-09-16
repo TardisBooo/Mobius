@@ -29,7 +29,7 @@ if (!within(outputDir, testRoot)) {
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: ["mobius.isolated.smoke.spec.ts", "interaction-regression.spec.ts"],
+  testMatch: ["mobius.isolated.smoke.spec.ts", "interaction-regression.spec.ts", "self-test-checklist.spec.ts"],
   timeout: 45_000,
   workers: 1,
   outputDir,
