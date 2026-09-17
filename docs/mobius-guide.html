@@ -43,7 +43,7 @@
 Set-Location mobius-connect
 cargo build --release --locked
 $mc = (Resolve-Path .\target\release\mobius-connect.exe).Path
-$vault = 'D:\DataVault\MobiusDemo'
+$vault = Join-Path $env:LOCALAPPDATA 'MobiusDemo'
 &amp; $mc --data-root $vault init
 &amp; $mc --data-root $vault doctor</code></pre></div>
 <p class="small">后面的命令都在同一 PowerShell 中执行，复用 $mc 与 $vault。不要把演示 vault 和正式 vault 混用。若需要与桌面共享图谱，必须明确指向桌面实际使用的数据仓库；相同项目路径不会自动共享索引。</p>
@@ -59,7 +59,7 @@ $source = 'D:\YourCodexHome\sessions'
 &amp; $mc --data-root $vault graph export --format mermaid $sid
 &amp; $mc --data-root $vault memory reference $sid
 &amp; $mc --data-root $vault sessions read $sid --offset 0 --bytes 4096</code></pre></div><p class="small">导出打印到 stdout；支持 JSON、Mermaid 和静态 HTML 引用列表。read 的单位是字节，每次 1–16384 字节；未对齐的 UTF-8 片段可能以 hex 返回，按响应的 encoding 解读。直接 CLI 读取是用户显式操作，MCP 读取则另外要求授权 token。</p>
-<h3>4. 准备 → 人工授权 → 启动 → 检查状态</h3><div class="codebox"><div class="codebar"><span>PowerShell / 启动会创建新会话</span><button class="copy" data-copy="cli-handoff">复制</button></div><pre><code id="cli-handoff">$project = 'E:\Workspaces\demo\app'
+<h3>4. 准备 → 人工授权 → 启动 → 检查状态</h3><div class="codebox"><div class="codebar"><span>PowerShell / 启动会创建新会话</span><button class="copy" data-copy="cli-handoff">复制</button></div><pre><code id="cli-handoff">$project = Join-Path $HOME 'projects\demo-app'
 $prepared = &amp; $mc --data-root $vault handoff prepare --harness codex --cwd $project $sid | ConvertFrom-Json
 $prepared.graph | ConvertTo-Json -Depth 20
 $hid = $prepared.handoff.id
@@ -78,8 +78,8 @@ $token = Read-Host '输入刚才收到的授权 token'
 <div class="codebox"><div class="codebar"><span>客户端配置示例 / 路径需替换</span><button class="copy" data-copy="mcp-config">复制</button></div><pre><code id="mcp-config">{
   "mcpServers": {
     "mobius": {
-      "command": "E:\\Workspaces\\Mobius\\repos\\mobius-connect\\target\\release\\mobius-connect.exe",
-      "args": ["--data-root", "D:\\DataVault\\MobiusDemo", "mcp", "serve"]
+      "command": "mobius-connect",
+      "args": ["--data-root", "%LOCALAPPDATA%\\MobiusDemo", "mcp", "serve"]
     }
   }
 }</code></pre></div><p class="small">该服务通过标准输入输出通信，不开放 HTTP 端口。不要把 PowerShell 提示符或普通日志写入 MCP stdout。CLI 和 MCP 使用同一个 vault 才能看到同一份图谱和授权。</p>
@@ -127,7 +127,7 @@ $sidC = 'C 的真实内部 session.id'
 <details><summary>找不到原始来源，或准备交接失败怎么办？</summary><p>先检查 Sources 的授权目录、文件是否仍存在、session ID 是否来自同一个 vault，以及目标 checkout 是否已注册。图谱中的缺失来源会明确标出；不要通过修改 Harness 的历史 JSONL 来“修复”路径。</p></details>
 <details><summary>图谱能让模型自动知道全部过去吗？</summary><p>不能。它提供路标和来源。模型是否读取、读取多少、如何使用，由模型及其 Harness 决定。原始历史里的命令也只是历史数据，不是新的执行授权。</p></details>
 </section>
-</main><footer><div class="wrap"><p>指南对齐：桌面开发分支 feat/session-lineage-references · 共享核心 6f2765a · mobius-connect 67e02fd。示意图为教学案例，不包含个人会话或凭据。</p><div class="footer-links"><a href="https://github.com/TardisBooo/Mobius/tree/feat/session-lineage-references" target="_blank" rel="noopener noreferrer">桌面源码 ↗</a><a href="https://github.com/TardisBooo/mobius-connect" target="_blank" rel="noopener noreferrer">CLI / MCP 源码 ↗</a><a href="https://github.com/TardisBooo/Mobius/blob/feat/session-lineage-references/docs/session-lineage-implementation.md" target="_blank" rel="noopener noreferrer">开发验收记录 ↗</a></div></div></footer>
+</main><footer><div class="wrap"><p>示意图为教学案例，不包含个人会话或凭据。</p><div class="footer-links"><a href="https://github.com/TardisBooo/Mobius" target="_blank" rel="noopener noreferrer">桌面源码 ↗</a><a href="https://github.com/TardisBooo/mobius-connect" target="_blank" rel="noopener noreferrer">CLI / MCP 源码 ↗</a><a href="https://github.com/TardisBooo/Mobius/blob/main/docs/session-lineage-implementation.md" target="_blank" rel="noopener noreferrer">开发验收记录 ↗</a></div></div></footer>
 <script>
 const data={a:{title:'确定重试机制',harness:'Codex',time:'2026-09-12 09:00',last:'最多重试三次，并保留失败原因。',parents:[]},b:{title:'实现有限次数重试',harness:'Claude',time:'2026-09-12 10:20',last:'重试上限已实现，准备验证边界条件。',parents:['a']},c:{title:'验证故障恢复',harness:'Pi',time:'2026-09-12 10:45',last:'发现超时后重试可能重复写入。',parents:['a']},d:{title:'合并实现与验证',harness:'Codex',time:'2026-09-12 11:30',last:'结合实现和验证记录，处理幂等性。',parents:['b','c']}};
 function show(ids){const ancestors=new Set();function walk(id){if(ancestors.has(id))return;ancestors.add(id);data[id].parents.forEach(walk)}ids.forEach(walk);const ordered=Object.keys(data).filter(id=>ancestors.has(id));document.querySelectorAll('[data-node]').forEach(el=>{const id=el.dataset.node;el.classList.toggle('active',ancestors.has(id));el.classList.toggle('selected',ids.includes(id));el.setAttribute('aria-pressed',String(ids.includes(id)))});document.querySelectorAll('[data-edge]').forEach(el=>el.classList.toggle('lit',[...el.dataset.edge].every(id=>ancestors.has(id))));document.getElementById('selection').textContent=`实际引用：${ordered.map(id=>id.toUpperCase()).join(' + ')}`;document.getElementById('selection-note').textContent=ids.length>1?'B + C 的准备包只有 A、B、C；尚未创建目标 D。':ids[0]==='b'?'不继承同项目的兄弟分支 C，也不继承后续 D。':ids[0]==='d'?'已有合并节点 D，回溯两条入边，公共祖先 A 仅出现一次。':'只沿已记录的入边回溯，不按目录收集全部会话。';document.getElementById('detail-title').textContent=ids.length>1?'多源交接预览':`${ids[0].toUpperCase()} · ${data[ids[0]].title}`;const dl=document.getElementById('detail-fields');dl.replaceChildren();const item=data[ids[0]];const fields=ids.length>1?[['源节点','B + C'],['祖先去重','A 只引用一次'],['目标节点','等待实际创建与识别'],['工作目录','由用户在准备时明确选择']]:[['Harness',item.harness],['内部 ID',`demo-${ids[0]}`],['原生 ID',`native-demo-${ids[0]}`],['示例时间',item.time],['对话摘录',item.last]];for(const [key,value]of fields){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=key;dd.textContent=value;dl.append(dt,dd)}const edges=[];ordered.forEach(id=>data[id].parents.filter(p=>ancestors.has(p)).forEach(p=>edges.push({source:`demo-${p}`,target:`demo-${id}`})));document.getElementById('graph-json').textContent=JSON.stringify({content_mode:'references_only',entry_session_ids:ids.map(id=>`demo-${id}`),nodes:ordered.map(id=>({session_id:`demo-${id}`,harness:data[id].harness.toLowerCase(),native_id:`native-demo-${id}`})),edges},null,2)}

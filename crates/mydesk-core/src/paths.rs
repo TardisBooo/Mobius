@@ -20,26 +20,22 @@ impl Default for WorkspacePaths {
 
 impl WorkspacePaths {
     pub fn from_environment() -> Self {
+        // MOBIUS_* wins. MYDESK_* remains an opt-in compatibility bridge for
+        // existing launch scripts. Defaults are portable local-app-data paths,
+        // never a machine-specific drive layout.
+        let data_root = env_path("MOBIUS_DATA_ROOT", "MYDESK_DATA_ROOT")
+            .unwrap_or_else(default_data_root);
+        let workspace_root = env_path("MOBIUS_WORKSPACE", "MYDESK_WORKSPACE")
+            .unwrap_or_else(default_workspace_root);
+        let artifacts_root = env_path("MOBIUS_ARTIFACTS_ROOT", "MYDESK_ARTIFACTS_ROOT")
+            .unwrap_or_else(|| data_root.join("artifacts"));
+        let catalog_root = env_path("MOBIUS_CATALOG_ROOT", "MYDESK_CATALOG_ROOT")
+            .unwrap_or_else(|| data_root.join("catalog"));
         Self {
-            // Möbius never defaults to a previous MyDesk installation or to a
-            // harness home.  The MYDESK_* names remain a deliberate opt-in
-            // compatibility bridge for existing launch scripts.
-            workspace_root: env_path(
-                "MOBIUS_WORKSPACE",
-                "MYDESK_WORKSPACE",
-                r"E:\Workspaces\Mobius",
-            ),
-            data_root: env_path(
-                "MOBIUS_DATA_ROOT",
-                "MYDESK_DATA_ROOT",
-                r"D:\DataVault\Mobius",
-            ),
-            artifacts_root: env_path(
-                "MOBIUS_ARTIFACTS_ROOT",
-                "MYDESK_ARTIFACTS_ROOT",
-                r"D:\AcceptedArtifacts\Mobius",
-            ),
-            catalog_root: env_path("MOBIUS_CATALOG_ROOT", "MYDESK_CATALOG_ROOT", r"D:\Catalog"),
+            workspace_root,
+            data_root,
+            artifacts_root,
+            catalog_root,
         }
     }
 
@@ -137,11 +133,27 @@ impl WorkspacePaths {
     }
 }
 
-fn env_path(primary: &str, legacy: &str, fallback: &str) -> PathBuf {
+fn env_path(primary: &str, legacy: &str) -> Option<PathBuf> {
     env::var_os(primary)
         .or_else(|| env::var_os(legacy))
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(fallback))
+}
+
+fn default_workspace_root() -> PathBuf {
+    env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+}
+
+fn default_data_root() -> PathBuf {
+    if let Some(base) = env::var_os("LOCALAPPDATA") {
+        return PathBuf::from(base).join("Mobius");
+    }
+    if let Some(home) = env::var_os("HOME").or_else(|| env::var_os("USERPROFILE")) {
+        return PathBuf::from(home)
+            .join(".local")
+            .join("share")
+            .join("mobius");
+    }
+    default_workspace_root().join(".mobius")
 }
 
 #[cfg(test)]
@@ -166,5 +178,16 @@ mod tests {
             env::remove_var("MOBIUS_WORKSPACE");
             env::remove_var("MYDESK_WORKSPACE");
         }
+    }
+
+    #[test]
+    fn default_data_root_is_portable_local_app_data() {
+        let data = super::default_data_root();
+        let text = data.to_string_lossy();
+        assert!(
+            !text.contains("DataVault") && !text.contains("AcceptedArtifacts"),
+            "default data root should be portable local app data, got {text}"
+        );
+        assert!(text.to_ascii_lowercase().contains("mobius"));
     }
 }

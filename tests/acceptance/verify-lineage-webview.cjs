@@ -15,7 +15,7 @@ const path = require('node:path');
     await page.goto('http://localhost:1420/');
     await page.evaluate(() => {
       localStorage.setItem('mobius.onboarding.complete', '1');
-      localStorage.setItem('mydesk.locale.v2', 'en');
+      localStorage.setItem('mobius.locale.v2', 'en');
     });
     await page.reload();
     await expect(page.locator('.workspace-atlas')).toBeVisible({ timeout: 20000 });

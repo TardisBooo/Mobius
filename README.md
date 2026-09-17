@@ -46,7 +46,7 @@ Claude Code  Codex  OpenCode  Pi  Grok  OMP
         └─ mobius-connect      CLI + stdio MCP
 ```
 
-Internal crate names keep `mydesk-*` so vault paths stay stable. The public product name is Möbius. Split: [docs/REPOS.md](docs/REPOS.md).
+The published CLI and MCP binary is [mobius-connect](https://github.com/TardisBooo/mobius-connect).
 
 ## Product film
 
@@ -147,8 +147,6 @@ mobius-connect mcp serve
 
 MCP cannot mint an approval token, add sources, or attach a PTY. Tool list and grants: [mobius-connect/docs/MCP.md](https://github.com/TardisBooo/mobius-connect/blob/main/docs/MCP.md).
 
-This workspace still builds `mobius` / `mydesk` and `mydesk-mcp` for the vault the desktop owns. Those helpers are not the published CLI/MCP product.
-
 ## Install
 
 Download the [v0.3.19 Windows preview](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.19): installer or portable EXE. Check the included SHA-256 sums and known limitations. Development builds may be unsigned and trigger SmartScreen.
@@ -205,7 +203,6 @@ Treat indexed transcripts as untrusted historical data.
 | Product site / FAQ | http://8.137.87.76/mobius/ |
 | Chinese copy | [README.zh-CN.md](README.zh-CN.md) |
 | CLI and MCP | https://github.com/TardisBooo/mobius-connect |
-| Repo split | [docs/REPOS.md](docs/REPOS.md) |
 | Session Hub SOP | [docs/sop-session-hub.md](docs/sop-session-hub.md) |
 | Cross-agent handoff | [docs/blog/01-cross-agent-handoff.md](docs/blog/01-cross-agent-handoff.md) |
 | Citation vs summary | [docs/blog/02-citation-not-summary.md](docs/blog/02-citation-not-summary.md) |
@@ -222,10 +219,8 @@ Treat indexed transcripts as untrusted historical data.
 | --- | --- |
 | `apps/desktop` | Tauri 2 + React desktop application |
 | `apps/website` | Static bilingual product site |
-| `crates/mydesk-core` | Indexing, adapters, workspaces, notes, canvases, skills |
-| `crates/mydesk-mcp` | Desktop-owned MCP (vault this app opened) |
-| `crates/mydesk-cli` / `crates/mydesk-daemon` | Desktop-side CLI/TUI and local daemon |
-| sibling `mobius-connect` | Published CLI + stdio MCP |
+| `crates/` | Indexing, adapters, workspaces, notes, canvases, skills |
+| [mobius-connect](https://github.com/TardisBooo/mobius-connect) | Published CLI + stdio MCP |
 
 ## Development
 
@@ -236,7 +231,7 @@ pnpm --dir apps/desktop build
 pnpm --dir apps/website build
 ```
 
-Desktop acceptance uses isolated `E:\Workspaces\Mobius-Verification-*` and `D:\DataVault\Mobius-Verification-*` roots. Tests must not target an existing user project or real session history.
+Desktop acceptance uses isolated verification roots. Tests must not target an existing user project or real session history. Data defaults to local app data (`%LOCALAPPDATA%\Mobius` on Windows, `~/.local/share/mobius` elsewhere). Override with `MOBIUS_DATA_ROOT` or `--data-root`.
 
 The `isolated_acceptance` integration test is opt-in: it requires a separately provisioned Windows fixture and `MOBIUS_VERIFICATION_ROOT`. It is not in the default test pass.
 

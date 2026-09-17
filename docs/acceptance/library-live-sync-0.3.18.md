@@ -6,7 +6,7 @@ Date: 2026-09-16 (Asia/Shanghai)
 
 - Source: `E:\Workspaces\Mobius\repos\desktop`
 - Maintained installation: `E:\SOFTWARE\Mobius`
-- Desktop shortcut: `C:\Users\MSI-NB\Desktop\Mobius.lnk`
+- Desktop shortcut: user desktop shortcut to the maintained installation
 - Isolated verification: `E:\Workspaces\_verification\mobius-ui-state-20260916`
 - Accepted package: `D:\AcceptedArtifacts\Mobius\v0.3.18\MOBIUS-0.3.18-windows-x64-setup.exe`
 

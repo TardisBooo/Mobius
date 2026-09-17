@@ -177,7 +177,7 @@ test("full isolated desktop acceptance: all local product flows remain explicit 
   try {
     await page.evaluate(() => {
       localStorage.setItem("mobius.onboarding.complete", "1");
-      localStorage.setItem("mydesk.locale.v2", "en");
+      localStorage.setItem("mobius.locale.v2", "en");
       localStorage.setItem("mobius.theme", "dark");
     });
     await page.reload();

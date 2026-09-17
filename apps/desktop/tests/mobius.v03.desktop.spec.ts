@@ -45,7 +45,7 @@ test("v0.3 isolated desktop: all harnesses, sessions, @ picker, canvas, and term
   try {
     await page.evaluate(() => {
       localStorage.setItem("mobius.onboarding.complete", "1");
-      localStorage.setItem("mydesk.locale.v2", "en");
+      localStorage.setItem("mobius.locale.v2", "en");
     });
     await page.reload();
     await expect(page.locator(".workspace-atlas")).toBeVisible();

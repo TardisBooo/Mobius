@@ -1285,7 +1285,7 @@ fn truncate_shareable(value: &str, limit: usize) -> String {
     if value.chars().count() <= limit {
         return value.to_string();
     }
-    const OMITTED: &str = "\n\n[MyDesk omitted oversized message payload]\n\n";
+    const OMITTED: &str = "\n\n[Möbius omitted oversized message payload]\n\n";
     let marker = OMITTED.chars().count();
     if limit <= marker {
         return value.chars().take(limit).collect();
@@ -1802,8 +1802,8 @@ mod tests {
         fs::write(
             session_directory.join("summary.json"),
             serde_json::to_vec(&json!({
-                "info": {"id": "grok-session-42", "cwd": "E:\\Workspaces\\MyDesk-AgentSession-SmokeTest"},
-                "git_root_dir": "E:/Workspaces/MyDesk-AgentSession-SmokeTest/"
+                "info": {"id": "grok-session-42", "cwd": "C:\\Users\\example\\projects\\checkout-smoke"},
+                "git_root_dir": "C:/Users/example/projects/checkout-smoke/"
             }))
             .expect("summary json"),
         )
@@ -1812,7 +1812,7 @@ mod tests {
         let parsed = parse_session(&history, AgentKind::Grok).expect("parse");
         assert_eq!(
             parsed.cwd.as_deref(),
-            Some("E:\\Workspaces\\MyDesk-AgentSession-SmokeTest")
+            Some("C:\\Users\\example\\projects\\checkout-smoke")
         );
     }
 

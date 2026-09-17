@@ -344,7 +344,7 @@ mod tests {
         let root = temporary.path();
         fs::write(
             root.join("map.csv"),
-            "OldPath,NewPath,State\nD:\\Data\\HC_PROJECT,E:\\Workspaces\\legacy,ACTIVE\nD:\\Data\\HC_PROJECT\\MyDesk,E:\\Workspaces\\MyDesk,ACTIVE\n",
+            "OldPath,NewPath,State\nC:\\old\\projects,C:\\Users\\example\\projects\\legacy,ACTIVE\nC:\\old\\projects\\app,C:\\Users\\example\\projects\\app,ACTIVE\n",
         )
         .expect("write map");
         let report = SessionMapCatalog::load(root).expect("load");
@@ -352,9 +352,9 @@ mod tests {
         let catalog = SessionMapCatalog::from_entries(report.entries);
         assert_eq!(
             catalog
-                .resolve_forward(Path::new(r"d:\data\hc_project\MYDESK\crates"))
+                .resolve_forward(Path::new(r"c:\old\projects\APP\crates"))
                 .expect("mapping"),
-            PathBuf::from(r"E:\Workspaces\MyDesk\crates")
+            PathBuf::from(r"C:\Users\example\projects\app\crates")
         );
     }
 
@@ -363,7 +363,7 @@ mod tests {
         let temporary = tempfile::tempdir().expect("temp");
         let path = temporary.path().join("mapping.json");
         let original =
-            r#"{"original_cwd":"D:\\Data\\HC_PROJECT\\A","new_cwd":"E:\\Workspaces\\A"}"#;
+            r#"{"original_cwd":"C:\\old\\projects\\A","new_cwd":"C:\\Users\\example\\projects\\A"}"#;
         fs::write(&path, original).expect("write");
         let report = SessionMapCatalog::load(temporary.path()).expect("load");
         assert_eq!(report.entries.len(), 1);

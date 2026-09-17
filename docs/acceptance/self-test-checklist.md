@@ -40,7 +40,7 @@ Verify with `node apps/desktop/scripts/sync-self-test-checklist.mjs --check`.
 | W-01 | Custom title bar and brand | `.mobius-topbar` shows MÖBIUS | `.mobius-topbar .mobius-brand strong` |
 | W-02 | Window controls exist | Minimize, Maximize, Close | `.window-controls [aria-label]` |
 | W-04 | Theme switch persists | `html[data-theme]` and `mobius.theme` | `button[aria-label='Switch theme']` |
-| W-05 | Language switch persists | Rail labels update; `mydesk.locale.v2` saved | `button[aria-label='Switch language']` |
+| W-05 | Language switch persists | Rail labels update; `mobius.locale.v2` saved | `button[aria-label='Switch language']` |
 | W-06 | Ctrl+K focuses session search | Agents page with caret in `.session-search-v2 input` | `.session-search-v2 input` |
 | W-07 | Rail Workspaces always opens atlas | From terminal, Workspaces rail shows `.workspace-atlas` | `.mobius-rail .rail-item` |
 

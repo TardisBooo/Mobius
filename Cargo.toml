@@ -12,7 +12,7 @@ resolver = "3"
 version = "0.3.19"
 edition = "2024"
 license = "MIT"
-authors = ["MyDesk"]
+authors = ["Tardis"]
 
 [workspace.dependencies]
 anyhow = "1.0"

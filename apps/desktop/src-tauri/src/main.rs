@@ -2690,7 +2690,7 @@ fn main() {
             terminal_close,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running MyDesk desktop application");
+        .expect("error while running Möbius desktop application");
 }
 
 #[cfg(test)]

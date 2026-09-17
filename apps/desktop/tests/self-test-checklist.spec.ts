@@ -26,7 +26,7 @@ test("checklist: expand checkouts, unique dialog cancel, graph tab, canvas reope
   await page.bringToFront();
   await page.evaluate(() => {
     localStorage.setItem("mobius.onboarding.complete", "1");
-    localStorage.setItem("mydesk.locale.v2", "en");
+    localStorage.setItem("mobius.locale.v2", "en");
     localStorage.setItem("mobius.theme", "dark");
   });
   await page.reload();

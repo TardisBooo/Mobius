@@ -451,8 +451,8 @@ export const desktopApi = {
       managed_id: null,
       skill: clone(skill),
       target,
-      target_root: target === "project" ? "E:\\Workspaces\\MyDesk\\.agents\\skills" : "C:\\Users\\MSI-NB\\.agents\\skills",
-      destination: (target === "project" ? "E:\\Workspaces\\MyDesk\\.agents\\skills\\" : "C:\\Users\\MSI-NB\\.agents\\skills\\") + skill.name,
+      target_root: target === "project" ? "C:\\Users\\example\\projects\\checkout\\.agents\\skills" : "C:\\Users\\example\\.agents\\skills",
+      destination: (target === "project" ? "C:\\Users\\example\\projects\\checkout\\.agents\\skills\\" : "C:\\Users\\example\\.agents\\skills\\") + skill.name,
       can_install: !skill.managed,
       reason: skill.managed ? "This destination already has a managed copy." : "A new managed copy will be created; the source remains untouched."
     };

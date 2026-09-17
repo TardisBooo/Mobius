@@ -42,7 +42,7 @@ test("workspace drag, note save, mount tree and terminal contrast", async () => 
     await page.evaluate(() => {
       localStorage.setItem("mobius.onboarding.complete", "1");
       localStorage.setItem("mobius.theme", "light");
-      localStorage.setItem("mydesk.locale.v2", "en");
+      localStorage.setItem("mobius.locale.v2", "en");
       localStorage.setItem("mobius.workspace.recent.v2", "[]");
       localStorage.setItem("mobius.workspace.recent.v2.seeded", "1");
     });

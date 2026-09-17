@@ -14,7 +14,7 @@ Facts locked to v0.3.19:
 - Desktop: https://github.com/TardisBooo/Mobius
 - CLI/MCP: https://github.com/TardisBooo/mobius-connect
 
-Attach `apps/website/public/product/session-hub-60s.gif` (60s social cut: search → cite → handoff → lineage) plus the handoff-graph screenshot. Full tour GIF: `apps/website/public/product/session-hub.gif`. Master MP4 with music: `apps/website/public/media/mobius-product-film.mp4` (32.6 MB, 109.3s, SHA-256 6779F673…5E79E8). Film source and version lineage live outside the repo at `D:\AcceptedArtifacts\Mobius\media\product-film-lineage\`.
+Attach `apps/website/public/product/session-hub-60s.gif` (60s social cut: search → cite → handoff → lineage) plus the handoff-graph screenshot. Full tour GIF: `apps/website/public/product/session-hub.gif`. Master MP4 with music: `apps/website/public/media/mobius-product-film.mp4` (32.6 MB, 109.3s, SHA-256 6779F673…5E79E8). Film source is archived outside the repository.
 
 ---
 
@@ -86,7 +86,7 @@ Möbius is an open-source session layer that sits next to the CLIs you already r
 - hand off a references-only ancestry graph to a new target session
 - search with SQLite FTS5/BM25 (optional localhost Ollama embeddings, fail-open)
 
-Rust core, Tauri desktop on Windows, sibling CLI+MCP (`mobius-connect`). Original files stay read-only. MCP cannot mint approval tokens, add sources, or attach a PTY.
+Rust core, Tauri desktop on Windows, plus CLI and MCP (`mobius-connect`). Original files stay read-only. MCP cannot mint approval tokens, add sources, or attach a PTY.
 
 Not Microsoft Mobius. Not a memory summarizer. OpenClaw adapter is not in this preview.
 

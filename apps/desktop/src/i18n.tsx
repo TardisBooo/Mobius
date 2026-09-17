@@ -1,7 +1,8 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
 export type Locale = "zh-CN" | "en";
-const STORAGE_KEY = "mydesk.locale.v2";
+const STORAGE_KEY = "mobius.locale.v2";
+const LEGACY_STORAGE_KEY = "mydesk.locale.v2";
 
 const zh: Record<string, string> = {
   Workspaces: "工作区", Sessions: "会话库", Terminal: "终端", Notes: "笔记", Canvas: "无限画布", Skills: "技能",
@@ -22,10 +23,17 @@ type I18nValue = { locale: Locale; setLocale: (locale: Locale) => void; t: (key:
 const I18nContext = createContext<I18nValue | null>(null);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(() => localStorage.getItem(STORAGE_KEY) === "en" ? "en" : "zh-CN");
+  const [locale, setLocaleState] = useState<Locale>(() => {
+    const stored = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
+    return stored === "en" ? "en" : "zh-CN";
+  });
   const value = useMemo<I18nValue>(() => ({
     locale,
-    setLocale(next) { localStorage.setItem(STORAGE_KEY, next); setLocaleState(next); },
+    setLocale(next) {
+      localStorage.setItem(STORAGE_KEY, next);
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+      setLocaleState(next);
+    },
     t(key) { return locale === "zh-CN" ? zh[key] ?? key : key; }
   }), [locale]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;

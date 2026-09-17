@@ -38,7 +38,7 @@
         { "id": "W-01", "name": "Custom title bar and brand", "expect": "`.mobius-topbar` shows MÖBIUS", "locator": ".mobius-topbar .mobius-brand strong" },
         { "id": "W-02", "name": "Window controls exist", "expect": "Minimize, Maximize, Close", "locator": ".window-controls [aria-label]" },
         { "id": "W-04", "name": "Theme switch persists", "expect": "`html[data-theme]` and `mobius.theme`", "locator": "button[aria-label='Switch theme']" },
-        { "id": "W-05", "name": "Language switch persists", "expect": "Rail labels update; `mydesk.locale.v2` saved", "locator": "button[aria-label='Switch language']" },
+        { "id": "W-05", "name": "Language switch persists", "expect": "Rail labels update; `mobius.locale.v2` saved", "locator": "button[aria-label='Switch language']" },
         { "id": "W-06", "name": "Ctrl+K focuses session search", "expect": "Agents page with caret in `.session-search-v2 input`", "locator": ".session-search-v2 input" },
         { "id": "W-07", "name": "Rail Workspaces always opens atlas", "expect": "From terminal, Workspaces rail shows `.workspace-atlas`", "locator": ".mobius-rail .rail-item" }
       ]

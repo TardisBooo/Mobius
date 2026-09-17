@@ -8,8 +8,8 @@ license.workspace = true
 name = "mydesk"
 path = "src/main.rs"
 
-# `mobius` is the product-facing spelling. Keep `mydesk` for existing local
-# scripts while both entry points intentionally expose the same commands.
+# `mobius` is the product binary. `mydesk` remains as an alias for existing
+# local scripts. Both entry points expose the same commands.
 [[bin]]
 name = "mobius"
 path = "src/mobius.rs"

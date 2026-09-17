@@ -36,7 +36,7 @@ Agent 已经把这些 transcript 写在磁盘上，却埋在 `~/.codex`、`~/.cl
 | CLI + MCP | [mobius-connect](https://github.com/TardisBooo/mobius-connect)；MCP 不能签发审批 |
 | 笔记、画布、技能 | Markdown、无限画布、目录挂载、技能版本 |
 
-内部 crate 仍叫 `mydesk-*`。对外产品名是 Möbius。分仓：[docs/REPOS.md](docs/REPOS.md)。
+发布用的 CLI 与 MCP 是 [mobius-connect](https://github.com/TardisBooo/mobius-connect)。
 
 ## 产品视频
 
@@ -134,8 +134,6 @@ mobius-connect mcp serve
 
 MCP 不能签发审批令牌、不能添加来源、不能接管 PTY。每条命令的 GIF 在 [mobius-connect README](https://github.com/TardisBooo/mobius-connect)。工具表见 [MCP.md](https://github.com/TardisBooo/mobius-connect/blob/main/docs/MCP.md)。
 
-本仓库仍会构建给桌面金库用的 `mobius` / `mydesk` 和 `mydesk-mcp`。它们不是对外发布的 CLI/MCP 产品。
-
 ## 安装
 
 从 [v0.3.19 Releases](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.19) 下载 Windows 安装包或便携 EXE，并核对 SHA-256 和已知限制。开发构建可能未签名，会触发 SmartScreen。
@@ -176,7 +174,6 @@ Codex、Claude Code、OpenCode、Pi、Grok、OMP。OpenClaw 尚未适配。原�
 | --- | --- |
 | 产品页 / FAQ | http://8.137.87.76/mobius/?lang=zh |
 | CLI 与 MCP | https://github.com/TardisBooo/mobius-connect |
-| 分仓 | [docs/REPOS.md](docs/REPOS.md) |
 | 跨 Agent 交接 | [docs/blog/01-cross-agent-handoff.md](docs/blog/01-cross-agent-handoff.md) |
 | 精确引用 vs 摘要 | [docs/blog/02-citation-not-summary.md](docs/blog/02-citation-not-summary.md) |
 | 审批令牌 | [docs/blog/03-approval-tokens.md](docs/blog/03-approval-tokens.md) |
@@ -191,6 +188,6 @@ pnpm --dir apps/desktop build
 pnpm --dir apps/website build
 ```
 
-桌面验收只能使用隔离的 `E:\Workspaces\Mobius-Verification-*` 和 `D:\DataVault\Mobius-Verification-*`，不得针对已有用户项目或真实会话。
+桌面验收只能使用隔离的验证根目录，不得针对已有用户项目或真实会话。数据默认写在本机应用数据目录（Windows 为 `%LOCALAPPDATA%\Mobius`，其他平台为 `~/.local/share/mobius`）。可用 `MOBIUS_DATA_ROOT` 或 `--data-root` 覆盖。
 
 完整研究来源见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。代码使用 [MIT License](LICENSE)。

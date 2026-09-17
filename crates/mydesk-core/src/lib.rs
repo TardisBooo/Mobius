@@ -1,7 +1,7 @@
-//! Local-first domain layer for MyDesk.
+//! Local-first domain layer for Möbius.
 //!
-//! The crate deliberately keeps source transcripts immutable. It owns only the
-//! normalized context index and content authored through MyDesk (notes, boards,
+//! The crate keeps source transcripts immutable. It owns only the
+//! normalized context index and content authored through Möbius (notes, boards,
 //! wiki snapshots, and managed skill manifests).
 
 pub mod database;

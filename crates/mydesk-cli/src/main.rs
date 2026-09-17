@@ -31,7 +31,7 @@ use std::{
 };
 
 #[derive(Debug, Parser)]
-#[command(name = "mydesk", version, about = "Local-first multi-agent workbench")]
+#[command(name = "mobius", version, about = "Möbius local-first Agent Session Hub")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
@@ -49,7 +49,7 @@ enum Command {
         #[command(subcommand)]
         command: WorkspacesCommand,
     },
-    /// Create the D: vault layout and SQLite index.
+    /// Create the local vault layout and SQLite index.
     Init,
     /// Report local index and vault health.
     Status,
@@ -102,8 +102,8 @@ enum MigrationCommand {
     Plan,
     /// Inspect structured old-to-new session path maps without changing them.
     SessionMaps {
-        #[arg(long, default_value = r"D:\Catalog\SessionMaps")]
-        root: PathBuf,
+        #[arg(long)]
+        root: Option<PathBuf>,
         /// Include every parsed mapping instead of a small sample.
         #[arg(long)]
         details: bool,
@@ -227,7 +227,7 @@ enum SkillsCommand {
         #[arg(long, default_value = "all")]
         scope: String,
     },
-    /// List copies owned by the MyDesk managed-skill manifest.
+    /// List copies owned by the Möbius managed-skill manifest.
     Managed,
     /// Check the exact source and destination without changing either directory.
     Preview {
@@ -354,6 +354,7 @@ fn main() -> Result<()> {
                 print_json(&Database::inspect_migration(&WorkspacePaths::default())?)
             }
             MigrationCommand::SessionMaps { root, details } => {
+                let root = root.unwrap_or_else(|| WorkspacePaths::default().session_maps_dir());
                 let report = SessionMapCatalog::load(&root)?;
                 if details {
                     print_json(&report)
@@ -589,19 +590,19 @@ fn main() -> Result<()> {
         Command::Daemon { command } => match command {
             DaemonCommand::Start => {
                 println!(
-                    "Run mydesk-daemon in another PowerShell window to expose local query methods through \\\\.\\pipe\\mydesk-v1."
+                    "Run the Möbius daemon in another PowerShell window to expose local query methods through \\\\.\\pipe\\mydesk-v2."
                 );
                 Ok(())
             }
             DaemonCommand::Status => {
                 println!(
-                    "The daemon status endpoint is the local named pipe \\\\.\\pipe\\mydesk-v1."
+                    "The daemon status endpoint is the local named pipe \\\\.\\pipe\\mydesk-v2."
                 );
                 Ok(())
             }
         },
         Command::Mcp => {
-            println!("Configure agent MCP stdio with the mydesk-mcp executable.");
+            println!("Configure agent MCP stdio with mobius-connect mcp serve.");
             Ok(())
         }
     }
@@ -662,11 +663,11 @@ fn require_supported_agent(agent: &AgentKind) -> Result<()> {
 
 fn print_agent_connection(agent: AgentKind) -> Result<()> {
     let command = match agent {
-        AgentKind::Codex => "codex mcp add mydesk -- mydesk-mcp",
-        AgentKind::Claude => "claude mcp add mydesk -- mydesk-mcp",
-        AgentKind::Pi => "Add mydesk-mcp to the Pi MCP extension configuration.",
-        AgentKind::Grok => "Add mydesk-mcp to the Grok MCP configuration.",
-        AgentKind::Omp => "Add mydesk-mcp to an OMP extension or MCP configuration.",
+        AgentKind::Codex => "codex mcp add mobius -- mobius-connect mcp serve",
+        AgentKind::Claude => "claude mcp add mobius -- mobius-connect mcp serve",
+        AgentKind::Pi => "Add mobius-connect mcp serve to the Pi MCP extension configuration.",
+        AgentKind::Grok => "Add mobius-connect mcp serve to the Grok MCP configuration.",
+        AgentKind::Omp => "Add mobius-connect mcp serve to an OMP extension or MCP configuration.",
         AgentKind::Opencode => "opencode mcp add mobius -- mobius-connect mcp serve",
         AgentKind::Apodex | AgentKind::Unknown => {
             "Choose a supported agent: codex, claude, pi, grok, omp, or opencode."
@@ -718,7 +719,7 @@ fn tui_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, desk: &MyDesk) ->
 
             frame.render_widget(
                 Paragraph::new(Line::from(vec![
-                    Span::styled(" MyDesk ", Style::default().fg(Color::LightBlue).add_modifier(Modifier::BOLD)),
+                    Span::styled(" Möbius ", Style::default().fg(Color::LightBlue).add_modifier(Modifier::BOLD)),
                     Span::raw("PowerShell workbench  /  Local-first  /  q to exit"),
                 ]))
                 .block(Block::default().borders(Borders::ALL).title("Workspace")),
@@ -739,7 +740,7 @@ fn tui_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, desk: &MyDesk) ->
             );
 
             let context_items = if contexts.is_empty() {
-                vec![ListItem::new("Run mydesk notes new or import a source session.")]
+                vec![ListItem::new("Run mobius notes new or import a source session.")]
             } else {
                 contexts
                     .iter()
@@ -764,7 +765,7 @@ fn tui_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, desk: &MyDesk) ->
             );
 
             let detail = format!(
-                "Index: {} contexts\nSessions: {}\nNotes: {}\nBoards: {}\n\nPS> mydesk recall \"memory\"\nPS> /ask @project:mydesk",
+                "Index: {} contexts\nSessions: {}\nNotes: {}\nBoards: {}\n\nPS> mobius recall \"memory\"\nPS> /ask @project:example",
                 status.contexts, status.sessions, status.notes, status.boards
             );
             frame.render_widget(
@@ -775,7 +776,7 @@ fn tui_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, desk: &MyDesk) ->
             );
 
             frame.render_widget(
-                Paragraph::new(" q / Esc: exit   •   mydesk sessions search <query> for full results")
+                Paragraph::new(" q / Esc: exit   •   mobius sessions search <query> for full results")
                     .style(Style::default().fg(Color::DarkGray)),
                 vertical[2],
             );

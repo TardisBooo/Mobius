@@ -48,7 +48,7 @@ fn note_update_creates_a_snapshot_before_replacing_current_markdown() {
     let first = NoteDraft {
         title: "Architecture decision".to_string(),
         body: "First conclusion".to_string(),
-        project_slug: Some("mydesk".to_string()),
+        project_slug: Some("checkout".to_string()),
         tags: vec!["decision".to_string()],
         source_ids: Vec::new(),
     };
@@ -74,10 +74,10 @@ fn project_summary_groups_normalized_context() {
     let temporary = tempfile::tempdir().expect("temporary test root");
     let desk = MyDesk::open(test_paths(temporary.path())).expect("open desk");
     let mut first = ContextRecord::new("session:test:one", ContextKind::Session, "One");
-    first.project_slug = Some("mydesk".to_string());
+    first.project_slug = Some("checkout".to_string());
     first.body = "SQLite search test".to_string();
     let mut second = ContextRecord::new("note:test:two", ContextKind::Note, "Two");
-    second.project_slug = Some("mydesk".to_string());
+    second.project_slug = Some("checkout".to_string());
     second.body = "Snapshot test".to_string();
     desk.import_session(first).expect("index session");
     desk.database.upsert_context(&second).expect("index note");
@@ -87,7 +87,7 @@ fn project_summary_groups_normalized_context() {
         .list_project_summaries()
         .expect("project summaries");
     assert_eq!(projects.len(), 1);
-    assert_eq!(projects[0].slug, "mydesk");
+    assert_eq!(projects[0].slug, "checkout");
     assert_eq!(projects[0].count, 2);
 }
 
@@ -99,7 +99,7 @@ fn repeated_source_index_skips_unchanged_files() {
     fs::create_dir_all(&source_root).expect("source root");
     fs::write(
         source_root.join("one.jsonl"),
-        "{\"cwd\":\"E:\\\\Workspaces\\\\MyDesk\",\"message\":{\"content\":\"Incremental index\"}}\n",
+        "{\"cwd\":\"C:\\\\Users\\\\example\\\\projects\\\\checkout\",\"message\":{\"content\":\"Incremental index\"}}\n",
     )
     .expect("source session");
 

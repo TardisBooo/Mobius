@@ -110,7 +110,7 @@ impl Database {
         let library_id = "note-library:default";
         let connection = self.connection()?;
         connection.execute(
-            "INSERT OR IGNORE INTO note_libraries(id, name, root_path, created_at) VALUES (?1, 'MyDesk', ?2, ?3)",
+            "INSERT OR IGNORE INTO note_libraries(id, name, root_path, created_at) VALUES (?1, 'Möbius', ?2, ?3)",
             params![library_id, canonical.display().to_string(), now],
         )?;
         let id = format!("mount:{}", uuid::Uuid::new_v4());
@@ -163,7 +163,7 @@ pub fn list_note_library_snapshot(
     mounts: &[MountInfo],
 ) -> Result<NoteLibrarySnapshot> {
     let mut files = Vec::new();
-    collect_note_root(&paths.notes_dir(), None, "MyDesk", false, &mut files);
+    collect_note_root(&paths.notes_dir(), None, "Möbius", false, &mut files);
     let mut mount_statuses = Vec::with_capacity(mounts.len());
     for mount in mounts {
         let scan = collect_note_root(

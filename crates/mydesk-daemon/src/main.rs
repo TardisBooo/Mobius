@@ -41,7 +41,7 @@ async fn main() -> Result<()> {
         .with_target(false)
         .init();
     let desk = MyDesk::initialize()?;
-    tracing::info!(database = %desk.database.path().display(), "MyDesk daemon started");
+    tracing::info!(database = %desk.database.path().display(), "Möbius daemon started");
 
     let mut first = true;
     loop {

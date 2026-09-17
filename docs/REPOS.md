@@ -1,34 +1,24 @@
 # Repositories
 
-Möbius ships as two GitHub repositories. They share one Rust core and one product name.
+Möbius is two public repositories under one product name.
 
-| Repository | Public name | What it is |
-| --- | --- | --- |
-| [TardisBooo/Mobius](https://github.com/TardisBooo/Mobius) | Möbius desktop | Windows workspace: session library, PowerShell workbench, handoff graph, notes, canvas, skills |
-| [TardisBooo/mobius-connect](https://github.com/TardisBooo/mobius-connect) | mobius-connect | CLI and stdio MCP for search, citation, lineage, handoff, and Mome |
+| Repository | What it is |
+| --- | --- |
+| [TardisBooo/Mobius](https://github.com/TardisBooo/Mobius) | Windows desktop: session library, PowerShell workbench, handoff graph, notes, canvas, skills |
+| [TardisBooo/mobius-connect](https://github.com/TardisBooo/mobius-connect) | CLI and stdio MCP for search, citation, lineage, handoff, and Mome |
 
-## Who uses which
+A person at a Windows desktop uses **Möbius**. A person at a terminal, or an agent over MCP, uses **mobius-connect**. Both read the same approved local sources. Neither rewrites harness transcripts.
 
-- A person at a Windows desktop uses **Möbius**.
-- A person at a terminal, or an agent over MCP, uses **mobius-connect**.
-- Both read the same approved local sources. Neither rewrites harness transcripts.
-
-## Shared core
-
-`mobius-connect` depends on `mydesk-core` from the desktop tree (`../desktop/crates/mydesk-core` in a sibling checkout). Internal crate names keep `mydesk-*` so existing vault paths and commands stay stable. The public product name is Möbius.
-
-The desktop workspace still builds `mydesk-cli` (`mobius` / `mydesk`) and `mydesk-mcp` for the vault the desktop owns. Those binaries are not the published CLI/MCP product. The published session-layer binary is `mobius-connect`.
-
-## Checkout layout used in development
+To build `mobius-connect` from source, clone the desktop repository next to it as `desktop`:
 
 ```
-E:\Workspaces\Mobius\repos\desktop          # this repository
-E:\Workspaces\Mobius\repos\mobius-connect   # CLI + MCP
-D:\DataVault\Mobius                         # durable local data
-D:\AcceptedArtifacts\Mobius                 # accepted deliverables
+git clone https://github.com/TardisBooo/mobius-connect.git
+git clone https://github.com/TardisBooo/Mobius.git desktop
+cd mobius-connect
+cargo build --release
 ```
 
-Durable session history never lives only on E:. Tests use isolated `--data-root` directories. They must not point at a real user vault.
+Durable data defaults to local app data (`%LOCALAPPDATA%\Mobius` on Windows, `~/.local/share/mobius` elsewhere). Tests use isolated `--data-root` directories. They must not point at a real user vault.
 
 ## Frozen contract (both repos)
 

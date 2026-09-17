@@ -5,8 +5,7 @@
 Open `docs/mobius-guide.html` for the desktop, CLI and MCP walkthrough, clickable
 ancestor/merge examples, exact command shapes and current acceptance boundaries.
 It is a self-contained offline document; demonstration buttons never call a
-backend. The delivered copy is stored at
-`D:\AcceptedArtifacts\Mobius\guides\mobius-guide-20260912.html`.
+backend.
 `node tests/acceptance/verify-guide.cjs <isolated-output-directory>` checks graph
 selection, keyboard tabs, copy feedback, JSON examples and mobile overflow.
 `start-lineage-desktop.ps1 -Visible` opens the isolated development UI for review;
@@ -22,8 +21,6 @@ MCP must share the same graph and source authorization semantics.
 ## Baseline audit
 
 - Published baseline: b4b2f88 (0.3.13).
-- The MyDesk working directory contains untracked 0.1.0 source and is not the
-  published application. Preserve it; do not build releases from it.
 - Legacy trajectory preparation reads and copies complete native logs, rejects
   files over 16 MiB, and forces full reading. Replace that launch path.
 - Legacy relay chains are workspace-filtered and bind a single source edge.
@@ -87,14 +84,7 @@ review, not used as acceptance evidence for reference-only handoffs.
 
 ## Workspace disposition
 
-The stale untracked source in the original MyDesk directory is preserved.
-Canonical development is under `E:\Workspaces\Mobius\repos\desktop`; the
-independent tool is under the sibling `mobius-connect` repository. Verification
-trees under `E:\Workspaces\_verification\mobius-lineage-20260912-run01` (failed
-old-constraint seed) and `run02` (isolated WebView evidence) are retained for
-review, not accepted deliverables or approved deletion targets. Durable accepted
-outputs belong in `D:\AcceptedArtifacts\Mobius`; no new release has been accepted.
-Native test trees `E:\Workspaces\_verification\mobius-native-codex-20260912-run01`
-and `run02` retain the rejected-schema and empty-thread probes; `run03` retains
-the passing live native test report. All three are retained for review. The
-single new test conversation was written by Codex itself and is not deleted.
+Canonical development is this desktop repository plus
+[mobius-connect](https://github.com/TardisBooo/mobius-connect). Isolated
+verification trees are retained for review; they are not accepted deliverables.
+No new release has been accepted solely because fixture tests pass.

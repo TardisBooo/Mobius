@@ -96,7 +96,7 @@ test("isolated v0.3 Workbench, SessionLibraryV2, and PTY smoke", async () => {
     // this isolated fixture, so assertions target the v0.2 surfaces.
     await page.evaluate(() => {
       localStorage.setItem("mobius.onboarding.complete", "1");
-      localStorage.setItem("mydesk.locale.v2", "en");
+      localStorage.setItem("mobius.locale.v2", "en");
       localStorage.setItem("mobius.workspace.recent.v2", "[]");
     });
     await page.reload();

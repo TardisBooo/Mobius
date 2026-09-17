@@ -335,7 +335,7 @@ fn preview_resolved_install(
             ),
             None => (
                 None,
-                "Destination exists and is not managed by MyDesk; it will not be overwritten."
+                "Destination exists and is not managed by Möbius; it will not be overwritten."
                     .to_string(),
             ),
         };

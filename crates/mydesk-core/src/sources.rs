@@ -818,14 +818,14 @@ mod tests {
     fn indexes_jsonl_without_changing_source() {
         let temporary = tempfile::tempdir().expect("temp directory");
         let source = temporary.path().join("session.jsonl");
-        let raw = "{\"cwd\":\"E:\\\\Workspaces\\\\MyDesk\",\"message\":{\"content\":\"Useful discussion sk-abcdefghijklmnopqrstuvwxyz123456\"}}\n";
+        let raw = "{\"cwd\":\"C:\\\\Users\\\\example\\\\projects\\\\checkout\",\"message\":{\"content\":\"Useful discussion sk-abcdefghijklmnopqrstuvwxyz123456\"}}\n";
         fs::write(&source, raw).expect("write source");
 
         let record = record_from_file(&source, AgentKind::Codex, None).expect("record");
         assert!(record.body.contains("Useful discussion"));
         assert!(!record.body.contains("sk-abcdefghijklmnopqrstuvwxyz123456"));
         assert!(record.body.contains("[REDACTED]"));
-        assert_eq!(record.project_slug.as_deref(), Some("mydesk"));
+        assert_eq!(record.project_slug.as_deref(), Some("checkout"));
         assert_eq!(fs::read_to_string(source).expect("read source"), raw);
     }
 

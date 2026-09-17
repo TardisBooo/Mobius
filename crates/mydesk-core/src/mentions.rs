@@ -86,7 +86,7 @@ mod tests {
     #[test]
     fn parses_all_supported_mention_kinds() {
         let mentions = parse_mentions(
-            "Use @project:mydesk with @session:codex/abc, @note:memory-model and @board:map#node-1.",
+            "Use @project:example with @session:codex/abc, @note:memory-model and @board:map#node-1.",
         );
         assert_eq!(mentions.len(), 4);
         assert_eq!(mentions[0].kind, MentionKind::Project);
