@@ -123,7 +123,7 @@ function libraryFingerprint(snapshot: NoteLibrarySnapshot, boards: BoardDocument
   return [
     part(snapshot.mounts.map((mount) => `${mount.id}\u0001${mount.state}\u0001${mount.virtual_path}\u0001${mount.real_path}`)),
     part(snapshot.mount_statuses.map((status) => `${status.mount_id}\u0001${status.state}\u0001${status.file_count}`)),
-    part(snapshot.files.map((file) => `${file.id}\u0001${file.title}\u0001${file.modified_at}\u0001${file.virtual_path}\u0001${file.read_only ? 1 : 0}`)),
+    part(snapshot.files.map((file) => `${file.id}\u0001${file.title}\u0001${file.virtual_path}\u0001${file.read_only ? 1 : 0}`)),
     part(boards.map((board) => `${board.id}\u0001${board.title}`)),
     part(trash.map((item) => item.id)),
   ].join("\u0003");
@@ -241,6 +241,7 @@ export function NotesLibraryV2({ onError, onToast, locale, onOpenCanvas }: { onE
   const restoredSelection = useRef(false);
   const latestLibraryRequest = useRef(0);
   const selectedRef = useRef<NoteFileInfo | null>(null);
+  const selectedPathRef = useRef<string | null>(null);
   const selectionReadVersion = useRef(0);
   const automaticRefreshRunning = useRef(false);
   const lastLibraryFingerprint = useRef("");
@@ -285,7 +286,7 @@ export function NotesLibraryV2({ onError, onToast, locale, onOpenCanvas }: { onE
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
     return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
   }, []);
-  useEffect(() => { selectedRef.current = selected; }, [selected]);
+  useEffect(() => { selectedRef.current = selected; selectedPathRef.current = selected?.real_path ?? null; }, [selected]);
   useEffect(() => { activeTabIdRef.current = activeTabId; }, [activeTabId]);
   useEffect(() => { editorBusyRef.current = saving || reading || saveState === "dirty"; }, [saving, reading, saveState]);
   useEffect(() => { uiBlockingRef.current = mountOpen || createMenuOpen || !!tabMenu || !!libraryMenu; }, [mountOpen, createMenuOpen, tabMenu, libraryMenu]);
@@ -309,6 +310,7 @@ export function NotesLibraryV2({ onError, onToast, locale, onOpenCanvas }: { onE
     stashActiveDraft();
     selectionReadVersion.current += 1;
     selectedRef.current = null;
+    selectedPathRef.current = null;
     tabBuffersRef.current.delete(DRAFT_TAB_ID);
     setDirtyTabIds((current) => { if (!current.has(DRAFT_TAB_ID)) return current; const next = new Set(current); next.delete(DRAFT_TAB_ID); return next; });
     setSelected(null); setActiveTabId(DRAFT_TAB_ID); setOpenTabs((current) => current.some((tab) => tab.id === DRAFT_TAB_ID) ? current : [...current, { id: DRAFT_TAB_ID, file: null, title: "" }].slice(-12)); titleValueRef.current = ""; bodyValueRef.current = ""; setTitle(""); setBody(""); setMode("source"); lastSaved.current = ""; setSaveState("idle");
@@ -318,6 +320,7 @@ export function NotesLibraryV2({ onError, onToast, locale, onOpenCanvas }: { onE
     stashActiveDraft();
     selectionReadVersion.current += 1;
     selectedRef.current = null;
+    selectedPathRef.current = null;
     setSelected(null); setActiveTabId(DRAFT_TAB_ID); setOpenTabs((current) => current.some((tab) => tab.id === DRAFT_TAB_ID) ? current : [...current, { id: DRAFT_TAB_ID, file: null, title: "" }].slice(-12));
     const buffered = tabBuffersRef.current.get(DRAFT_TAB_ID);
     const draftTitle = buffered?.title ?? "";
@@ -326,13 +329,27 @@ export function NotesLibraryV2({ onError, onToast, locale, onOpenCanvas }: { onE
     setMode("source"); lastSaved.current = ""; setSaveState(draftTitle || draftBody ? "dirty" : "idle");
   }, [stashActiveDraft]);
   const select = useCallback(async (file: NoteFileInfo) => {
-    // Persist before asynchronous file IO so a quick page switch can still
-    // restore the exact document rather than falling back to an empty draft.
-    stashActiveDraft();
-    const readVersion = ++selectionReadVersion.current;
+    const alreadyOpen = selectedPathRef.current ? samePath(selectedPathRef.current, file.real_path) : false;
     localStorage.setItem("mobius.library.selected-path", file.real_path);
     selectedRef.current = file;
-    setSelected(file); setActiveTabId(file.id); setOpenTabs((current) => current.some((tab) => tab.id === file.id) ? current : [...current, { id: file.id, file, title: file.title }].slice(-12)); setTitle(file.title); setBody(""); setMode(file.read_only ? "preview" : "source"); setReading(true);
+    selectedPathRef.current = file.real_path;
+    setOpenTabs((current) => current.some((tab) => tab.id === file.id || (tab.file && samePath(tab.file.real_path, file.real_path))) ? current.map((tab) => tab.file && samePath(tab.file.real_path, file.real_path) ? { id: file.id, file, title: file.title } : tab) : [...current, { id: file.id, file, title: file.title }].slice(-12));
+    if (alreadyOpen) {
+      // Same document is already on screen. Update tab metadata only; do not
+      // bump the read generation (that would abort an in-flight first load),
+      // blank the body, flip reading, or reset scroll.
+      setActiveTabId(file.id);
+      if (`${titleValueRef.current}\u0000${bodyValueRef.current}` === lastSaved.current && titleValueRef.current !== file.title) {
+        titleValueRef.current = file.title;
+        setTitle(file.title);
+        lastSaved.current = `${file.title}\u0000${bodyValueRef.current}`;
+      }
+      return;
+    }
+    stashActiveDraft();
+    const readVersion = ++selectionReadVersion.current;
+    setSelected(file); setActiveTabId(file.id);
+    setTitle(file.title); setBody(""); setMode(file.read_only ? "preview" : "source"); setReading(true);
     try {
       const raw = await desktopApi.readNoteFile(file.real_path);
       if (readVersion !== selectionReadVersion.current) return;
@@ -382,15 +399,20 @@ export function NotesLibraryV2({ onError, onToast, locale, onOpenCanvas }: { onE
       return;
     }
     selectedRef.current = nextSelected;
-    setSelected(nextSelected);
-    const sourceChanged = current.id !== nextSelected.id
-      || current.modified_at !== nextSelected.modified_at
-      || current.title !== nextSelected.title;
-    // Match editor expectations: clean documents follow disk immediately;
-    // an unsaved editable working copy is never overwritten by a watch event.
-    const editorIsClean = `${titleValueRef.current}\u0000${bodyValueRef.current}` === lastSaved.current;
-    if (sourceChanged && (current.read_only || editorIsClean)) void select(nextSelected);
-  }, [create, select]);
+    const metadataChanged = current.id !== nextSelected.id || current.title !== nextSelected.title || current.virtual_path !== nextSelected.virtual_path;
+    if (metadataChanged) setSelected(nextSelected);
+    setOpenTabs((currentTabs) => currentTabs.map((tab) => tab.file && samePath(tab.file.real_path, nextSelected.real_path) ? { ...tab, id: nextSelected.id, file: nextSelected, title: nextSelected.title } : tab));
+    if (activeTabIdRef.current === current.id) setActiveTabId(nextSelected.id);
+    // Identity / title metadata can follow the tree without rereading the
+    // document. Reloading the body here is what flashes the browse/edit pane:
+    // it blanks the textarea, sets reading, and restores scroll. Only a
+    // person-triggered file open (select) should do that.
+    if (current.title !== nextSelected.title && (activeTabIdRef.current === nextSelected.id || activeTabIdRef.current === current.id) && `${titleValueRef.current}\u0000${bodyValueRef.current}` === lastSaved.current) {
+      titleValueRef.current = nextSelected.title;
+      setTitle(nextSelected.title);
+      lastSaved.current = `${nextSelected.title}\u0000${bodyValueRef.current}`;
+    }
+  }, [create]);
   const reload = useCallback(async (quiet = false) => {
     const request = ++latestLibraryRequest.current;
     // A background tick must not flash the refresh spinner; only an explicit
@@ -445,7 +467,7 @@ export function NotesLibraryV2({ onError, onToast, locale, onOpenCanvas }: { onE
     // absent now, it is no longer a valid location to restore.
     restoredSelection.current = true;
     if (saved) void select(saved); else if (savedPath) localStorage.removeItem("mobius.library.selected-path");
-  }, [files, library.snapshot_id, select]);
+  }, [files, select]);
   useEffect(() => {
     if (selected) localStorage.setItem("mobius.library.selected-path", selected.real_path);
   }, [selected]);
@@ -459,7 +481,7 @@ export function NotesLibraryV2({ onError, onToast, locale, onOpenCanvas }: { onE
       if (treeScrollRef.current && Number.isFinite(treeTop) && treeTop > 0) treeScrollRef.current.scrollTop = treeTop;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [body, mode, reading, selected]);
+  }, [body, mode, reading, selected?.real_path]);
   const refreshLibrary = useCallback(async (quiet = false) => {
     await reload(quiet);
     if (!quiet) onToast(locale === "zh-CN" ? "资料库已刷新" : "Library refreshed");
@@ -573,7 +595,7 @@ export function NotesLibraryV2({ onError, onToast, locale, onOpenCanvas }: { onE
       <TreeSection command={treeCommand} icon={<FolderPlus size={15}/>} title={locale === "zh-CN" ? "挂载" : "Mounts"} count={mounts.length} action={<button className="icon-soft" type="button" onClick={() => setMountOpen(true)} title={text.mount}><Plus size={14}/></button>}>{mounts.map((mountInfo) => <MountBranch command={treeCommand} key={mountInfo.id} mountInfo={mountInfo} status={mountStatuses.find((status) => status.mount_id === mountInfo.id)} files={visible.filter((file) => file.mount_id === mountInfo.id)} selectedId={selected?.id} locale={locale} onSelect={(file) => void select(file)} onUnmount={() => void unmount(mountInfo)} onContextMenu={(event, target) => setLibraryMenu({ x: event.clientX, y: event.clientY, target })} onMountContextMenu={(event, mount) => setLibraryMenu({ x: event.clientX, y: event.clientY, target: { type: "mount", mount } })}/>)}</TreeSection>
       <TreeSection command={treeCommand} icon={<Trash2 size={15}/>} title={text.trash} count={trash.length}>{trash.map((item) => <div key={item.id} className="library-trash-item" onContextMenu={(event) => { event.preventDefault(); setLibraryMenu({ x: event.clientX, y: event.clientY, target: { type: "trash", item } }); }}><Trash2 size={13}/><span title={item.original_path}>{item.title}</span><button className="icon-soft" type="button" onClick={() => void restoreTrash(item)} title={text.restoreItem}><Undo2 size={13}/></button></div>)}</TreeSection>
     </div></aside><div className="notes-library-splitter" role="separator" aria-orientation="vertical" aria-label="Resize library panel" tabIndex={0} onPointerDown={startResize} onKeyDown={keyboardResize}/>
-    <section aria-busy={reading} className={`note-editor-v2 mode-${readOnly ? "preview" : mode}`}><div className="note-tabs-v2" role="tablist">{openTabs.map((tab) => { const active = activeTabId === tab.id; const tabTitle = tab.file?.id === selected?.id ? (title || tab.title) : (tab.file?.title || tab.title || text.untitled); return <div className={`note-tab-v2 ${active ? "active" : ""}`} key={tab.id}><button type="button" role="tab" aria-selected={active} onClick={() => { if (tab.file) void select(tab.file); else openDraft(); }}><FileText size={13}/><span>{tabTitle}</span>{dirtyTabIds.has(tab.id) ? <i className="note-tab-dirty-dot" role="img" aria-label={locale === "zh-CN" ? "有未保存更改" : "Unsaved changes"}/> : null}</button><button className="note-tab-close-v2" type="button" aria-label={`Close ${tabTitle}`} onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}><X size={12}/></button></div>; })}<button className="note-tab-new-v2" type="button" onClick={create} title={text.newNote}><Plus size={14}/></button></div><header><input value={title} onChange={(event) => { titleValueRef.current = event.target.value; setTitle(event.target.value); setSaveState("dirty"); }} readOnly={readOnly || reading} placeholder={text.untitled}/><div className="note-view-switch" role="group" aria-label={text.preview}><button className={mode === "source" ? "active" : ""} disabled={readOnly || reading} onClick={() => setMode("source")} title={text.source}><Code2 size={15}/><span>{text.source}</span></button><button className={mode === "preview" ? "active" : ""} disabled={reading} onClick={() => setMode("preview")} title={text.preview}><Eye size={15}/><span>{text.preview}</span></button><button className={mode === "split" ? "active" : ""} disabled={readOnly || reading} onClick={() => setMode("split")} title={text.split}><PanelRight size={15}/><span>{text.split}</span></button></div><div className="note-actions">{readOnly ? <button className="soft-button" type="button" onClick={() => { const copyTitle = `${title} copy`; setSelected(null); setActiveTabId(DRAFT_TAB_ID); setOpenTabs((current) => current.some((tab) => tab.id === DRAFT_TAB_ID) ? current : [...current, { id: DRAFT_TAB_ID, file: null, title: "" }].slice(-12)); titleValueRef.current = copyTitle; bodyValueRef.current = body; setTitle(copyTitle); setBody(body); setMode("source"); lastSaved.current = ""; setSaveState("dirty"); tabBuffersRef.current.set(DRAFT_TAB_ID, { title: copyTitle, body }); }}>Copy to note</button> : null}<button className="soft-button" onClick={create}><Plus size={15}/>{text.newNote}</button><button className="primary-button" disabled={saving || reading || readOnly || !title.trim()} onClick={() => void save()}>{saving ? <LoaderCircle className="spin" size={15}/> : <Save size={15}/>} {saving ? text.saving : text.save}</button></div></header><div ref={editorContentRef} className="note-content-v2" onScrollCapture={(event) => { const target = event.target as HTMLElement; if (selected && target !== event.currentTarget) localStorage.setItem(`mobius.library.scroll.${selected.real_path}.${mode}`, String(target.scrollTop)); }}>{!readOnly && mode !== "preview" ? <textarea disabled={reading} value={body} onChange={(event) => { bodyValueRef.current = event.target.value; setBody(event.target.value); setSaveState("dirty"); }} placeholder={text.noNotes}/> : null}{(readOnly || mode !== "source") ? <MarkdownPreview markdown={body} sourcePath={selected?.real_path ?? null} text={text}/> : null}</div>{selected ? <footer><span>{selected.virtual_path}</span><span className={`note-save-state ${saveState}`}>{readOnly ? (locale === "zh-CN" ? "只读挂载" : "Read-only mount") : saveState === "dirty" ? (locale === "zh-CN" ? "未保存" : "Unsaved changes") : saveState === "error" ? (locale === "zh-CN" ? "保存失败" : "Save failed") : saveState === "saved" ? (locale === "zh-CN" ? "已保存" : "Saved") : text.editable}</span></footer> : null}</section>
+    <section className={`note-editor-v2 mode-${readOnly ? "preview" : mode}${reading ? " is-reading" : ""}`}><div className="note-tabs-v2" role="tablist">{openTabs.map((tab) => { const active = activeTabId === tab.id; const tabTitle = tab.file?.id === selected?.id ? (title || tab.title) : (tab.file?.title || tab.title || text.untitled); return <div className={`note-tab-v2 ${active ? "active" : ""}`} key={tab.id}><button type="button" role="tab" aria-selected={active} onClick={() => { if (tab.file) void select(tab.file); else openDraft(); }}><FileText size={13}/><span>{tabTitle}</span>{dirtyTabIds.has(tab.id) ? <i className="note-tab-dirty-dot" role="img" aria-label={locale === "zh-CN" ? "有未保存更改" : "Unsaved changes"}/> : null}</button><button className="note-tab-close-v2" type="button" aria-label={`Close ${tabTitle}`} onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}><X size={12}/></button></div>; })}<button className="note-tab-new-v2" type="button" onClick={create} title={text.newNote}><Plus size={14}/></button></div><header><input value={title} onChange={(event) => { titleValueRef.current = event.target.value; setTitle(event.target.value); setSaveState("dirty"); }} readOnly={readOnly || reading} placeholder={text.untitled}/><div className="note-view-switch" role="group" aria-label={text.preview}><button className={mode === "source" ? "active" : ""} disabled={readOnly || reading} onClick={() => setMode("source")} title={text.source}><Code2 size={15}/><span>{text.source}</span></button><button className={mode === "preview" ? "active" : ""} disabled={reading} onClick={() => setMode("preview")} title={text.preview}><Eye size={15}/><span>{text.preview}</span></button><button className={mode === "split" ? "active" : ""} disabled={readOnly || reading} onClick={() => setMode("split")} title={text.split}><PanelRight size={15}/><span>{text.split}</span></button></div><div className="note-actions">{readOnly ? <button className="soft-button" type="button" onClick={() => { const copyTitle = `${title} copy`; setSelected(null); setActiveTabId(DRAFT_TAB_ID); setOpenTabs((current) => current.some((tab) => tab.id === DRAFT_TAB_ID) ? current : [...current, { id: DRAFT_TAB_ID, file: null, title: "" }].slice(-12)); titleValueRef.current = copyTitle; bodyValueRef.current = body; setTitle(copyTitle); setBody(body); setMode("source"); lastSaved.current = ""; setSaveState("dirty"); tabBuffersRef.current.set(DRAFT_TAB_ID, { title: copyTitle, body }); }}>Copy to note</button> : null}<button className="soft-button" onClick={create}><Plus size={15}/>{text.newNote}</button><button className="primary-button" disabled={saving || reading || readOnly || !title.trim()} onClick={() => void save()}>{saving ? <LoaderCircle className="spin" size={15}/> : <Save size={15}/>} {saving ? text.saving : text.save}</button></div></header><div ref={editorContentRef} className="note-content-v2" onScrollCapture={(event) => { const target = event.target as HTMLElement; if (selected && target !== event.currentTarget) localStorage.setItem(`mobius.library.scroll.${selected.real_path}.${mode}`, String(target.scrollTop)); }}>{!readOnly && mode !== "preview" ? <textarea disabled={reading} value={body} onChange={(event) => { bodyValueRef.current = event.target.value; setBody(event.target.value); setSaveState("dirty"); }} placeholder={text.noNotes}/> : null}{(readOnly || mode !== "source") ? <MarkdownPreview markdown={body} sourcePath={selected?.real_path ?? null} text={text}/> : null}</div>{selected ? <footer><span>{selected.virtual_path}</span><span className={`note-save-state ${saveState}`}>{readOnly ? (locale === "zh-CN" ? "只读挂载" : "Read-only mount") : saveState === "dirty" ? (locale === "zh-CN" ? "未保存" : "Unsaved changes") : saveState === "error" ? (locale === "zh-CN" ? "保存失败" : "Save failed") : saveState === "saved" ? (locale === "zh-CN" ? "已保存" : "Saved") : text.editable}</span></footer> : null}</section>
     {tabMenu ? <ContextMenu className="note-tab-context-menu-v2" x={tabMenu.x} y={tabMenu.y} onClose={() => setTabMenu(null)} items={[
       { id: "open-source", label: text.openSourceFolder, icon: <FolderOpen size={14}/>, disabled: !tabMenu.tab.file, onSelect: () => { if (tabMenu.tab.file) void desktopApi.revealNoteSource(tabMenu.tab.file.real_path).catch((reason) => onError(String(reason))); } },
       { id: "close-tab", label: text.closeTab, icon: <X size={14}/>, onSelect: () => closeTab(tabMenu.tab.id) },
