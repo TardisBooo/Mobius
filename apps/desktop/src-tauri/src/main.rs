@@ -5,7 +5,9 @@ use mydesk_core::{
     NoteDraft, NoteFileInfo, NoteLibrarySnapshot, ProjectSummary, ProviderIndexReport, RelayGraph,
     RelayMode, SearchRequest, SessionQuery, SessionSearchHit, SessionSourceRoot, SkillInfo,
     TrashItem, WikiDraft, WikiQueueItem, Workspace, WorkspaceInspection, WorkspaceStatus,
-    note_mounts::{list_note_files, list_note_library_snapshot, read_note_file},
+    note_mounts::{
+        list_note_files, list_note_library_snapshot, note_is_private_vault_file, read_note_file,
+    },
     skills::{
         ManagedSkillInstall, SkillDeployment, SkillHistoryEntry, discover_project_skills,
         discover_standard_skills, install_marketplace_skill, install_skill_from_catalogue,
@@ -47,6 +49,53 @@ struct DesktopState {
     refresh_pending: Arc<Mutex<usize>>,
     terminals: Mutex<HashMap<String, TerminalProcess>>,
     library_watcher: Mutex<Option<LibraryWatcher>>,
+    /// Explorer snapshots walk the disk. Those stats/opens are not external
+    /// edits; the gate keeps them from bouncing into the renderer the way VS
+    /// Code keeps uncorrelated watcher events from waking every editor model.
+    library_scan_gate: Arc<LibraryScanGate>,
+}
+
+struct LibraryScanGate {
+    in_flight: std::sync::atomic::AtomicBool,
+    quiet_until: Mutex<Option<std::time::Instant>>,
+}
+
+impl LibraryScanGate {
+    fn new() -> Self {
+        Self {
+            in_flight: std::sync::atomic::AtomicBool::new(false),
+            quiet_until: Mutex::new(None),
+        }
+    }
+
+    fn begin(&self) {
+        self.in_flight
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn end(&self) {
+        self.in_flight
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+        *self.quiet_until.lock() =
+            Some(std::time::Instant::now() + Duration::from_millis(250));
+    }
+
+    fn suppress_watch_echo(&self) -> bool {
+        if self.in_flight.load(std::sync::atomic::Ordering::Relaxed) {
+            return true;
+        }
+        self.quiet_until
+            .lock()
+            .is_some_and(|until| std::time::Instant::now() < until)
+    }
+}
+
+struct LibraryScanGuard(Arc<LibraryScanGate>);
+
+impl Drop for LibraryScanGuard {
+    fn drop(&mut self) {
+        self.0.end();
+    }
 }
 
 const NOTE_LIBRARY_CHANGED_EVENT: &str = "mobius://note-library-changed";
@@ -60,10 +109,13 @@ struct LibraryWatcher {
 }
 
 impl LibraryWatcher {
-    fn new(app: AppHandle) -> notify::Result<Self> {
+    fn new(app: AppHandle, scan_gate: Arc<LibraryScanGate>) -> notify::Result<Self> {
         let watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
             match event {
                 Ok(event) if !matches!(event.kind, EventKind::Access(_)) => {
+                    if scan_gate.suppress_watch_echo() {
+                        return;
+                    }
                     if let Err(error) = app.emit(NOTE_LIBRARY_CHANGED_EVENT, ()) {
                         tracing::warn!("could not emit Library change event: {error}");
                     }
@@ -720,21 +772,8 @@ fn update_note_file_command(
 ) -> CommandResult<ContextRecord> {
     // The service repeats the canonical vault-root check. Keeping it at the
     // command boundary makes the read-only mount rule explicit as well.
-    let known = list_note_files(
-        &state.desk.paths,
-        &state
-            .desk
-            .database
-            .list_note_mounts()
-            .map_err(command_error)?,
-    )
-    .map_err(command_error)?;
     let candidate = Path::new(&path).canonicalize().map_err(command_error)?;
-    let allowed_private_note = known.iter().any(|file| {
-        file.mount_id.is_none()
-            && Path::new(&file.real_path).canonicalize().ok().as_ref() == Some(&candidate)
-    });
-    if !allowed_private_note {
+    if !note_is_private_vault_file(&candidate, &state.desk.paths.notes_dir()) {
         return Err("only existing private vault notes can be updated".into());
     }
     state
@@ -744,6 +783,9 @@ fn update_note_file_command(
 }
 #[tauri::command]
 fn list_note_files_command(state: State<'_, DesktopState>) -> CommandResult<Vec<NoteFileInfo>> {
+    let scan_gate = state.library_scan_gate.clone();
+    scan_gate.begin();
+    let _guard = LibraryScanGuard(scan_gate);
     let mounts = state
         .desk
         .database
@@ -761,8 +803,12 @@ fn note_library_snapshot_command(
     state: State<'_, DesktopState>,
 ) -> CommandResult<NoteLibrarySnapshot> {
     // Re-arm a source that disappeared and later returned. Native events are
-    // the fast path; the existing periodic snapshot remains the fallback for
-    // filesystems that do not reliably surface watch events.
+    // the fast path; the existing periodic snapshot remains a fallback for
+    // filesystems that drop watch events. The scan itself is masked so the
+    // walk cannot echo into the renderer as a second refresh.
+    let scan_gate = state.library_scan_gate.clone();
+    scan_gate.begin();
+    let _guard = LibraryScanGuard(scan_gate);
     sync_library_watcher(&state);
     let mounts = state
         .desk
@@ -778,8 +824,12 @@ fn read_note_file_command(state: State<'_, DesktopState>, path: String) -> Comma
         .database
         .list_note_mounts()
         .map_err(command_error)?;
-    let known = list_note_files(&state.desk.paths, &mounts).map_err(command_error)?;
-    read_note_file(Path::new(&path), &known).map_err(command_error)
+    read_note_file(
+        Path::new(&path),
+        &state.desk.paths.notes_dir(),
+        &mounts,
+    )
+    .map_err(command_error)
 }
 
 #[tauri::command]
@@ -2578,6 +2628,7 @@ fn main() {
             refresh_pending: Arc::new(Mutex::new(0)),
             terminals: Mutex::new(HashMap::new()),
             library_watcher: Mutex::new(None),
+            library_scan_gate: Arc::new(LibraryScanGate::new()),
         })
         .setup(|app| {
             // Setup runs after the native window has been constructed. Keep
@@ -2588,7 +2639,7 @@ fn main() {
             let desk = state.desk.clone();
             let refresh_gate = state.refresh_gate.clone();
             let refresh_pending = state.refresh_pending.clone();
-            match LibraryWatcher::new(app.handle().clone()) {
+            match LibraryWatcher::new(app.handle().clone(), state.library_scan_gate.clone()) {
                 Ok(mut watcher) => {
                     watcher.sync_roots(library_watch_roots(&state.desk));
                     *state.library_watcher.lock() = Some(watcher);

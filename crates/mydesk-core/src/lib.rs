@@ -36,7 +36,9 @@ pub use mcp_approvals::{
 pub use model::*;
 pub use embedding::{SemanticPolicy, SemanticStatusReport};
 pub use mome::MomeRecall;
-pub use note_mounts::{MountInfo, MountScanStatus, NoteFileInfo, NoteLibrarySnapshot};
+pub use note_mounts::{
+    MountInfo, MountScanStatus, NoteFileInfo, NoteLibrarySnapshot, note_is_private_vault_file,
+};
 pub use paths::WorkspacePaths;
 pub use providers::{
     ProviderIndexProviderReport, ProviderIndexReport, ProviderIndexRootReport, ProviderIndexer,

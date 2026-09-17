@@ -11,7 +11,14 @@ Mounted Library Sources are persistent user choices, while their directories can
 
 Möbius exposes one `NoteLibrarySnapshot` for Library refreshes. A snapshot contains the mount configuration captured at scan start, all files discovered from exactly those mounts, and a runtime status for each mount. Desktop applies only the newest requested snapshot as one replacement; older responses are discarded.
 
-The native desktop owns one recursive filesystem watcher for the private notes vault and each non-overlapping Mounted Library Source. Native events carry no cached directory model; they only signal the renderer to rebuild a snapshot after a short debounce. The periodic snapshot remains a fallback because operating systems and network filesystems may drop watcher events. Clean open documents follow external changes; an unsaved editable working copy is never overwritten by a watcher event.
+The native desktop owns one recursive filesystem watcher for the private notes vault and each non-overlapping Mounted Library Source. Native events carry no cached directory model; they only signal the renderer to rebuild a snapshot after a short debounce. The periodic snapshot remains a fallback because operating systems and network filesystems may drop watcher events.
+
+The explorer and the open document are separate working copies, following VS Code's `IWorkingCopy` / `TextFileEditorModel` boundary:
+
+- A snapshot walk must not echo into the watcher. Scan-time file opens are masked, then quieted for a short window.
+- Opening or reading one document authorizes that path against configured roots. It does not restat the whole tree.
+- A dirty working copy is never resolved from a watcher event. A clean copy may pick up disk contents in place, without blanking the editor or restoring scroll from the tree.
+- Explorer identity is path + title + virtual path. `mtime` is not part of the fingerprint that decides whether to swap the tree.
 
 Mount configuration remains persistent until an explicit unmount. Scan status is transient: an unavailable source has no files in the snapshot and is shown as unavailable rather than being represented by a retained cache. Mount roots must not overlap, because overlapping roots make one physical file appear as multiple competing Library identities.
 

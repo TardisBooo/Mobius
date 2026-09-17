@@ -4,10 +4,18 @@ use chrono::Utc;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     fs,
     io::{BufRead, BufReader},
-    path::Path,
+    path::{Path, PathBuf},
+    sync::Mutex,
 };
+
+fn title_cache() -> &'static Mutex<HashMap<String, (String, String)>> {
+    static CACHE: std::sync::OnceLock<Mutex<HashMap<String, (String, String)>>> =
+        std::sync::OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
 
 // A single unusually large source must not silently starve every source that
 // follows it in the library.  The status returned with a snapshot makes a
@@ -181,12 +189,9 @@ pub fn list_note_library_snapshot(
             unreadable_entries: scan.unreadable_entries,
         });
     }
-    files.sort_by(|left, right| {
-        right
-            .modified_at
-            .cmp(&left.modified_at)
-            .then_with(|| left.virtual_path.cmp(&right.virtual_path))
-    });
+    // Explorer order is path identity, not mtime. Sorting by mtime made every
+    // metadata tick look like a different tree to the renderer fingerprint.
+    files.sort_by(|left, right| left.virtual_path.cmp(&right.virtual_path));
     Ok(NoteLibrarySnapshot {
         snapshot_id: format!("library-snapshot:{}", uuid::Uuid::new_v4()),
         scanned_at: Utc::now().to_rfc3339(),
@@ -272,11 +277,10 @@ fn collect_note_root(
                 stable_path(entry.path())
             ),
             mount_id: mount_id.map(str::to_string),
-            // The editor treats the title field as the user-facing filename.
-            // Reading the frontmatter here keeps the tree and open tabs in
-            // sync after a title edit, while the on-disk slug remains stable
-            // so links and snapshots do not silently break.
-            title: note_title(entry.path()),
+            // Explorer labels come from a path+mtime cache. Opening every
+            // file on each scan is what echoed into the native watcher and
+            // made the tree look like it had changed.
+            title: cached_note_title(entry.path(), modified_at.as_deref()),
             virtual_path,
             real_path: entry.path().display().to_string(),
             read_only,
@@ -310,6 +314,23 @@ fn mount_paths_overlap(left: &Path, right: &Path) -> bool {
             .is_some_and(|suffix| suffix.starts_with('\\'))
 }
 
+fn cached_note_title(path: &Path, modified_at: Option<&str>) -> String {
+    let key = mount_path_key(path);
+    let stamp = modified_at.unwrap_or_default().to_string();
+    if let Ok(cache) = title_cache().lock() {
+        if let Some((cached_stamp, title)) = cache.get(&key) {
+            if cached_stamp == &stamp {
+                return title.clone();
+            }
+        }
+    }
+    let title = note_title(path);
+    if let Ok(mut cache) = title_cache().lock() {
+        cache.insert(key, (stamp, title.clone()));
+    }
+    title
+}
+
 fn note_title(path: &Path) -> String {
     let fallback = path
         .file_stem()
@@ -333,19 +354,64 @@ fn note_title(path: &Path) -> String {
 fn stable_path(path: &Path) -> String {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
-    hasher.update(path.display().to_string().to_ascii_lowercase().as_bytes());
+    hasher.update(mount_path_key(path).as_bytes());
     hex::encode(hasher.finalize())[..24].to_string()
 }
 
-pub fn read_note_file(path: &Path, known: &[NoteFileInfo]) -> Result<String> {
-    let canonical = path.canonicalize()?;
-    let allowed = known
-        .iter()
-        .any(|file| Path::new(&file.real_path).canonicalize().ok().as_ref() == Some(&canonical));
-    if !allowed {
+pub fn note_is_private_vault_file(path: &Path, notes_dir: &Path) -> bool {
+    is_note_extension(path) && path_is_under(path, notes_dir)
+}
+
+/// Authorize a single-file read from configured library roots.
+///
+/// VS Code's disk provider checks the path against watched roots; it does not
+/// restat the whole tree. A full snapshot here would open every Markdown file
+/// (title scan) and echo into the native watcher while the editor is resolving
+/// a working copy.
+pub fn read_note_file(path: &Path, notes_dir: &Path, mounts: &[MountInfo]) -> Result<String> {
+    let canonical = path
+        .canonicalize()
+        .with_context(|| format!("reading {}", path.display()))?;
+    if !is_note_extension(&canonical) {
+        anyhow::bail!("note path is not a Markdown or text document");
+    }
+    if !note_path_is_in_libraries(&canonical, notes_dir, mounts) {
         anyhow::bail!("note path is outside configured libraries");
     }
     fs::read_to_string(&canonical).with_context(|| format!("reading {}", canonical.display()))
+}
+
+fn note_path_is_in_libraries(path: &Path, notes_dir: &Path, mounts: &[MountInfo]) -> bool {
+    if path_is_under(path, notes_dir) {
+        return true;
+    }
+    mounts
+        .iter()
+        .any(|mount| path_is_under(path, Path::new(&mount.real_path)))
+}
+
+fn is_note_extension(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+            .as_str(),
+        "md" | "markdown" | "txt"
+    )
+}
+
+fn path_is_under(child: &Path, parent: &Path) -> bool {
+    let child = mount_path_key(&canonicalize_or_self(child));
+    let parent = mount_path_key(&canonicalize_or_self(parent));
+    child == parent
+        || child
+            .strip_prefix(&parent)
+            .is_some_and(|suffix| suffix.starts_with('\\'))
+}
+
+fn canonicalize_or_self(path: &Path) -> PathBuf {
+    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
 #[cfg(test)]
@@ -418,6 +484,23 @@ mod tests {
             .add_note_mount(&child, "Nested", "read_only")
             .expect_err("a nested mount duplicates content from its parent");
         assert!(error.to_string().contains("overlaps"));
+        Ok(())
+    }
+
+    #[test]
+    fn reading_a_note_authorizes_the_path_without_rescanning_the_tree() -> Result<()> {
+        let temporary = tempfile::tempdir()?;
+        let paths = paths(temporary.path());
+        paths.ensure_layout()?;
+        let notes = paths.notes_dir();
+        fs::create_dir_all(&notes)?;
+        let allowed = notes.join("open.md");
+        fs::write(&allowed, "hello")?;
+        let outside = temporary.path().join("outside.md");
+        fs::write(&outside, "secret")?;
+
+        assert_eq!(read_note_file(&allowed, &notes, &[])?, "hello");
+        assert!(read_note_file(&outside, &notes, &[]).is_err());
         Ok(())
     }
 }

@@ -1,4 +1,20 @@
 /* Disclosure controls shared by canvas and mounted-library roots. */
+
+/* Explorer and editor are independent paint/layout roots. A tree snapshot
+   must not reflow the working copy, and typing must not reflow the tree. */
+.notes-nav-v2,
+.note-editor-v2 {
+  contain: layout paint style;
+}
+
+.note-editor-v2 {
+  isolation: isolate;
+}
+
+.library-tree-v2 {
+  contain: layout paint style;
+  min-height: 0;
+}
 .library-mount-head {
   gap: 4px;
   padding: 2px 4px;
