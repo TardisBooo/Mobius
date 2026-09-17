@@ -20,6 +20,10 @@ Möbius is open-source desktop software by Tardis. It is not Microsoft Mobius, C
 - [Citation vs summary](https://github.com/TardisBooo/Mobius/blob/main/docs/blog/02-citation-not-summary.md): `@session` ranges over generated summaries.
 - [Approval tokens](https://github.com/TardisBooo/Mobius/blob/main/docs/blog/03-approval-tokens.md): human TTY grant; MCP cannot self-approve.
 
+## Philosophy
+
+A Session is the durable unit of work: harness + native id + original transcript. Git records what landed; the session records why. A full trajectory (messages, tools, failures, corrections) is the asset. A summary is a claim about that tape and goes stale. Across agents, a lineage graph of confirmed handoff edges is how you audit a project. Native resume stays with the original harness. Switching agents always opens a new session. The envelope is references_only.
+
 ## What Möbius is
 
 Möbius indexes approved local agent transcripts by project directory and worktree, including OpenCode's read-only `opencode.db`. Native resume stays with the original harness. Switching agents starts a new target session and carries confirmed Session references, not a generated summary.

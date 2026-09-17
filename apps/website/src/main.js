@@ -20,8 +20,8 @@ const setLanguage = (language) => {
   document.title = zh ? "MÖBIUS | Agent 会话层" : "MÖBIUS | Agent Session Hub";
   const description = document.querySelector('meta[name="description"]');
   if (description) description.setAttribute("content", zh
-    ? "莫比乌斯是开源的跨 Agent 会话层。在 Claude Code、Codex、OpenCode、Pi、Grok 与 OMP 之间搜索、引用、恢复和交接上下文，不改写任何 Harness。"
-    : "Möbius is an open-source Agent Session Hub. Search, cite, resume and hand off context across Claude Code, Codex, OpenCode, Pi, Grok, and OMP without rewriting a harness.");
+    ? "莫比乌斯是开源的跨 Agent 会话层。Session 才是资产。在 Claude Code、Codex、OpenCode、Pi、Grok 与 OMP 之间搜索、引用、恢复和交接。传引用，不传摘要。"
+    : "Möbius is an open-source Agent Session Hub. A Session is the asset. Search, cite, resume and hand off across Claude Code, Codex, OpenCode, Pi, Grok, and OMP. References, not summaries.");
   localStorage.setItem("mobius.website.language", language);
 };
 

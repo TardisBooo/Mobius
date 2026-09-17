@@ -8,42 +8,35 @@
 
 > Windows 开发预览 v0.3.19。兼容性按 Harness 逐项验证并附证据。这不是 Microsoft Mobius、ControlTheory Möbius 或 Circular Labs Mobius。OpenClaw（`~/.openclaw`）在路线图上，本预览没有该适配器。
 
-## 为什么需要会话层
+## 哲学
 
-Agent 已经把 transcript 写在磁盘上。痛点是下一个 Agent 用不了：不能搜索、不能精确引用、也不能无损继续。Harness 越多，缺口越大。
+**Session** 是工作的持久单位：Harness + 原生 id + 原始 transcript。Git 记录最终进树的内容。Session 记录它为什么进树——失败尝试、工具轨迹、最后那次修正。磁带才是资产。摘要是对磁带的主张，主张会过期。
 
-莫比乌斯放在这些 CLI 之间。原生 resume 仍走原 Harness；切换 Agent 会创建新会话，只携带已确认的 Session 身份和祖先边。信封是一张图。磁带仍在磁盘上。
+Agent 已经把这些 transcript 写在磁盘上，却埋在 `~/.codex`、`~/.claude/projects`、OpenCode 的 `opencode.db` 里。两周后你找不到改写鉴权中间件的那次 Claude 对话。把一份简报贴进 Codex，下一个 Agent 会编一份源会话从未同意的待办。同一 checkout 上的 Harness 越多，粘贴税越重。
 
-## 安装
+莫比乌斯放在这些 CLI 之间，不替换它们。
 
-从 [v0.3.19 Releases](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.19) 下载 Windows 安装包或便携 EXE，并核对 SHA-256 和已知限制。开发构建可能未签名，会触发 SmartScreen。
+- 原生 resume 仍走原 Harness。切换 Agent 一定打开**新**会话。
+- 信封是已确认 Session 身份和祖先边组成的图，不是生成的 handover.md。
+- 完整轨迹（消息、工具、失败、修正）用引用保存，比压缩更便宜。1.2 GB 的 JSONL 也能交接，因为信封里没有正文。
+- 交接图谱让多 Agent 项目可审计。Codex → Claude → Pi 是接力链，是 DAG。「回去」是第三个会话，不是环。沿链回到精确证据。
 
-```powershell
-git clone https://github.com/TardisBooo/Mobius.git
-cd Mobius
-pnpm --dir apps/desktop install --frozen-lockfile
-pnpm --dir apps/desktop tauri build
-```
+需要简报就写成笔记。会话层负责留住磁带。
 
-需要 Rust、Node.js/pnpm、Windows C++ Build Tools 和 WebView2。莫比乌斯只通过各 Harness 公开的命令行接口调用已安装程序。
+## 能做什么
 
-## 快速开始
+| 能力 | 你得到什么 |
+| --- | --- |
+| 按项目聚合会话 | Codex、Claude Code、OpenCode、Pi、Grok、OMP，按目录和 worktree |
+| 搜索与引用 | 本地 SQLite FTS/BM25；复制 `@session:provider/id#mN-mM` |
+| 本地记忆（Mome） | 显式召回，最多 3 个会话 / 约 1200 token；默认不注入 |
+| 原生恢复 | 协议已验证时，在 PowerShell 里走原 CLI + 原生 id |
+| 只传引用的交接 | 新建目标会话；审核范围、工具、token；来源只读 |
+| 交接图谱 | 接力 DAG；跨 Agent 回溯 |
+| CLI + MCP | [mobius-connect](https://github.com/TardisBooo/mobius-connect)；MCP 不能签发审批 |
+| 笔记、画布、技能 | Markdown、无限画布、目录挂载、技能版本 |
 
-1. 检查本地发现的 Harness 来源。
-2. 批准需要索引的来源，或明确选择目录。
-3. 建立只读索引。
-4. 添加或选择项目。
-5. 预览并恢复原会话，或打开空白 PowerShell。
-6. 只有需要新建目标 Agent 会话时，才使用「交接给其他 Agent」。
-
-## 怎么拼在一起
-
-| 界面 | 仓库 | 给谁 |
-| --- | --- | --- |
-| 桌面 | 本仓库 | 会话库、PowerShell 工作台、交接图、笔记、画布、技能 |
-| CLI + MCP | [mobius-connect](https://github.com/TardisBooo/mobius-connect) | 终端搜索、谱系、交接、Mome、stdio MCP |
-
-内部 crate 仍叫 `mydesk-*`，以免改掉已有数据路径。对外产品名是 Möbius。分仓说明：[docs/REPOS.md](docs/REPOS.md)。
+内部 crate 仍叫 `mydesk-*`。对外产品名是 Möbius。分仓：[docs/REPOS.md](docs/REPOS.md)。
 
 ## 产品视频
 
@@ -139,9 +132,31 @@ mobius-connect sessions search "flaky tests"
 mobius-connect mcp serve
 ```
 
-MCP 不能签发审批令牌、不能添加来源、不能接管 PTY。工具表见 [MCP.md](https://github.com/TardisBooo/mobius-connect/blob/main/docs/MCP.md)。
+MCP 不能签发审批令牌、不能添加来源、不能接管 PTY。每条命令的 GIF 在 [mobius-connect README](https://github.com/TardisBooo/mobius-connect)。工具表见 [MCP.md](https://github.com/TardisBooo/mobius-connect/blob/main/docs/MCP.md)。
 
 本仓库仍会构建给桌面金库用的 `mobius` / `mydesk` 和 `mydesk-mcp`。它们不是对外发布的 CLI/MCP 产品。
+
+## 安装
+
+从 [v0.3.19 Releases](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.19) 下载 Windows 安装包或便携 EXE，并核对 SHA-256 和已知限制。开发构建可能未签名，会触发 SmartScreen。
+
+```powershell
+git clone https://github.com/TardisBooo/Mobius.git
+cd Mobius
+pnpm --dir apps/desktop install --frozen-lockfile
+pnpm --dir apps/desktop tauri build
+```
+
+需要 Rust、Node.js/pnpm、Windows C++ Build Tools 和 WebView2。莫比乌斯只通过各 Harness 公开的命令行接口调用已安装程序。
+
+## 快速开始
+
+1. 检查本地发现的 Harness 来源。
+2. 批准需要索引的来源，或明确选择目录。
+3. 建立只读索引。
+4. 添加或选择项目。
+5. 预览并恢复原会话，或打开空白 PowerShell。
+6. 只有需要新建目标 Agent 会话时，才使用「交接给其他 Agent」。
 
 ## 安全边界
 

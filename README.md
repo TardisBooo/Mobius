@@ -8,46 +8,33 @@ Möbius is an open-source **session layer for coding agents**. Search, cite, res
 
 > Windows development preview v0.3.19. Compatibility is verified per harness and published with evidence. This is not Microsoft Mobius, ControlTheory Möbius, or Circular Labs Mobius. OpenClaw (`~/.openclaw`) is on the roadmap and is not indexed in this preview.
 
-## Why a session layer
+## Philosophy
 
-Coding agents already write transcripts. The next agent cannot search, cite or continue that work without a lossy paste. The more harnesses you run, the worse the gap.
+A **Session** is the durable unit of work: harness + native id + the original transcript. Git records what landed in the tree. The session records why it landed that way — the failed attempts, the tool traces, the correction that finally stuck. That tape is the asset. A summary is a claim about the tape. Claims go stale.
 
-Möbius sits between those CLIs. Native resume stays with the original harness. Switching agents starts a new session and carries confirmed Session identities plus ancestor edges. The envelope is a graph. The tape stays on disk.
+Coding agents already write those transcripts. They bury them in `~/.codex`, `~/.claude/projects`, OpenCode's `opencode.db`, and the rest. Two weeks later you cannot find the Claude thread that rewrote auth middleware. You paste a briefing into Codex and the next agent invents a todo list the source never agreed to. The more harnesses you run on one checkout, the worse the paste tax.
 
-| Without Möbius | With Möbius |
+Möbius sits between those CLIs. It does not replace them.
+
+- Native resume stays with the original harness. Switching agents always opens a **new** session.
+- The envelope is a graph of confirmed Session identities and ancestor edges, not a generated handover.md.
+- A complete trajectory — messages, tools, failures, corrections — is cheaper to keep as references than to compress. A 1.2 GB JSONL still hands off because the envelope never contains the body.
+- A lineage graph is how you keep a multi-agent project honest. Codex → Claude → Pi is a relay chain, a DAG. “Back” is a third session, not a cycle. Follow the chain to the exact evidence.
+
+If you need a briefing, write one as a note. The session layer keeps the tape.
+
+## What it does
+
+| Capability | What you get |
 | --- | --- |
-| Remember which terminal owns a discussion | Start from the project and see its sessions |
-| Re-explain architecture, failures, and progress | Carry a reviewable trajectory into the next agent |
-| Search every harness separately | Search approved local sources from one place |
-| Notes and canvases live in unrelated tools | Keep supporting material beside the project |
-
-## Install
-
-Download the [v0.3.19 Windows preview](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.19): installer or portable EXE. Check the included SHA-256 sums and known limitations. Development builds may be unsigned and trigger SmartScreen.
-
-```powershell
-git clone https://github.com/TardisBooo/Mobius.git
-cd Mobius
-pnpm --dir apps/desktop install --frozen-lockfile
-pnpm --dir apps/desktop tauri build
-```
-
-Requirements: Rust, Node.js with pnpm, Windows C++ Build Tools, and WebView2. Bundles land under `target/release/bundle`.
-
-Möbius calls each installed harness through its documented CLI. It does not patch or replace Codex, Claude Code, OpenCode, Pi, Grok, or OMP.
-
-## Quick start
-
-1. Review locally discovered harness roots.
-2. Approve the sources you want indexed, or choose an explicit folder.
-3. Build the read-only index.
-4. Add or select a project.
-5. Preview a session and resume it, or open a blank PowerShell.
-6. Use **Handoff to another agent** only when you want a new target session with selected trajectory context.
-
-The in-app six-step guide covers value, privacy, indexing, resume, handoffs, the library, and skill scopes. It stays available from Help.
-
-## How it fits together
+| Project-grouped sessions | Codex, Claude Code, OpenCode, Pi, Grok, OMP in one library, by directory and worktree |
+| Search and cite | Local SQLite FTS/BM25; copy `@session:provider/id#mN-mM` |
+| Local memory (Mome) | Explicit recall, max 3 sessions / ~1200 tokens; nothing injected by default |
+| Native resume | Original CLI + native id in PowerShell, when the protocol is verified |
+| Reference-only handoff | New target session; review range, tools, token estimate; source stays read-only |
+| Lineage graph | Relay DAG of handoffs; follow work across agents |
+| CLI + MCP | [mobius-connect](https://github.com/TardisBooo/mobius-connect); MCP cannot mint approvals |
+| Notes, canvas, skills | Markdown, infinite canvas, folder mounts, skill versions beside the workbench |
 
 ```
 Claude Code  Codex  OpenCode  Pi  Grok  OMP
@@ -59,12 +46,7 @@ Claude Code  Codex  OpenCode  Pi  Grok  OMP
         └─ mobius-connect      CLI + stdio MCP
 ```
 
-| Surface | Repository | For |
-| --- | --- | --- |
-| Desktop | this repo | Session library, PowerShell workbench, graph, notes, canvas, skills |
-| CLI + MCP | [mobius-connect](https://github.com/TardisBooo/mobius-connect) | Terminal search, lineage, handoff, Mome, stdio MCP |
-
-Internal crate names keep `mydesk-*` so vault paths stay stable. The public product name is Möbius. Split details: [docs/REPOS.md](docs/REPOS.md).
+Internal crate names keep `mydesk-*` so vault paths stay stable. The public product name is Möbius. Split: [docs/REPOS.md](docs/REPOS.md).
 
 ## Product film
 
@@ -150,7 +132,7 @@ Inspect, install, edit, remove, and restore global or project skills with versio
 
 ![mobius-connect CLI search and stdio MCP](apps/website/public/product/chapters/12-cli.gif)
 
-[mobius-connect](https://github.com/TardisBooo/mobius-connect) is the published session-layer binary for terminals and agents. **MCP cannot mint approvals.**
+[mobius-connect](https://github.com/TardisBooo/mobius-connect) is the published session-layer binary for terminals and agents. **MCP cannot mint approvals.** Each command has its own GIF in that README.
 
 ```powershell
 mobius-connect init
@@ -167,13 +149,31 @@ MCP cannot mint an approval token, add sources, or attach a PTY. Tool list and g
 
 This workspace still builds `mobius` / `mydesk` and `mydesk-mcp` for the vault the desktop owns. Those helpers are not the published CLI/MCP product.
 
-Optional hybrid ranking from the desktop-side CLI:
+## Install
+
+Download the [v0.3.19 Windows preview](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.19): installer or portable EXE. Check the included SHA-256 sums and known limitations. Development builds may be unsigned and trigger SmartScreen.
 
 ```powershell
-mobius mome model status
-mobius mome semantic enable --model nomic-embed-text
-mobius mome semantic sync
+git clone https://github.com/TardisBooo/Mobius.git
+cd Mobius
+pnpm --dir apps/desktop install --frozen-lockfile
+pnpm --dir apps/desktop tauri build
 ```
+
+Requirements: Rust, Node.js with pnpm, Windows C++ Build Tools, and WebView2. Bundles land under `target/release/bundle`.
+
+Möbius calls each installed harness through its documented CLI. It does not patch or replace Codex, Claude Code, OpenCode, Pi, Grok, or OMP.
+
+## Quick start
+
+1. Review locally discovered harness roots.
+2. Approve the sources you want indexed, or choose an explicit folder.
+3. Build the read-only index.
+4. Add or select a project.
+5. Preview a session and resume it, or open a blank PowerShell.
+6. Use **Handoff to another agent** only when you want a new target session with selected trajectory context.
+
+The in-app six-step guide covers value, privacy, indexing, resume, handoffs, the library, and skill scopes. It stays available from Help.
 
 ## Security
 
