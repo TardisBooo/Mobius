@@ -14,7 +14,7 @@ const MOME_SCHEMA_VERSION: i64 = 3;
 const CHUNK_CHARACTER_TARGET: usize = 1_800;
 
 #[derive(Clone, Debug)]
-pub(crate) struct MomeChunkMatch {
+pub struct MomeChunkMatch {
     pub provider: AgentKind,
     pub provider_session_id: String,
     pub session_record_id: String,

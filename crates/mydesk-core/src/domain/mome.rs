@@ -16,15 +16,23 @@ pub struct MomeRecallRequest {
     /// Capped at [`MAX_MOME_TOKENS`].  This is an output budget, not a model
     /// prompt parameter, so callers cannot cause a full transcript export.
     pub max_tokens: Option<usize>,
+    /// `lexical` forces BM25. `hybrid` (default) uses embeddings when a local
+    /// model is enabled and ready, otherwise fails open to lexical.
+    #[serde(default)]
+    pub retrieval_mode: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum MomeSemanticStatus {
-    /// This build has no semantic/vector backend configured. Recall is the
-    /// local SQLite FTS/BM25 path only; it never infers that a model is absent
-    /// merely because no semantic backend was invoked.
+    /// Semantic retrieval is off. Recall is the local SQLite FTS/BM25 path.
     LexicalOnlyNoSemanticBackendConfigured,
+    /// The operator enabled embeddings, but the local model was missing,
+    /// unreachable, or coverage was too low. Lexical results were returned.
+    SemanticUnavailable,
+    /// Lexical and embedding ranks were fused. Citations still point at source
+    /// message ranges; no summary was generated.
+    HybridReady,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -46,6 +54,10 @@ pub struct MomeRecallResponse {
     pub query: String,
     pub retrieval_mode: String,
     pub semantic_status: MomeSemanticStatus,
+    #[serde(default)]
+    pub embedding_coverage: Option<String>,
+    #[serde(default)]
+    pub fallback_reason: Option<String>,
     pub max_tokens: usize,
     pub estimated_tokens: usize,
     pub sources: Vec<MomeSource>,

@@ -10,6 +10,7 @@ pub enum AgentKind {
     Pi,
     Grok,
     Omp,
+    Opencode,
     // Decode existing catalogues without deleting or rewriting historical data.
     // This retired provider must never be offered as an active adapter.
     Apodex,
@@ -18,19 +19,20 @@ pub enum AgentKind {
 }
 
 impl AgentKind {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Codex,
         Self::Claude,
         Self::Pi,
         Self::Grok,
         Self::Omp,
+        Self::Opencode,
         Self::Unknown,
     ];
 
     pub fn is_supported(&self) -> bool {
         matches!(
             self,
-            Self::Codex | Self::Claude | Self::Pi | Self::Grok | Self::Omp
+            Self::Codex | Self::Claude | Self::Pi | Self::Grok | Self::Omp | Self::Opencode
         )
     }
 
@@ -41,6 +43,7 @@ impl AgentKind {
             Self::Pi => "pi",
             Self::Grok => "grok",
             Self::Omp => "omp",
+            Self::Opencode => "opencode",
             Self::Apodex => "apodex",
             Self::Unknown => "unknown",
         }
@@ -63,6 +66,7 @@ impl FromStr for AgentKind {
             "pi" => Self::Pi,
             "grok" | "xai-grok" => Self::Grok,
             "omp" | "oh-my-pi" => Self::Omp,
+            "opencode" | "open-code" => Self::Opencode,
             "apodex" => Self::Apodex,
             _ => Self::Unknown,
         })

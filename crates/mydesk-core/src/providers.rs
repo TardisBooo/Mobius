@@ -133,6 +133,12 @@ impl SessionAdapterRegistry {
                 coverage: "partial",
                 native_resume: true,
             },
+            SessionAdapter {
+                provider: AgentKind::Opencode,
+                version: "opencode-sqlite-v1",
+                coverage: "partial",
+                native_resume: false,
+            },
         ]
     }
 
@@ -149,10 +155,10 @@ impl SessionAdapterRegistry {
     }
 
     pub fn is_candidate(provider: &AgentKind, path: &Path) -> bool {
-        if !session_extension(path) {
-            return false;
-        }
         match provider {
+            AgentKind::Opencode => crate::opencode::is_opencode_db_name(path),
+            AgentKind::Apodex | AgentKind::Unknown => false,
+            _ if !session_extension(path) => false,
             AgentKind::Codex => path
                 .extension()
                 .and_then(|value| value.to_str())
@@ -161,7 +167,6 @@ impl SessionAdapterRegistry {
             AgentKind::Grok => path
                 .file_name()
                 .is_some_and(|name| name.eq_ignore_ascii_case("chat_history.jsonl")),
-            AgentKind::Apodex | AgentKind::Unknown => false,
         }
     }
 }
@@ -222,7 +227,11 @@ impl<'a> ProviderIndexer<'a> {
                     }
                 }
             }
-            let available = Path::new(&session.source_path).is_file();
+            let available = if session.provider == AgentKind::Opencode {
+                crate::opencode::source_is_available(&session.source_path)
+            } else {
+                Path::new(&session.source_path).is_file()
+            };
             if available != session.source_available
                 || session.source_path != original.to_string_lossy()
             {
@@ -243,6 +252,7 @@ impl<'a> ProviderIndexer<'a> {
             AgentKind::Pi,
             AgentKind::Grok,
             AgentKind::Omp,
+            AgentKind::Opencode,
         ];
         let mut reports = providers
             .iter()
@@ -313,6 +323,21 @@ impl<'a> ProviderIndexer<'a> {
                 return Ok(());
             }
         };
+        if root.agent == AgentKind::Opencode {
+            if let Some(db_path) = crate::opencode::db_file_in_root(&canonical_root)
+                .or_else(|| crate::opencode::is_opencode_db_name(&canonical_root).then_some(canonical_root.clone()))
+            {
+                self.index_opencode_db(&db_path, mappings, report, &mut root_report, errors)?;
+                report.skipped += root_report.skipped;
+                report.root_reports.push(root_report);
+                report.coverage = aggregate_coverage(&report.root_reports);
+                return Ok(());
+            }
+            root_report.coverage = "unavailable".to_string();
+            report.root_reports.push(root_report);
+            report.coverage = aggregate_coverage(&report.root_reports);
+            return Ok(());
+        }
         if !canonical_root.is_dir() {
             root_report.coverage = "unavailable".to_string();
             report.root_reports.push(root_report);
@@ -425,16 +450,120 @@ impl<'a> ProviderIndexer<'a> {
         if source_is_current {
             return Ok(IndexOutcome::Unchanged);
         }
-        let mut parsed = parse_session(path, provider.clone())?;
+        if provider == AgentKind::Opencode {
+            anyhow::bail!("OpenCode sessions are indexed from opencode.db, not as JSONL files");
+        }
+        let parsed = parse_session(path, provider.clone())?;
+        self.persist_parsed_session(provider, fingerprint, parsed, mappings, source_version, &adapter)
+    }
+
+    fn index_opencode_db(
+        &self,
+        db_path: &Path,
+        mappings: &SessionMapCatalog,
+        report: &mut ProviderIndexProviderReport,
+        root_report: &mut ProviderIndexRootReport,
+        errors: &mut Vec<String>,
+    ) -> Result<()> {
+        let sessions = match crate::opencode::list_sessions(db_path) {
+            Ok(sessions) => sessions,
+            Err(error) => {
+                root_report.coverage = "failed".to_string();
+                root_report.errors.push(error.to_string());
+                report.skipped += 1;
+                errors.push(format!("{}: {error}", db_path.display()));
+                return Ok(());
+            }
+        };
+        let adapter = SessionAdapterRegistry::for_provider(&AgentKind::Opencode);
+        let mapping_revision = session_map_revision(mappings);
+        for session in sessions {
+            report.discovered += 1;
+            root_report.discovered += 1;
+            let fingerprint = session.fingerprint.clone();
+            let fingerprint_suffix = format!(
+                "{}:{}",
+                fingerprint.raw_bytes,
+                fingerprint.modified_unix_millis.unwrap_or_default()
+            );
+            let source_version = format!(
+                "{}:{fingerprint_suffix}:maps-{mapping_revision}:opencode-sqlite-v1",
+                adapter.version
+            );
+            if self
+                .database
+                .session_source_unchanged(&fingerprint.source_path, &source_version)?
+            {
+                report.unchanged += 1;
+                root_report.unchanged += 1;
+                continue;
+            }
+            let parsed = ParsedSession {
+                provider_session_id: session.native_id.clone(),
+                native_session_id: Some(session.native_id.clone()),
+                is_subagent: session.parent_id.is_some(),
+                parent_session_id: session.parent_id.clone(),
+                cwd: session.cwd.clone(),
+                started_at: session.started_at.clone(),
+                updated_at: session.updated_at.clone(),
+                native_title: session.title.clone(),
+                messages: session
+                    .messages
+                    .into_iter()
+                    .map(|message| ParsedMessage {
+                        role: message.role,
+                        kind: message.kind,
+                        content: message.content,
+                        timestamp: message.timestamp,
+                        line: 0,
+                        event_id: message.event_id,
+                    })
+                    .collect(),
+            };
+            match self.persist_parsed_session(
+                AgentKind::Opencode,
+                fingerprint,
+                parsed,
+                mappings,
+                source_version,
+                &adapter,
+            ) {
+                Ok(IndexOutcome::Indexed) => {
+                    report.indexed += 1;
+                    root_report.indexed += 1;
+                }
+                Ok(IndexOutcome::Unchanged) => {
+                    report.unchanged += 1;
+                    root_report.unchanged += 1;
+                }
+                Err(error) => {
+                    root_report.skipped += 1;
+                    if errors.len() < 100 {
+                        errors.push(format!("{}: {error}", db_path.display()));
+                    }
+                    if root_report.errors.len() < 20 {
+                        root_report.errors.push(error.to_string());
+                    }
+                }
+            }
+        }
+        root_report.coverage = "partial".to_string();
+        Ok(())
+    }
+
+    fn persist_parsed_session(
+        &self,
+        provider: AgentKind,
+        fingerprint: crate::sources::SourceFingerprint,
+        mut parsed: ParsedSession,
+        mappings: &SessionMapCatalog,
+        source_version: String,
+        adapter: &SessionAdapter,
+    ) -> Result<IndexOutcome> {
         if parsed.messages.is_empty() {
             anyhow::bail!("no shareable messages found");
         }
         let source_message_count = parsed.messages.len();
-        // A complete source file can still need a partial catalogue entry: each
-        // individual payload and the retained message set have explicit caps.
-        // Keep this separate from byte-level source sampling and publish their
-        // combined result below so clients never mistake a small source for a
-        // complete transcript merely because its file was read in full.
         let message_payload_truncated = parsed.messages.iter().any(|message| {
             let cap = if message.role == MessageRole::Tool {
                 MAX_TOOL_CHARS
@@ -447,7 +576,8 @@ impl<'a> ProviderIndexer<'a> {
         let catalogue_message_count = parsed.messages.len();
         let message_rows_omitted = catalogue_message_count < source_message_count;
         let message_catalogue_partial = message_rows_omitted || message_payload_truncated;
-        let source_catalogue_partial = fingerprint.raw_bytes > MAX_JSONL_FULL_BYTES;
+        let source_catalogue_partial = provider != AgentKind::Opencode
+            && fingerprint.raw_bytes > MAX_JSONL_FULL_BYTES;
         let catalogue_coverage = if source_catalogue_partial || message_catalogue_partial {
             "partial"
         } else {
@@ -469,8 +599,6 @@ impl<'a> ProviderIndexer<'a> {
                     .find_map(|message| meaningful_user_title(&message.content))
             })
             .unwrap_or_else(|| format!("{} · {}", provider, parsed.provider_session_id));
-        // A native id is intentionally not sufficient for internal identity:
-        // multiple source folders can legitimately contain the same session.
         let session_id = self
             .database
             .session_id_for_source(&fingerprint.source_path)?
@@ -487,7 +615,6 @@ impl<'a> ProviderIndexer<'a> {
             capabilities.push(SessionCapability::NativeResume);
         }
         let native_resume = capabilities.contains(&SessionCapability::NativeResume);
-        // Quoted historical markers must never bind an unrelated target.
         let handoff_marker = Regex::new(r"^\[MOBIUS_HANDOFF_ID:([^\]\r\n]+)\]")?;
         let mobius_handoff_id = parsed
             .messages
@@ -557,7 +684,7 @@ impl<'a> ProviderIndexer<'a> {
                 "native_resume": native_resume,
                 "parent_session_id": parsed.parent_session_id,
                 "native_resume_reason": if parsed.is_subagent {
-                    Some("Codex child agent: inspect this history; resume the parent explicitly in Codex to continue the agent tree.")
+                    Some("Child agent history: inspect this session; resume the parent harness session to continue the tree.")
                 } else { None },
             }),
         };
@@ -688,7 +815,8 @@ fn approved_canonical_root(root: &Path) -> Result<PathBuf> {
     if metadata.file_type().is_symlink() {
         anyhow::bail!("approved source root cannot be a symlink");
     }
-    if !metadata.is_dir() {
+    let opencode_db = crate::opencode::is_opencode_db_name(root) && metadata.is_file();
+    if !metadata.is_dir() && !opencode_db {
         anyhow::bail!("approved source root is not a directory");
     }
     Ok(root.canonicalize()?)
@@ -1893,5 +2021,53 @@ mod tests {
                 .iter()
                 .all(|hit| hit.session.provider != AgentKind::Apodex)
         );
+    }
+
+    #[test]
+    fn opencode_sqlite_is_indexed_read_only_with_session_locators() {
+        let temporary = tempfile::tempdir().expect("temp");
+        let paths = test_paths(temporary.path());
+        let database = Database::open(&paths).expect("database");
+        let root = temporary.path().join("opencode");
+        fs::create_dir_all(&root).expect("root");
+        let db = crate::opencode::write_fixture_db(&root.join("opencode.db")).expect("fixture");
+        let before = fs::metadata(&db).expect("meta").len();
+        save_approved_session_sources(
+            &paths,
+            vec![SessionSourceRoot {
+                agent: AgentKind::Opencode,
+                path: root.display().to_string(),
+                exists: true,
+                mode: "manual_read_only".into(),
+                provenance: "test fixture".into(),
+            }],
+        )
+        .expect("approve");
+        let report = ProviderIndexer::new(&database, &paths)
+            .index_approved_roots()
+            .expect("index");
+        assert!(report.indexed >= 1, "{report:#?}");
+        let sessions = database
+            .query_sessions(&SessionQuery {
+                providers: vec![AgentKind::Opencode],
+                limit: 20,
+                ..SessionQuery::default()
+            })
+            .expect("sessions");
+        assert!(
+            sessions
+                .iter()
+                .any(|hit| hit.session.provider_session_id == "ses_parent")
+        );
+        let parent = sessions
+            .iter()
+            .find(|hit| hit.session.provider_session_id == "ses_parent")
+            .unwrap();
+        assert!(parent.session.source_path.contains("#opencode:ses_parent"));
+        assert!(!parent
+            .session
+            .capabilities
+            .contains(&SessionCapability::NativeResume));
+        assert_eq!(fs::metadata(&db).expect("meta").len(), before);
     }
 }

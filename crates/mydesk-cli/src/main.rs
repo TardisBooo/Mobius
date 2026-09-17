@@ -270,6 +270,11 @@ enum MomeCommand {
         #[command(subcommand)]
         command: MomeModelCommand,
     },
+    /// Opt-in local embeddings. Disabled by default; recall fails open to BM25.
+    Semantic {
+        #[command(subcommand)]
+        command: MomeSemanticCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -287,6 +292,21 @@ enum MomeModelCommand {
         #[arg(long)]
         accept_download: bool,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum MomeSemanticCommand {
+    /// Report whether embeddings are enabled and whether localhost Ollama is ready.
+    Status,
+    /// Enable hybrid ranking. Selected indexed chunks may be sent to localhost Ollama.
+    Enable {
+        #[arg(long, default_value = mome_cli::DEFAULT_OLLAMA_EMBEDDING_MODEL)]
+        model: String,
+    },
+    /// Turn semantic ranking off. Existing vectors stay as a derived cache.
+    Disable,
+    /// Embed pending Mome chunks. Never opens native transcript files.
+    Sync,
 }
 
 #[derive(Debug, Args)]
@@ -433,6 +453,7 @@ fn main() -> Result<()> {
                         checkout_id: arguments.checkout_id,
                         providers: vec![provider.clone()],
                         max_tokens: None,
+                        retrieval_mode: None,
                     })?;
                     print_json(&mome_cli::hook_response(
                         provider,
@@ -459,6 +480,19 @@ fn main() -> Result<()> {
                     accept_download,
                 } => print_json(&mome_cli::install_local_model(&model, accept_download)?),
             },
+            MomeCommand::Semantic { command } => {
+                let desk = MyDesk::initialize()?;
+                match command {
+                    MomeSemanticCommand::Status => print_json(&desk.semantic_status()?),
+                    MomeSemanticCommand::Enable { model } => {
+                        print_json(&desk.set_semantic_enabled(true, Some(&model))?)
+                    }
+                    MomeSemanticCommand::Disable => {
+                        print_json(&desk.set_semantic_enabled(false, None)?)
+                    }
+                    MomeSemanticCommand::Sync => print_json(&desk.sync_mome_embeddings()?),
+                }
+            }
         },
         Command::Notes { command } => {
             let desk = MyDesk::initialize()?;
@@ -598,13 +632,16 @@ fn mome_request_from_args(arguments: MomeRecallArgs) -> Result<MomeRecallRequest
         checkout_id: arguments.checkout_id,
         providers,
         max_tokens: arguments.max_tokens,
+        retrieval_mode: None,
     })
 }
 
 fn parse_mome_provider(value: &str) -> Result<AgentKind> {
     let provider = value.parse::<AgentKind>()?;
     if !provider.is_supported() {
-        anyhow::bail!("Unsupported Mome provider {value}. Use codex, claude, pi, grok, or omp.");
+        anyhow::bail!(
+            "Unsupported Mome provider {value}. Use codex, claude, pi, grok, omp, or opencode."
+        );
     }
     Ok(provider)
 }
@@ -618,7 +655,7 @@ fn validate_skill_scope(scope: &str) -> Result<()> {
 
 fn require_supported_agent(agent: &AgentKind) -> Result<()> {
     if !agent.is_supported() {
-        anyhow::bail!("Choose codex, claude, pi, grok, or omp.")
+        anyhow::bail!("Choose codex, claude, pi, grok, omp, or opencode.")
     }
     Ok(())
 }
@@ -630,8 +667,9 @@ fn print_agent_connection(agent: AgentKind) -> Result<()> {
         AgentKind::Pi => "Add mydesk-mcp to the Pi MCP extension configuration.",
         AgentKind::Grok => "Add mydesk-mcp to the Grok MCP configuration.",
         AgentKind::Omp => "Add mydesk-mcp to an OMP extension or MCP configuration.",
+        AgentKind::Opencode => "opencode mcp add mobius -- mobius-connect mcp serve",
         AgentKind::Apodex | AgentKind::Unknown => {
-            "Choose a supported agent: codex, claude, pi, grok, or omp."
+            "Choose a supported agent: codex, claude, pi, grok, omp, or opencode."
         }
     };
     println!("{command}");

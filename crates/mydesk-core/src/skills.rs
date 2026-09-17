@@ -811,8 +811,9 @@ fn target_root_for_harness(
         "pi" => Ok(user.join(".pi/skills")),
         "grok" => Ok(user.join(".grok/skills")),
         "omp" => Ok(user.join(".omp/agent/skills")),
+        "opencode" => Ok(user.join(".opencode/skills")),
         _ => bail!(
-            "Unsupported skill target {target}. Use global, project:<registered-checkout>, codex, claude, pi, grok, or omp."
+            "Unsupported skill target {target}. Use global, project:<registered-checkout>, codex, claude, pi, grok, omp, or opencode."
         ),
     }
 }

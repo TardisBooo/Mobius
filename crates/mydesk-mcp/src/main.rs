@@ -99,7 +99,7 @@ fn tool_definitions() -> Vec<Value> {
         tool(
             "list_sessions",
             "List indexed native-session metadata. It never reads transcript messages.",
-            json!({"workspace_id":{"type":"string"},"checkout_id":{"type":"string"},"providers":{"type":"array","items":{"enum":["codex","claude","pi"]}},"limit":{"type":"integer","minimum":1,"maximum":100}}),
+            json!({"workspace_id":{"type":"string"},"checkout_id":{"type":"string"},"providers":{"type":"array","items":{"enum":["codex","claude","pi","grok","omp","opencode"]}},"limit":{"type":"integer","minimum":1,"maximum":100}}),
             &[],
         ),
         tool(
@@ -117,13 +117,13 @@ fn tool_definitions() -> Vec<Value> {
         tool(
             "search_sessions",
             "Search message-level history only after a user has granted an exact desktop search approval token.",
-            json!({"approval_token":{"type":"string"},"query":{"type":"string"},"workspace_id":{"type":"string"},"checkout_id":{"type":"string"},"providers":{"type":"array","items":{"enum":["codex","claude","pi"]}},"limit":{"type":"integer","minimum":1,"maximum":100}}),
+            json!({"approval_token":{"type":"string"},"query":{"type":"string"},"workspace_id":{"type":"string"},"checkout_id":{"type":"string"},"providers":{"type":"array","items":{"enum":["codex","claude","pi","grok","omp","opencode"]}},"limit":{"type":"integer","minimum":1,"maximum":100}}),
             &["approval_token", "query", "providers"],
         ),
         tool(
             "mome_recall",
             "Recall a bounded, precisely cited local context package only after explicit desktop approval. It searches the regenerable local SQLite FTS/BM25 index; this build does not invoke a semantic model during recall.",
-            json!({"approval_token":{"type":"string"},"query":{"type":"string"},"workspace_id":{"type":"string"},"checkout_id":{"type":"string"},"providers":{"type":"array","minItems":1,"items":{"enum":["codex","claude","pi"]}},"max_tokens":{"type":"integer","minimum":1,"maximum":MAX_MOME_TOKENS}}),
+            json!({"approval_token":{"type":"string"},"query":{"type":"string"},"workspace_id":{"type":"string"},"checkout_id":{"type":"string"},"providers":{"type":"array","minItems":1,"items":{"enum":["codex","claude","pi","grok","omp","opencode"]}},"max_tokens":{"type":"integer","minimum":1,"maximum":MAX_MOME_TOKENS}}),
             &["approval_token", "query", "providers"],
         ),
         tool(
@@ -147,8 +147,32 @@ fn tool_definitions() -> Vec<Value> {
         tool(
             "request_session_approval",
             "Return desktop approval requirements. This MCP server cannot mint an approval token itself.",
-            json!({"operation":{"enum":["search_sessions","get_messages","resolve_reference","mome_recall"]}}),
+            json!({"operation":{"enum":["search_sessions","get_messages","resolve_reference","mome_recall","read_session_range","commit_handoff"]}}),
             &["operation"],
+        ),
+        tool(
+            "get_lineage",
+            "Return the inherited session graph for explicit entry sessions. This does not read transcripts.",
+            json!({"session_ids":{"type":"array","items":{"type":"string"},"minItems":1}}),
+            &["session_ids"],
+        ),
+        tool(
+            "prepare_handoff",
+            "Prepare a references-only graph handoff. Does not start a process or copy session transcripts.",
+            json!({"session_ids":{"type":"array","items":{"type":"string"},"minItems":1},"harness":{"type":"string","enum":["codex","claude","pi","grok","omp","opencode"]},"cwd":{"type":"string"}}),
+            &["session_ids", "harness", "cwd"],
+        ),
+        tool(
+            "commit_handoff",
+            "Seal a previously prepared graph handoff using a human-issued single-use token.",
+            json!({"handoff_id":{"type":"string"},"approval_token":{"type":"string"}}),
+            &["handoff_id", "approval_token"],
+        ),
+        tool(
+            "get_handoff_status",
+            "Read a sealed handoff record. A started process is not a bound native session.",
+            json!({"handoff_id":{"type":"string"}}),
+            &["handoff_id"],
         ),
     ]
 }
@@ -255,6 +279,7 @@ fn call_tool(desk: &MyDesk, approvals: &McpApprovalStore, params: &Value) -> Res
                     checkout_id: attempt.checkout_id,
                     providers,
                     max_tokens: Some(max_tokens),
+                    retrieval_mode: optional_string(&args, "retrieval_mode"),
                 },
             )?)?))
         }
@@ -316,6 +341,50 @@ fn call_tool(desk: &MyDesk, approvals: &McpApprovalStore, params: &Value) -> Res
                 desk.database.list_session_artifacts(&session.id)?,
             )?))
         }
+        "get_lineage" => {
+            let ids: Vec<String> = serde_json::from_value(args["session_ids"].clone())?;
+            Ok(tool_result(serde_json::to_value(desk.session_lineage(&ids)?)?))
+        }
+        "prepare_handoff" => {
+            let ids: Vec<String> = serde_json::from_value(args["session_ids"].clone())?;
+            let harness = required_string(&args, "harness")?;
+            let cwd = std::path::Path::new(required_string(&args, "cwd")?);
+            let graph = desk.save_lineage(&ids)?;
+            Ok(tool_result(json!({
+                "graph": graph,
+                "content_mode": "references_only",
+                "harness": harness,
+                "cwd": cwd,
+                "note": "Review this graph in a human terminal. Möbius has not summarized these sessions. Commit requires a separately issued approval token."
+            })))
+        }
+        "commit_handoff" => {
+            let attempt = McpApprovalAttempt {
+                operation: "commit_handoff".into(),
+                query: Some(required_string(&args, "handoff_id")?.into()),
+                workspace_id: None,
+                checkout_id: None,
+                providers: vec![],
+                provider: None,
+                session_id: None,
+                start_ordinal: None,
+                end_ordinal: None,
+                requested_chars: 1,
+            };
+            if let Err(error) = authorize(approvals, &args, &attempt) {
+                return Ok(approval_required_result(
+                    "commit_handoff",
+                    &error.to_string(),
+                ));
+            }
+            Ok(tool_result(desk.database.handoff_status(required_string(
+                &args,
+                "handoff_id",
+            )?)?))
+        }
+        "get_handoff_status" => Ok(tool_result(desk.database.handoff_status(
+            required_string(&args, "handoff_id")?,
+        )?)),
         _ => Err(anyhow!("unknown Möbius tool: {name}")),
     }
 }

@@ -210,6 +210,23 @@ impl MyDesk {
         crate::MomeRecall::new(&self.database).recall(request)
     }
 
+    pub fn semantic_status(&self) -> Result<crate::SemanticStatusReport> {
+        self.database.semantic_status_report()
+    }
+
+    pub fn set_semantic_enabled(
+        &self,
+        enabled: bool,
+        model: Option<&str>,
+    ) -> Result<crate::SemanticPolicy> {
+        self.database.set_semantic_enabled(enabled, model)
+    }
+
+    pub fn sync_mome_embeddings(&self) -> Result<crate::SemanticStatusReport> {
+        self.database.sync_mome_chunks()?;
+        self.database.sync_mome_embeddings()
+    }
+
     pub fn create_or_update_note(&self, draft: NoteDraft) -> Result<ContextRecord> {
         let (slug, path, snapshot) = self.vault.write_note(&draft)?;
         self.record_note(draft, slug, path, snapshot)

@@ -7,7 +7,8 @@
 
 use crate::{
     Database, MAX_MOME_SESSION_SOURCES, MAX_MOME_TOKENS, MomeRecallRequest, MomeRecallResponse,
-    MomeSemanticStatus, MomeSource,
+    MomeSemanticStatus,
+    embedding,
 };
 use anyhow::{Result, bail};
 
@@ -35,42 +36,37 @@ impl<'a> MomeRecall<'a> {
             .unwrap_or(MAX_MOME_TOKENS)
             .clamp(1, MAX_MOME_TOKENS);
         self.database.sync_mome_chunks()?;
-        let candidates = self.database.search_mome_chunks(request, 96)?;
-        let mut sources = Vec::new();
-        let mut used = 0usize;
-        for candidate in candidates {
-            if sources.len() == MAX_MOME_SESSION_SOURCES
-                || sources.iter().any(|source: &MomeSource| {
-                    source.session_record_id == candidate.session_record_id
-                })
-            {
-                continue;
-            }
-            let remaining = max_tokens.saturating_sub(used);
-            if remaining == 0 {
-                break;
-            }
-            let (text, estimated_tokens) = truncate_to_tokens(&candidate.content, remaining);
-            if text.is_empty() {
-                continue;
-            }
-            used += estimated_tokens;
-            sources.push(MomeSource {
-                provider: candidate.provider,
-                session_id: candidate.provider_session_id,
-                session_record_id: candidate.session_record_id,
-                start_ordinal: candidate.start_ordinal,
-                end_ordinal: candidate.end_ordinal,
-                citation: candidate.citation,
-                content_hash: candidate.content_hash,
-                text,
-                estimated_tokens,
-            });
-        }
+        let lexical = self.database.search_mome_chunks(request, 96)?;
+        let force_lexical = request
+            .retrieval_mode
+            .as_deref()
+            .is_some_and(|mode| mode.eq_ignore_ascii_case("lexical"));
+        let policy = self.database.semantic_policy()?;
+        let (ranked, semantic_status, embedding_coverage, fallback_reason) = if force_lexical
+            || !policy.enabled
+        {
+            (
+                lexical,
+                MomeSemanticStatus::LexicalOnlyNoSemanticBackendConfigured,
+                Some("none".into()),
+                None,
+            )
+        } else {
+            self.database
+                .rerank_mome_chunks(&request.query, lexical, &policy)?
+        };
+        let (sources, used) =
+            embedding::pack_sources(ranked, max_tokens, MAX_MOME_SESSION_SOURCES);
+        let retrieval_mode = match semantic_status {
+            MomeSemanticStatus::HybridReady => "hybrid",
+            _ => "lexical_bm25",
+        };
         Ok(MomeRecallResponse {
             query: request.query.trim().to_string(),
-            retrieval_mode: "lexical_bm25".into(),
-            semantic_status: MomeSemanticStatus::LexicalOnlyNoSemanticBackendConfigured,
+            retrieval_mode: retrieval_mode.into(),
+            semantic_status,
+            embedding_coverage,
+            fallback_reason,
             max_tokens,
             estimated_tokens: used,
             sources,

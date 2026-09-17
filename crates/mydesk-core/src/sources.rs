@@ -71,7 +71,10 @@ pub fn load_approved_session_sources(paths: &WorkspacePaths) -> Result<ApprovedS
     // invalidate stale sources. New/manual approvals remain strict.
     let mut roots = Vec::new();
     for mut root in manifest.roots {
-        if Path::new(&root.path).is_dir() {
+        let path = Path::new(&root.path);
+        if path.is_dir()
+            || (root.agent == AgentKind::Opencode && crate::opencode::db_file_in_root(path).is_some())
+        {
             roots.extend(normalize_approved_roots(vec![root])?);
         } else {
             root.exists = false;
@@ -270,7 +273,10 @@ pub fn normalize_approved_roots(roots: Vec<SessionSourceRoot>) -> Result<Vec<Ses
                 requested.display()
             );
         }
-        if !metadata.is_dir() {
+        let opencode_db = root.agent == AgentKind::Opencode
+            && crate::opencode::is_opencode_db_name(&requested)
+            && metadata.is_file();
+        if !metadata.is_dir() && !opencode_db {
             bail!(
                 "approved source root is not a directory: {}",
                 requested.display()
@@ -378,7 +384,31 @@ fn conventional_session_roots(paths: &WorkspacePaths, probe: bool) -> Vec<Sessio
             user.join(".omp/agent/sessions"),
             "OMP: conventional agent sessions",
         ),
+        (
+            AgentKind::Opencode,
+            user.join(".local/share/opencode"),
+            "OpenCode: conventional local share",
+        ),
+        (
+            AgentKind::Opencode,
+            user.join(".opencode"),
+            "OpenCode: conventional home",
+        ),
     ];
+    if let Some(local) = env::var_os("LOCALAPPDATA") {
+        definitions.push((
+            AgentKind::Opencode,
+            PathBuf::from(local).join("opencode"),
+            "OpenCode: LOCALAPPDATA",
+        ));
+    }
+    if let Some(xdg) = env::var_os("XDG_DATA_HOME") {
+        definitions.push((
+            AgentKind::Opencode,
+            PathBuf::from(xdg).join("opencode"),
+            "OpenCode: XDG_DATA_HOME",
+        ));
+    }
     // An explicit CODEX_HOME is a deliberate boundary (and is how isolated
     // test profiles avoid reading a workstation's unrelated archive). When
     // absent, include the documented portable installation as one exact root;
@@ -758,7 +788,7 @@ fn looks_sensitive(path: &Path) -> bool {
         || name == "key.txt"
 }
 
-fn stable_path_hash(path: &str) -> String {
+pub(crate) fn stable_path_hash(path: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(path.as_bytes());
     let hash = hex::encode(hasher.finalize());

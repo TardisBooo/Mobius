@@ -222,6 +222,13 @@ pub(crate) fn doctor_report() -> DoctorReport {
             true,
             "OMP extensions may be enabled only by an explicit installer target.",
         ),
+        provider_capability(
+            AgentKind::Opencode,
+            "opencode",
+            "mcp_or_explicit_reference",
+            false,
+            "Möbius indexes approved OpenCode SQLite history without changing OpenCode configuration.",
+        ),
     ];
     DoctorReport {
         kind: "mobius_mome_doctor_report",
@@ -360,6 +367,7 @@ fn known_configuration_paths(provider: &AgentKind) -> Vec<PathBuf> {
         AgentKind::Pi => &[".pi/config.json", ".pi/settings.json"],
         AgentKind::Grok => &[".grok/config.toml", ".grok/pager.toml"],
         AgentKind::Omp => &[".omp/agent/config.yml", ".omp/agent/settings.json"],
+        AgentKind::Opencode => &[".local/share/opencode/opencode.db", ".opencode/opencode.db"],
         AgentKind::Apodex | AgentKind::Unknown => &[],
     };
     names.iter().map(|name| home.join(name)).collect()
@@ -408,6 +416,8 @@ mod tests {
             query: "remember the migration".into(),
             retrieval_mode: "lexical_bm25".into(),
             semantic_status: MomeSemanticStatus::LexicalOnlyNoSemanticBackendConfigured,
+            embedding_coverage: Some("none".into()),
+            fallback_reason: None,
             max_tokens: 1200,
             estimated_tokens: 4,
             sources: vec![MomeSource {
@@ -470,7 +480,13 @@ mod tests {
         let report = doctor_report();
         assert!(report.read_only);
         assert!(!report.writes_harness_configuration);
-        assert_eq!(report.capabilities.len(), 5);
+        assert_eq!(report.capabilities.len(), 6);
+        assert!(
+            report
+                .capabilities
+                .iter()
+                .any(|capability| capability.provider == AgentKind::Opencode)
+        );
         assert!(!report.semantic_retrieval_enabled);
         assert!(!report.local_model_runtime.semantic_retrieval_enabled);
     }

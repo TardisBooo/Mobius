@@ -12,6 +12,8 @@ pub mod mcp_approvals;
 pub mod mentions;
 pub mod model;
 pub mod mome;
+pub mod embedding;
+pub mod opencode;
 pub mod note_mounts;
 pub mod paths;
 pub mod providers;
@@ -32,6 +34,7 @@ pub use mcp_approvals::{
     McpApprovalRequest, McpApprovalStore,
 };
 pub use model::*;
+pub use embedding::{SemanticPolicy, SemanticStatusReport};
 pub use mome::MomeRecall;
 pub use note_mounts::{MountInfo, MountScanStatus, NoteFileInfo, NoteLibrarySnapshot};
 pub use paths::WorkspacePaths;

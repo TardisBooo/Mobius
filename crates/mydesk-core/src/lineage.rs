@@ -211,17 +211,21 @@ impl MyDesk {
             source.source_status == "available",
             "session source is unavailable or not authorized"
         );
-        let mut file = fs::File::open(
-            source
-                .source_path
-                .as_ref()
-                .context("source location missing")?,
-        )?;
-        let size = file.metadata()?.len();
-        ensure!(offset <= size, "offset exceeds source length");
-        file.seek(SeekFrom::Start(offset))?;
-        let mut bytes = Vec::new();
-        file.take(length as u64).read_to_end(&mut bytes)?;
+        let locator = source
+            .source_path
+            .as_ref()
+            .context("source location missing")?;
+        let (bytes, size) = if crate::opencode::parse_locator(locator).is_some() {
+            crate::opencode::read_locator_range(locator, offset, length)?
+        } else {
+            let mut file = fs::File::open(locator)?;
+            let size = file.metadata()?.len();
+            ensure!(offset <= size, "offset exceeds source length");
+            file.seek(SeekFrom::Start(offset))?;
+            let mut bytes = Vec::new();
+            file.take(length as u64).read_to_end(&mut bytes)?;
+            (bytes, size)
+        };
         let (encoding, data) = match std::str::from_utf8(&bytes) {
             Ok(text) => ("utf-8", text.to_owned()),
             Err(_) => ("hex", hex::encode(&bytes)),
@@ -391,6 +395,42 @@ fn source_reference(
     session: Session,
     roots: &[(crate::AgentKind, std::path::PathBuf)],
 ) -> SessionReference {
+    if let Some((db_path, _)) = crate::opencode::parse_locator(&session.source_path) {
+        let canonical = db_path.canonicalize().ok();
+        let metadata = fs::symlink_metadata(&db_path).ok();
+        let allowed = canonical.as_ref().is_some_and(|p| {
+            roots.iter().any(|(agent, root)| {
+                *agent == session.provider && (p.starts_with(root) || p == root)
+            })
+        });
+        let status = match &metadata {
+            None => "missing",
+            Some(m) if m.file_type().is_symlink() => "linked_source_rejected",
+            Some(m) if !m.is_file() => "not_a_file",
+            _ if !allowed => "not_authorized",
+            _ => "available",
+        };
+        return SessionReference {
+            session_id: session.id,
+            harness: Some(session.provider.to_string()),
+            native_id: Some(session.provider_session_id),
+            title: Some(session.title),
+            created_at: session.started_at,
+            updated_at: Some(session.updated_at),
+            checkout_id: session.checkout_id,
+            source_path: if status == "available" {
+                Some(session.source_path)
+            } else {
+                None
+            },
+            source_status: status.into(),
+            observed_bytes: if allowed {
+                metadata.map(|m| m.len())
+            } else {
+                None
+            },
+        };
+    }
     let path = Path::new(&session.source_path);
     let canonical = path.canonicalize().ok();
     let metadata = fs::symlink_metadata(path).ok();
@@ -597,6 +637,33 @@ mod tests {
             .session_lineage(&["b".into(), "c".into(), "b".into()])
             .unwrap();
         assert_eq!(entries.entry_session_ids.len(), 2);
+        assert_eq!(entries.nodes.len(), 3);
+    }
+
+    #[test]
+    fn mutual_handoff_is_a_relay_chain_not_a_cycle() {
+        let (_root, desk) = setup();
+        // Codex "a" hands to Claude "b"; Claude later hands BACK, which opens
+        // a NEW Codex session "c" instead of reopening "a". Mutual exchange
+        // therefore zig-zags forward as a relay chain and stays a DAG; only a
+        // corrupt legacy edge pointing at an existing ancestor could cycle,
+        // and that is rejected by validation.
+        edge(&desk, "a", "b");
+        edge(&desk, "b", "c");
+        let graph = desk.session_lineage(&["c".into()]).unwrap();
+        assert_eq!(graph.content_mode, "references_only");
+        assert_eq!(
+            graph
+                .nodes
+                .iter()
+                .map(|n| n.session_id.as_str())
+                .collect::<Vec<_>>(),
+            ["a", "b", "c"]
+        );
+        assert_eq!(graph.edges.len(), 2);
+        // Entering the graph from both ends of the exchange still sees each
+        // shared ancestor exactly once.
+        let entries = desk.session_lineage(&["b".into(), "c".into()]).unwrap();
         assert_eq!(entries.nodes.len(), 3);
     }
 

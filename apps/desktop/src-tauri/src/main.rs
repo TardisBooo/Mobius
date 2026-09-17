@@ -2800,6 +2800,15 @@ mod terminal_tests {
         );
         assert!(
             native_resume_command(
+                mydesk_core::AgentKind::Opencode,
+                &PathBuf::from("opencode.exe"),
+                "ses_parent",
+                Path::new(r"E:\Workspaces\Example"),
+            )
+            .is_err()
+        );
+        assert!(
+            native_resume_command(
                 mydesk_core::AgentKind::Unknown,
                 &executable,
                 "not-used",
