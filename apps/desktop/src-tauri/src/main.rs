@@ -1,6 +1,6 @@
 use mydesk_core::harness_launch;
 use mydesk_core::{
-    AgentSummary, BoardDocument, ContextRecord, HandoffDraft, HealthStatus, McpApprovalGrant,
+    AgentSummary, AppSettings, AppSettingsView, BoardDocument, ContextRecord, HandoffDraft, HealthStatus, McpApprovalGrant,
     McpApprovalRequest, McpApprovalStore, Message, MomeRecallRequest, MomeRecallResponse, MyDesk,
     NoteDraft, NoteFileInfo, NoteLibrarySnapshot, ProjectSummary, ProviderIndexReport, RelayGraph,
     RelayMode, SearchRequest, SessionQuery, SessionSearchHit, SessionSourceRoot, SkillInfo,
@@ -352,6 +352,23 @@ fn command_error(error: impl std::fmt::Display) -> String {
 #[tauri::command]
 fn health(state: State<'_, DesktopState>) -> CommandResult<HealthStatus> {
     state.desk.health().map_err(command_error)
+}
+#[tauri::command]
+fn app_settings_command(state: State<'_, DesktopState>) -> CommandResult<AppSettingsView> {
+    state.desk.settings_view().map_err(command_error)
+}
+#[tauri::command]
+fn save_app_settings_command(
+    state: State<'_, DesktopState>,
+    settings: AppSettings,
+) -> CommandResult<AppSettingsView> {
+    state.desk.save_settings(settings).map_err(command_error)
+}
+#[tauri::command]
+fn restart_app_command(app: AppHandle) -> CommandResult<()> {
+    app.restart();
+    #[allow(unreachable_code)]
+    Ok(())
 }
 #[tauri::command]
 fn search_context(
@@ -759,6 +776,9 @@ async fn mome_recall_command(
 }
 #[tauri::command]
 fn create_note(state: State<'_, DesktopState>, draft: NoteDraft) -> CommandResult<ContextRecord> {
+    let scan_gate = state.library_scan_gate.clone();
+    scan_gate.begin();
+    let _guard = LibraryScanGuard(scan_gate);
     state
         .desk
         .create_or_update_note(draft)
@@ -772,6 +792,9 @@ fn update_note_file_command(
 ) -> CommandResult<ContextRecord> {
     // The service repeats the canonical vault-root check. Keeping it at the
     // command boundary makes the read-only mount rule explicit as well.
+    let scan_gate = state.library_scan_gate.clone();
+    scan_gate.begin();
+    let _guard = LibraryScanGuard(scan_gate);
     let candidate = Path::new(&path).canonicalize().map_err(command_error)?;
     if !note_is_private_vault_file(&candidate, &state.desk.paths.notes_dir()) {
         return Err("only existing private vault notes can be updated".into());
@@ -2667,6 +2690,9 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             health,
+            app_settings_command,
+            save_app_settings_command,
+            restart_app_command,
             search_context,
             read_context,
             list_projects,

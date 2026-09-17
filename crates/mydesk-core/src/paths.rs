@@ -1,3 +1,4 @@
+use crate::settings::{self, AppSettingsView};
 use anyhow::{Context, Result, bail};
 use std::{
     env, fs,
@@ -12,6 +13,14 @@ pub struct WorkspacePaths {
     pub catalog_root: PathBuf,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PathSources {
+    pub data_root: &'static str,
+    pub artifacts_root: &'static str,
+    pub catalog_root: &'static str,
+    pub workspace_root: &'static str,
+}
+
 impl Default for WorkspacePaths {
     fn default() -> Self {
         Self::from_environment()
@@ -20,23 +29,28 @@ impl Default for WorkspacePaths {
 
 impl WorkspacePaths {
     pub fn from_environment() -> Self {
-        // MOBIUS_* wins. MYDESK_* remains an opt-in compatibility bridge for
-        // existing launch scripts. Defaults are portable local-app-data paths,
-        // never a machine-specific drive layout.
-        let data_root = env_path("MOBIUS_DATA_ROOT", "MYDESK_DATA_ROOT")
-            .unwrap_or_else(default_data_root);
-        let workspace_root = env_path("MOBIUS_WORKSPACE", "MYDESK_WORKSPACE")
-            .unwrap_or_else(default_workspace_root);
-        let artifacts_root = env_path("MOBIUS_ARTIFACTS_ROOT", "MYDESK_ARTIFACTS_ROOT")
-            .unwrap_or_else(|| data_root.join("artifacts"));
-        let catalog_root = env_path("MOBIUS_CATALOG_ROOT", "MYDESK_CATALOG_ROOT")
-            .unwrap_or_else(|| data_root.join("catalog"));
-        Self {
-            workspace_root,
-            data_root,
-            artifacts_root,
-            catalog_root,
-        }
+        resolve_workspace_paths().0
+    }
+
+    pub fn settings_view() -> Result<AppSettingsView> {
+        let settings = settings::load_app_settings().unwrap_or_default();
+        let (paths, sources) = resolve_workspace_paths();
+        Ok(AppSettingsView {
+            settings,
+            settings_path: settings::settings_file_path().display().to_string(),
+            data_root: paths.data_root.display().to_string(),
+            artifacts_root: paths.artifacts_root.display().to_string(),
+            catalog_root: paths.catalog_root.display().to_string(),
+            workspace_root: paths.workspace_root.display().to_string(),
+            notes_dir: paths.notes_dir().display().to_string(),
+            database_path: paths.database_path().display().to_string(),
+            default_data_root: settings::default_data_root().display().to_string(),
+            data_root_source: sources.data_root.to_string(),
+            artifacts_root_source: sources.artifacts_root.to_string(),
+            catalog_root_source: sources.catalog_root.to_string(),
+            workspace_root_source: sources.workspace_root.to_string(),
+            restart_required: false,
+        })
     }
 
     pub fn ensure_layout(&self) -> Result<()> {
@@ -133,27 +147,71 @@ impl WorkspacePaths {
     }
 }
 
-fn env_path(primary: &str, legacy: &str) -> Option<PathBuf> {
-    env::var_os(primary)
-        .or_else(|| env::var_os(legacy))
-        .map(PathBuf::from)
+fn resolve_workspace_paths() -> (WorkspacePaths, PathSources) {
+    // Environment still wins for one process (CI, isolated tests, a one-off
+    // launch). Stored settings are how a released desktop remembers a person's
+    // data roots without baking a drive letter into the binary.
+    let stored = settings::load_app_settings().unwrap_or_default();
+    let (data_root, data_root_source) = resolve_path(
+        "MOBIUS_DATA_ROOT",
+        "MYDESK_DATA_ROOT",
+        stored.data_root.as_deref(),
+        settings::default_data_root,
+    );
+    let (workspace_root, workspace_root_source) = resolve_path(
+        "MOBIUS_WORKSPACE",
+        "MYDESK_WORKSPACE",
+        stored.workspace_root.as_deref(),
+        settings::default_workspace_root,
+    );
+    let (artifacts_root, artifacts_root_source) = resolve_path(
+        "MOBIUS_ARTIFACTS_ROOT",
+        "MYDESK_ARTIFACTS_ROOT",
+        stored.artifacts_root.as_deref(),
+        || data_root.join("artifacts"),
+    );
+    let (catalog_root, catalog_root_source) = resolve_path(
+        "MOBIUS_CATALOG_ROOT",
+        "MYDESK_CATALOG_ROOT",
+        stored.catalog_root.as_deref(),
+        || data_root.join("catalog"),
+    );
+    (
+        WorkspacePaths {
+            workspace_root,
+            data_root,
+            artifacts_root,
+            catalog_root,
+        },
+        PathSources {
+            data_root: data_root_source,
+            artifacts_root: artifacts_root_source,
+            catalog_root: catalog_root_source,
+            workspace_root: workspace_root_source,
+        },
+    )
 }
 
-fn default_workspace_root() -> PathBuf {
-    env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+fn resolve_path(
+    primary: &str,
+    legacy: &str,
+    stored: Option<&str>,
+    fallback: impl FnOnce() -> PathBuf,
+) -> (PathBuf, &'static str) {
+    if let Some(path) = env_path(primary) {
+        return (path, "environment");
+    }
+    if let Some(path) = env_path(legacy) {
+        return (path, "legacy-environment");
+    }
+    if let Some(raw) = stored.map(str::trim).filter(|value| !value.is_empty()) {
+        return (PathBuf::from(raw), "settings");
+    }
+    (fallback(), "default")
 }
 
-fn default_data_root() -> PathBuf {
-    if let Some(base) = env::var_os("LOCALAPPDATA") {
-        return PathBuf::from(base).join("Mobius");
-    }
-    if let Some(home) = env::var_os("HOME").or_else(|| env::var_os("USERPROFILE")) {
-        return PathBuf::from(home)
-            .join(".local")
-            .join("share")
-            .join("mobius");
-    }
-    default_workspace_root().join(".mobius")
+fn env_path(name: &str) -> Option<PathBuf> {
+    env::var_os(name).map(PathBuf::from)
 }
 
 #[cfg(test)]
@@ -182,7 +240,7 @@ mod tests {
 
     #[test]
     fn default_data_root_is_portable_local_app_data() {
-        let data = super::default_data_root();
+        let data = crate::settings::default_data_root();
         let text = data.to_string_lossy();
         assert!(
             !text.contains("DataVault") && !text.contains("AcceptedArtifacts"),

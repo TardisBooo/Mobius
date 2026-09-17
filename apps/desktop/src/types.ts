@@ -20,6 +20,32 @@ export interface HealthStatus {
   wiki_entries: number;
 }
 
+export interface AppSettings {
+  data_root?: string | null;
+  artifacts_root?: string | null;
+  catalog_root?: string | null;
+  workspace_root?: string | null;
+  theme?: string | null;
+  locale?: string | null;
+}
+
+export interface AppSettingsView {
+  settings: AppSettings;
+  settings_path: string;
+  data_root: string;
+  artifacts_root: string;
+  catalog_root: string;
+  workspace_root: string;
+  notes_dir: string;
+  database_path: string;
+  default_data_root: string;
+  data_root_source: string;
+  artifacts_root_source: string;
+  catalog_root_source: string;
+  workspace_root_source: string;
+  restart_required: boolean;
+}
+
 export interface ContextRecord {
   id: string;
   kind: ContextKind;

@@ -16,6 +16,7 @@ pub mod embedding;
 pub mod opencode;
 pub mod note_mounts;
 pub mod paths;
+pub mod settings;
 pub mod providers;
 pub mod service;
 pub mod session_maps;
@@ -40,6 +41,7 @@ pub use note_mounts::{
     MountInfo, MountScanStatus, NoteFileInfo, NoteLibrarySnapshot, note_is_private_vault_file,
 };
 pub use paths::WorkspacePaths;
+pub use settings::{AppSettings, AppSettingsView};
 pub use providers::{
     ProviderIndexProviderReport, ProviderIndexReport, ProviderIndexRootReport, ProviderIndexer,
     SessionAdapter, SessionAdapterRegistry,

@@ -19,6 +19,7 @@ The explorer and the open document are separate working copies, following VS Cod
 - Opening or reading one document authorizes that path against configured roots. It does not restat the whole tree.
 - A dirty working copy is never resolved from a watcher event. A clean copy may pick up disk contents in place, without blanking the editor or restoring scroll from the tree.
 - Explorer identity is path + title + virtual path. `mtime` is not part of the fingerprint that decides whether to swap the tree.
+- Save writes the working copy and leaves caret/scroll/focus in place. A first create may refresh the explorer; an in-place save must not resolve the open model again.
 
 Mount configuration remains persistent until an explicit unmount. Scan status is transient: an unavailable source has no files in the snapshot and is shown as unavailable rather than being represented by a retained cache. Mount roots must not overlap, because overlapping roots make one physical file appear as multiple competing Library identities.
 

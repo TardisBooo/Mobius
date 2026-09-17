@@ -16,6 +16,8 @@ import type {
   CanvasAssetInfo,
   ContextHit,
   ContextRecord,
+  AppSettings,
+  AppSettingsView,
   HealthStatus,
   LinkPreview,
   ManagedSkillInstall,
@@ -214,6 +216,38 @@ export const desktopApi = {
 
   async health(): Promise<HealthStatus> {
     return inTauri() ? invoke<HealthStatus>("health") : clone(demoHealth);
+  },
+
+  async appSettings(): Promise<AppSettingsView> {
+    if (!inTauri()) {
+      return {
+        settings: {},
+        settings_path: "browser-preview",
+        data_root: demoHealth.database_path.replace(/\\[^\\]+$/, ""),
+        artifacts_root: "browser-preview/artifacts",
+        catalog_root: "browser-preview/catalog",
+        workspace_root: ".",
+        notes_dir: "browser-preview/vault/notes",
+        database_path: demoHealth.database_path,
+        default_data_root: "browser-preview",
+        data_root_source: "default",
+        artifacts_root_source: "default",
+        catalog_root_source: "default",
+        workspace_root_source: "default",
+        restart_required: false,
+      };
+    }
+    return invoke<AppSettingsView>("app_settings_command");
+  },
+
+  async saveAppSettings(settings: AppSettings): Promise<AppSettingsView> {
+    if (!inTauri()) throw new Error("Settings are available in the desktop app.");
+    return invoke<AppSettingsView>("save_app_settings_command", { settings });
+  },
+
+  async restartApp(): Promise<void> {
+    if (!inTauri()) return;
+    await invoke("restart_app_command");
   },
 
   async search(request: SearchRequest): Promise<ContextHit[]> {

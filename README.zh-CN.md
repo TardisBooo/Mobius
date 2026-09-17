@@ -188,6 +188,6 @@ pnpm --dir apps/desktop build
 pnpm --dir apps/website build
 ```
 
-桌面验收只能使用隔离的验证根目录，不得针对已有用户项目或真实会话。数据默认写在本机应用数据目录（Windows 为 `%LOCALAPPDATA%\Mobius`，其他平台为 `~/.local/share/mobius`）。可用 `MOBIUS_DATA_ROOT` 或 `--data-root` 覆盖。
+桌面验收只能使用隔离的验证根目录，不得针对已有用户项目或真实会话。数据默认写在本机应用数据目录（Windows 为 `%LOCALAPPDATA%\Mobius`，其他平台为 `~/.local/share/mobius`）。发布版可在「设置」里改数据目录，保存在 `%APPDATA%\Mobius\settings.json`（或其他平台的 `~/.config/mobius/settings.json`）。`MOBIUS_DATA_ROOT` / `--data-root` 仍可覆盖单次启动。二进制不写死盘符。
 
 完整研究来源见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。代码使用 [MIT License](LICENSE)。

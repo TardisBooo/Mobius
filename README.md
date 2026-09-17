@@ -231,7 +231,7 @@ pnpm --dir apps/desktop build
 pnpm --dir apps/website build
 ```
 
-Desktop acceptance uses isolated verification roots. Tests must not target an existing user project or real session history. Data defaults to local app data (`%LOCALAPPDATA%\Mobius` on Windows, `~/.local/share/mobius` elsewhere). Override with `MOBIUS_DATA_ROOT` or `--data-root`.
+Desktop acceptance uses isolated verification roots. Tests must not target an existing user project or real session history. Data defaults to local app data (`%LOCALAPPDATA%\Mobius` on Windows, `~/.local/share/mobius` elsewhere). A person can point a released build at another vault from **Settings**; that choice is stored in `%APPDATA%\Mobius\settings.json` (or `~/.config/mobius/settings.json`). `MOBIUS_DATA_ROOT` / `--data-root` still override one process. The binary does not hard-code a drive layout.
 
 The `isolated_acceptance` integration test is opt-in: it requires a separately provisioned Windows fixture and `MOBIUS_VERIFICATION_ROOT`. It is not in the default test pass.
 

@@ -40,6 +40,20 @@ impl MyDesk {
         self.database.health()
     }
 
+    pub fn settings_view(&self) -> Result<crate::AppSettingsView> {
+        WorkspacePaths::settings_view()
+    }
+
+    pub fn save_settings(&self, settings: crate::AppSettings) -> Result<crate::AppSettingsView> {
+        crate::settings::save_app_settings(&settings)?;
+        let mut view = WorkspacePaths::settings_view()?;
+        view.restart_required = view.data_root != self.paths.data_root.display().to_string()
+            || view.artifacts_root != self.paths.artifacts_root.display().to_string()
+            || view.catalog_root != self.paths.catalog_root.display().to_string()
+            || view.workspace_root != self.paths.workspace_root.display().to_string();
+        Ok(view)
+    }
+
     pub fn register_workspace(
         &self,
         path: &Path,
