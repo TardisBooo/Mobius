@@ -1,4 +1,4 @@
-const statuses = ["PI → GROK → CODEX", "SOURCE / VERIFIED", "NEXT / MEASURE P95"];
+const statuses = ["CODEX → CLAUDE", "SEARCH / CITE / RESUME / HAND OFF", "REFERENCES / NOT SUMMARY"];
 const status = document.querySelector(".hero-status");
 if (status && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
   let index = 0;
@@ -17,11 +17,11 @@ const setLanguage = (language) => {
     const label = languageButton.querySelector(".lang-label");
     if (label) label.textContent = zh ? "English" : "简体中文";
   }
-  document.title = zh ? "MÖBIUS | 切换 Agent，工作不断线" : "MÖBIUS | Switch agents. Keep the work.";
+  document.title = zh ? "MÖBIUS | Agent 会话层" : "MÖBIUS | Agent Session Hub";
   const description = document.querySelector('meta[name="description"]');
   if (description) description.setAttribute("content", zh
-    ? "莫比乌斯是面向 Codex、Claude Code、Pi、Grok 与 OMP 的本地优先 Windows 工作台。按引用交接会话，用项目图谱追踪历史，以 FTS/BM25 搜索，并在真实 PowerShell 旁记录文档。"
-    : "Möbius is a local-first Windows workspace for Codex, Claude Code, Pi, Grok, and OMP. Hand off sessions by reference, follow a project graph, search with FTS/BM25, and keep notes beside real PowerShell.");
+    ? "莫比乌斯是开源的跨 Agent 会话层。在 Claude Code、Codex、OpenCode、Pi、Grok 与 OMP 之间搜索、引用、恢复和交接上下文，不改写任何 Harness。"
+    : "Möbius is an open-source Agent Session Hub. Search, cite, resume and hand off context across Claude Code, Codex, OpenCode, Pi, Grok, and OMP without rewriting a harness.");
   localStorage.setItem("mobius.website.language", language);
 };
 

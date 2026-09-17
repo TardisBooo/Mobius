@@ -1,123 +1,29 @@
-# MÖBIUS
+# Möbius — your Agent Session Hub
 
-[![MÖBIUS — Keep the thread. A local workspace for coding agents.](apps/website/public/product/video-poster.png)](http://8.137.87.76/mobius/)
+Möbius is an open-source **session layer for coding agents**. Search, cite, resume and hand off context across Claude Code, Codex, OpenCode, Pi, Grok and OMP. It does not rewrite a harness. A handoff carries **references, not summaries**.
 
-**Switch agents. Keep the work.**
+**Yours, on this PC.** The index is local SQLite FTS/BM25. Approved transcripts stay in their harness folders and are read-only to Möbius. OpenCode is read from a read-only `opencode.db`. Model accounts stay with the CLIs you already pay for. Möbius itself has no paid tier and phones home for nothing.
 
-A Windows workspace for people who use Codex, Claude Code, Pi, Grok, and OMP across the same projects. Built with a **Rust core, Tauri 2 desktop shell, React/TypeScript UI and SQLite local index**.
+[简体中文](README.zh-CN.md) · [Live site](http://8.137.87.76/mobius/) · [CLI / MCP](https://github.com/TardisBooo/mobius-connect) · [Releases](https://github.com/TardisBooo/Mobius/releases) · [MIT License](LICENSE)
 
-[简体中文](README.zh-CN.md) · [Live product site](http://8.137.87.76/mobius/?lang=en) · [Watch the film](http://8.137.87.76/mobius/?lang=en#demo) · [Releases](https://github.com/TardisBooo/Mobius/releases) · [Acceptance evidence](docs/acceptance/real-desktop-20260908.md) · [MIT License](LICENSE)
+> Windows development preview v0.3.19. Compatibility is verified per harness and published with evidence. This is not Microsoft Mobius, ControlTheory Möbius, or Circular Labs Mobius. OpenClaw (`~/.openclaw`) is on the roadmap and is not indexed in this preview.
 
-> Möbius is a development preview. Compatibility is verified per harness and published with evidence. It does not include model accounts, subscriptions, or API credits.
+## Why a session layer
 
-## Four connected workflows
+Coding agents already write transcripts. The next agent cannot search, cite or continue that work without a lossy paste. The more harnesses you run, the worse the gap.
 
-- **Hand off sessions** to another agent, with a reviewable trace.
-- **Follow project history** through a persistent handoff graph.
-- **Search conversation content** and inspect the exact source message.
-- **Write documents and collect multimedia** on a free canvas beside your workbench.
-
-## Why Möbius
-
-Agent CLIs remember their own sessions. They do not give you one project-shaped view of the work that moved between them. Möbius groups sessions by working directory and worktree, opens the original agent in an interactive PowerShell, and creates explicit cross-agent handoffs without rewriting source history.
+Möbius sits between those CLIs. Native resume stays with the original harness. Switching agents starts a new session and carries confirmed Session identities plus ancestor edges. The envelope is a graph. The tape stays on disk.
 
 | Without Möbius | With Möbius |
 | --- | --- |
 | Remember which terminal owns a discussion | Start from the project and see its sessions |
 | Re-explain architecture, failures, and progress | Carry a reviewable trajectory into the next agent |
 | Search every harness separately | Search approved local sources from one place |
-| Keep notes, canvases, and skills in unrelated tools | Manage supporting material beside the project |
-
-## Product film
-
-[![Animated preview: workspace, agent handoff graph and multimedia canvas. Click for the full film with sound.](apps/website/public/product/product-teaser.gif)](http://8.137.87.76/mobius/?lang=en#demo)
-
-**[▶ Play the 32-second v0.3.19 tour](http://8.137.87.76/mobius/?lang=en#demo)** · [Direct MP4](http://8.137.87.76/mobius/media/mobius-product-film.mp4)
-
-The preview above is an animated GIF. The full video player opens on the product site; a repository MP4 link is not an inline GitHub player.
-
-A 32-second English tour of sessions, reference-only handoff, the project graph and the local library. Real UI screenshots; fictional demo data; agent output is scripted. This film is not native-agent acceptance evidence, and no personal sessions are shown. See the [media credits](licenses/MEDIA-CREDITS.md).
-
-## Core workflows
-
-### Feature map
-
-| Capability | What you can do |
-| --- | --- |
-| **Rust-powered, local-first** | Rust handles indexing, harness adapters, handoff data and local services; Tauri hosts the desktop UI. Your model accounts remain your own. |
-| **Multi-agent session library** | Aggregate approved Codex, Claude Code, Pi, Grok, and OMP transcripts by project directory and worktree. |
-| **Precise history lookup** | Find a session by name or native ID, inspect original messages, and copy an exact `@session:provider/id#mN` or `#mN-mM` reference. |
-| **Full-text history search** | Search locally indexed content with SQLite FTS/BM25, inspect matching source text, and explicitly recall bounded excerpts through Mome. |
-| **Cross-agent handoff** | Review a trajectory and launch a new target-agent session in the project directory, without overwriting the source transcript. |
-| **Persistent handoff history** | Follow project-level relay links and source message ranges across repeated handoffs. |
-| **Native terminal workbench** | Resume the original harness, create blank PowerShell tabs, split panes, and return to running terminals. |
-| **Documents and free canvas** | Edit/preview Markdown and organize text, images, video, links, sections and nested canvases in one library. Mount external folders read-only. |
-| **Skills and MCP** | Manage global/project skills with editing and version history; use MCP to search sessions and retrieve explicitly approved source ranges. |
-
-### Precise, full-text and semantic search are different
-
-- **Precise references — available:** use a known session ID and message range to retrieve the exact evidence.
-- **Keyword/full-text recall — available:** Mome uses a local SQLite FTS/BM25 chunk index, prioritizes the current project/worktree among indexed sources, and returns at most three citable sessions within a 1,200-token output budget.
-- **Semantic/vector or hybrid search — not available in v0.3.19:** no embedding model or vector backend is integrated. This is a future capability, not a hidden setting you can enable today. Mome explicitly reports lexical-only retrieval.
-
-Nothing searches other sessions or injects history by default. Local retrieval itself does not call a model; sending selected excerpts to an agent consumes context tokens.
-
-### 1. Find every session from the project
-
-Möbius detects approved Codex, Claude Code, Pi, Grok, and OMP roots, reads transcripts without rewriting them, and groups sessions by project directory and worktree. Native resume is exposed only when the installed Harness has a verified resume protocol: OMP uses its documented `--cwd … --resume …` flow; the currently supported Grok history format remains inspect/search/handoff-only.
-
-![Session library grouped by project and harness](apps/website/public/product/session-library.png)
-
-- Search messages, architecture decisions, progress, and failed attempts.
-- Inspect the exact source session and message before acting.
-- Copy a precise `@session:provider/id#mN` reference when you know the source.
-- Run Mome local lexical recall only when you explicitly want a broader search.
-
-### 2. Resume in real PowerShell
-
-Resume keeps the original harness and native session ID. Möbius opens an interactive PowerShell in the correct working directory instead of replacing the CLI.
-
-![Actual terminal UI with scripted demonstration output](apps/website/public/product/native-resume.png)
-
-You can also open blank PowerShell tabs, split the workspace, and return to existing terminals without losing their state.
-
-### 3. Hand off the full trajectory
-
-Switching agents creates a new target session. Before launch, review the message range, tool calls, failed attempts, corrections, source IDs, and estimated token payload.
-
-![Explicit handoff payload review](apps/website/public/product/handoff-review.png)
-
-The source stays read-only. Repeated handoffs form a relay graph so a later agent can trace the work back to exact evidence instead of receiving only a summary.
-
-![Multi-hop agent handoff graph](apps/website/public/product/handoff-graph.png)
-
-### 4. Keep supporting work local
-
-- **Library:** editable Markdown notes with rendered preview.
-- **Infinite canvas:** text, sticky notes, sections, links, images, audio, video, PDFs, session references, and nested canvases.
-- **Folder mounts:** recursive read-only views of external directories; every level is collapsible.
-- **Skills:** inspect, install, edit, remove, and restore global or project skills with version history.
-- **Mome:** explicit local FTS/BM25 recall, project/worktree ranking preference, source citations and a visible context budget; no semantic backend is integrated in this release.
-
-![Multimedia research on the actual Möbius canvas](apps/website/public/product/multimedia-canvas.png)
-
-## Privacy and context boundaries
-
-- The index reads only finite, approved harness roots.
-- Original session JSON/JSONL files are not rewritten.
-- Other sessions are not searched or injected by default.
-- Local search does not consume model tokens. Selected text consumes tokens only after you send it to an agent.
-- Native resume stays with the original harness. Switching harnesses is an explicit handoff into a new session.
+| Notes and canvases live in unrelated tools | Keep supporting material beside the project |
 
 ## Install
 
 Download the [v0.3.19 Windows preview](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.19): installer or portable EXE. Check the included SHA-256 sums and known limitations. Development builds may be unsigned and trigger SmartScreen.
-
-See the [self-test checklist](docs/acceptance/self-test-checklist.md) and the [0.3.18 Library live-sync acceptance](docs/acceptance/library-live-sync-0.3.18.md). MÖBIUS uses each installed harness only through its documented command-line interface; it does not patch or replace Codex, Claude Code, Pi, Grok, or OMP.
-
-### Build from source
-
-Requirements: Rust, Node.js with pnpm, Windows C++ Build Tools, and WebView2.
 
 ```powershell
 git clone https://github.com/TardisBooo/Mobius.git
@@ -126,18 +32,189 @@ pnpm --dir apps/desktop install --frozen-lockfile
 pnpm --dir apps/desktop tauri build
 ```
 
-Bundles are generated under `target/release/bundle`.
+Requirements: Rust, Node.js with pnpm, Windows C++ Build Tools, and WebView2. Bundles land under `target/release/bundle`.
 
-## First run
+Möbius calls each installed harness through its documented CLI. It does not patch or replace Codex, Claude Code, OpenCode, Pi, Grok, or OMP.
+
+## Quick start
 
 1. Review locally discovered harness roots.
-2. Approve the sources you want indexed, or choose an explicit source folder.
+2. Approve the sources you want indexed, or choose an explicit folder.
 3. Build the read-only index.
 4. Add or select a project.
 5. Preview a session and resume it, or open a blank PowerShell.
 6. Use **Handoff to another agent** only when you want a new target session with selected trajectory context.
 
-The six-step in-app guide explains product value, privacy, indexing, resume, handoffs, the library, and skill scopes. It remains available from Help.
+The in-app six-step guide covers value, privacy, indexing, resume, handoffs, the library, and skill scopes. It stays available from Help.
+
+## How it fits together
+
+```
+Claude Code  Codex  OpenCode  Pi  Grok  OMP
+        │  read-only adapters
+        ▼
+   local SQLite index (FTS5/BM25; optional localhost embeddings)
+        │
+        ├─ this repository     Windows desktop
+        └─ mobius-connect      CLI + stdio MCP
+```
+
+| Surface | Repository | For |
+| --- | --- | --- |
+| Desktop | this repo | Session library, PowerShell workbench, graph, notes, canvas, skills |
+| CLI + MCP | [mobius-connect](https://github.com/TardisBooo/mobius-connect) | Terminal search, lineage, handoff, Mome, stdio MCP |
+
+Internal crate names keep `mydesk-*` so vault paths stay stable. The public product name is Möbius. Split details: [docs/REPOS.md](docs/REPOS.md).
+
+## Product film
+
+[![109-second Agent Session Hub tour. Click for the full film.](apps/website/public/product/video-poster.png)](http://8.137.87.76/mobius/?lang=en#demo)
+
+**[▶ Play the 109-second tour](http://8.137.87.76/mobius/?lang=en#demo)** · [Direct MP4](http://8.137.87.76/mobius/media/mobius-product-film.mp4) · [60s GIF](apps/website/public/product/session-hub-60s.gif)
+
+Real UI recordings and screenshots; fictional demo data; agent output is scripted. This film is not native-agent acceptance evidence, and no personal sessions are shown. [Media credits](licenses/MEDIA-CREDITS.md). Film source is archived outside the repository.
+
+## Features, as filmed
+
+Each clip is a chapter from the product film. OpenCode is indexed in the product; the film itself shows Codex, Claude, Pi and Grok.
+
+### 01 Workspaces — every agent, one project
+
+![Workspaces grouped by project and harness](apps/website/public/product/chapters/01-workspaces.gif)
+
+Möbius groups Codex, Claude Code, OpenCode, Pi, Grok, and OMP history by project directory and worktree. OpenCode sessions come from a read-only `opencode.db` with locators of the form `{db}#opencode:{id}`.
+
+### 02 Session search — find the decision
+
+![Session search hitting exact source messages](apps/website/public/product/chapters/02-search.gif)
+
+Search approved local sources from one place. Inspect the exact source message, then copy `@session:provider/id#mN` or `#mN-mM`.
+
+### 03 Local memory — recall only when you ask
+
+![Mome local memory recall](apps/website/public/product/chapters/03-memory.gif)
+
+Mome uses local SQLite FTS/BM25, prefers the current project/worktree, returns at most three citable sessions, and caps output at about 1,200 tokens. Nothing searches other sessions or injects history by default.
+
+Hybrid ranking is opt-in. `mobius mome semantic enable` (or `mobius-connect semantic enable`) may send already-indexed chunks to localhost Ollama `nomic-embed-text`. Vectors are a regenerable derived index. If Ollama is absent, recall stays lexical and says so. Local lexical search does not consume model tokens.
+
+### 04 Citation handoff — references, not summaries
+
+![Citation range copied into a references-only package](apps/website/public/product/chapters/04-cite.gif)
+
+Copy the exact range. Seal a `references_only` package. Deliver it into the next conversation. The next agent reads confirmed ancestors; it is never handed a generated briefing.
+
+### 05 Agent handoff — new session, same project
+
+![Handoff review before launching the next agent](apps/website/public/product/chapters/05-handoff.gif)
+
+Switching agents creates a new target session. Before launch, review the message range, tool calls, failed attempts, corrections, source IDs, and estimated token payload. The source stays read-only. Repeated handoffs form a relay DAG: A→B then “back” is A→B→C, not a cycle.
+
+### 06 Continue working — native resume stays native
+
+![PowerShell continuation after a handoff](apps/website/public/product/chapters/06-continue.gif)
+
+Resume keeps the original CLI and native session ID. Möbius opens interactive PowerShell in the correct working directory. Native resume is shown only when that harness has a verified protocol: OMP uses its documented `--cwd … --resume …` flow; Grok and OpenCode history remain inspect/search/handoff-only in this preview.
+
+### 07 Handoff lineage — follow the chain
+
+![Current lineage graph viewer](apps/website/public/product/chapters/07-lineage.gif)
+
+Every handoff becomes an edge between an immutable source session and a new target session. Follow the graph backward to the exact evidence.
+
+### 08 Infinite canvas
+
+![Infinite canvas](apps/website/public/product/chapters/08-canvas.gif)
+
+Arrange text, sticky notes, sections, links, images, audio, video, PDFs, session references, and nested canvases beside the workbench.
+
+### 09 Multimedia notes
+
+![Multimedia notes on the canvas](apps/website/public/product/chapters/09-media.gif)
+
+Images, video, and links live in the same research space as the session that produced them.
+
+### 10 Documents and folders
+
+![Library documents and folder mounts](apps/website/public/product/chapters/10-library.gif)
+
+Editable Markdown with rendered preview. Folder mounts are recursive read-only views of external directories.
+
+### 11 Skill management
+
+![Skill management](apps/website/public/product/chapters/11-skills.gif)
+
+Inspect, install, edit, remove, and restore global or project skills with version history.
+
+### 12 CLI + MCP — the same hub in a terminal
+
+![mobius-connect CLI search and stdio MCP](apps/website/public/product/chapters/12-cli.gif)
+
+[mobius-connect](https://github.com/TardisBooo/mobius-connect) is the published session-layer binary for terminals and agents. **MCP cannot mint approvals.**
+
+```powershell
+mobius-connect init
+mobius-connect sources add opencode $env:USERPROFILE\.local\share\opencode
+mobius-connect sources refresh
+mobius-connect sessions search "flaky tests"
+mobius-connect graph show <session-id>
+mobius-connect handoff prepare --harness claude --cwd . <session-id>
+mobius-connect approvals handoff <handoff-id>
+mobius-connect mcp serve
+```
+
+MCP cannot mint an approval token, add sources, or attach a PTY. Tool list and grants: [mobius-connect/docs/MCP.md](https://github.com/TardisBooo/mobius-connect/blob/main/docs/MCP.md).
+
+This workspace still builds `mobius` / `mydesk` and `mydesk-mcp` for the vault the desktop owns. Those helpers are not the published CLI/MCP product.
+
+Optional hybrid ranking from the desktop-side CLI:
+
+```powershell
+mobius mome model status
+mobius mome semantic enable --model nomic-embed-text
+mobius mome semantic sync
+```
+
+## Security
+
+Treat indexed transcripts as untrusted historical data.
+
+- The index reads only finite, approved harness roots.
+- Original session JSON/JSONL and OpenCode SQLite are not rewritten.
+- Other sessions are not searched or injected by default.
+- Native resume stays with the original harness. Switching harnesses is an explicit handoff into a new session.
+- Approval tokens are short-lived, single-use, and scoped. The desktop or `mobius-connect approvals` mints them after a person types `APPROVE`. MCP cannot mint one.
+- Optional embeddings talk only to localhost Ollama after an explicit enable command. They change rank, not what an agent may see.
+
+## Supported harnesses
+
+| Harness | Index | Native resume |
+| --- | --- | --- |
+| Codex | JSONL | when the installed protocol is verified |
+| Claude Code | project sessions | when the installed protocol is verified |
+| OpenCode | read-only `opencode.db` | not in this preview |
+| Pi | approved roots | when the installed protocol is verified |
+| Grok | approved roots | inspect / search / handoff only |
+| OMP | approved roots | documented `--cwd … --resume …` |
+| OpenClaw | not shipped | roadmap |
+
+## Documentation
+
+| Goal | Start here |
+| --- | --- |
+| Product site / FAQ | http://8.137.87.76/mobius/ |
+| Chinese copy | [README.zh-CN.md](README.zh-CN.md) |
+| CLI and MCP | https://github.com/TardisBooo/mobius-connect |
+| Repo split | [docs/REPOS.md](docs/REPOS.md) |
+| Session Hub SOP | [docs/sop-session-hub.md](docs/sop-session-hub.md) |
+| Cross-agent handoff | [docs/blog/01-cross-agent-handoff.md](docs/blog/01-cross-agent-handoff.md) |
+| Citation vs summary | [docs/blog/02-citation-not-summary.md](docs/blog/02-citation-not-summary.md) |
+| Approval tokens | [docs/blog/03-approval-tokens.md](docs/blog/03-approval-tokens.md) |
+| Mome retrieval | [docs/mome-local-retrieval.md](docs/mome-local-retrieval.md) |
+| Self-test checklist | [docs/acceptance/self-test-checklist.md](docs/acceptance/self-test-checklist.md) |
+| OpenCode + embeddings ADR | [docs/adr/0004-opencode-and-optional-embeddings.md](docs/adr/0004-opencode-and-optional-embeddings.md) |
+| Launch copy (X / HN / Reddit) | [docs/gtm/launch.md](docs/gtm/launch.md) |
+| Machine-readable facts | [apps/website/public/llms.txt](apps/website/public/llms.txt) |
 
 ## Architecture
 
@@ -145,11 +222,10 @@ The six-step in-app guide explains product value, privacy, indexing, resume, han
 | --- | --- |
 | `apps/desktop` | Tauri 2 + React desktop application |
 | `apps/website` | Static bilingual product site |
-| `crates/mydesk-core` | Local indexing, adapters, workspaces, notes, canvases, and skills |
-| `crates/mydesk-mcp` | Read-only MCP session search and approved text retrieval |
-| `crates/mydesk-cli` / `crates/mydesk-daemon` | CLI/TUI and local daemon |
-
-Internal crate names retain `mydesk-*` for data and command compatibility.
+| `crates/mydesk-core` | Indexing, adapters, workspaces, notes, canvases, skills |
+| `crates/mydesk-mcp` | Desktop-owned MCP (vault this app opened) |
+| `crates/mydesk-cli` / `crates/mydesk-daemon` | Desktop-side CLI/TUI and local daemon |
+| sibling `mobius-connect` | Published CLI + stdio MCP |
 
 ## Development
 
@@ -162,10 +238,10 @@ pnpm --dir apps/website build
 
 Desktop acceptance uses isolated `E:\Workspaces\Mobius-Verification-*` and `D:\DataVault\Mobius-Verification-*` roots. Tests must not target an existing user project or real session history.
 
-The `isolated_acceptance` integration test is opt-in: it requires a separately provisioned Windows fixture and `MOBIUS_VERIFICATION_ROOT`. It is not included in the default test pass; run it explicitly with `--ignored` only after preparing its isolated inputs.
+The `isolated_acceptance` integration test is opt-in: it requires a separately provisioned Windows fixture and `MOBIUS_VERIFICATION_ROOT`. It is not in the default test pass.
 
 ## Inspiration, attribution, and license
 
 Möbius learned from open-source session viewers, agent workspaces, memory systems, note canvases, and skill managers. Product communication also draws inspiration from Blume and AionUi; the editorial scan-line direction references Kate Loseva's hero animation.
 
-See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the complete research list and licensing boundaries. Möbius source code is released under the [MIT License](LICENSE). Third-party dependencies and referenced projects retain their own licenses and trademarks.
+See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the research list and licensing boundaries. Möbius source is [MIT](LICENSE). Third-party dependencies and referenced projects retain their own licenses and trademarks.

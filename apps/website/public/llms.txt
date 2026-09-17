@@ -1,30 +1,36 @@
 # MÖBIUS
 
-> A local-first Windows workspace for Codex, Claude Code, Pi, Grok, and OMP. It groups sessions by project, resumes the original harness, and hands off references rather than summaries.
+> Möbius is an open-source Agent Session Hub. Search, cite, resume and hand off context across Claude Code, Codex, OpenCode, Pi, Grok, and OMP without rewriting a harness.
 
-Möbius is open-source desktop software by Tardis. It is not Microsoft Mobius, ControlTheory Möbius, or Circular Labs Mobius. Current preview: v0.3.19 for Windows, MIT licensed, $0. It does not sell model accounts.
+Möbius is open-source desktop software by Tardis. It is not Microsoft Mobius, ControlTheory Möbius, or Circular Labs Mobius. Current preview: v0.3.19 for Windows, MIT licensed, $0. It does not sell model accounts. OpenClaw history is on the roadmap and is not indexed in this preview.
 
 ## Docs
 
 - [Product page](http://8.137.87.76/mobius/): bilingual landing page for the Windows preview, install steps, FAQ, and product film.
 - [Chinese product page](http://8.137.87.76/mobius/?lang=zh): the same page with Simplified Chinese copy.
 - [Pricing](http://8.137.87.76/mobius/pricing.md): MIT, $0 preview; no model credits included.
-- [Source](https://github.com/TardisBooo/Mobius): Rust/Tauri 2/React/SQLite repository.
+- [Desktop source](https://github.com/TardisBooo/Mobius): Rust/Tauri 2/React/SQLite repository.
+- [CLI and MCP](https://github.com/TardisBooo/mobius-connect): `mobius-connect` search, lineage, handoff, stdio MCP.
+- [MCP contract](https://github.com/TardisBooo/mobius-connect/blob/main/docs/MCP.md): privilege split; MCP cannot mint approvals.
 - [Releases](https://github.com/TardisBooo/Mobius/releases): Windows installer and portable EXE with SHA-256 sums.
 - [English README](https://github.com/TardisBooo/Mobius/blob/main/README.md): capabilities, search limits, and build instructions.
 - [Chinese README](https://github.com/TardisBooo/Mobius/blob/main/README.zh-CN.md): the same facts in Simplified Chinese.
 - [Self-test checklist](https://github.com/TardisBooo/Mobius/blob/main/docs/acceptance/self-test-checklist.md): living UI contract used before a release.
+- [Handoff design](https://github.com/TardisBooo/Mobius/blob/main/docs/blog/01-cross-agent-handoff.md): graph envelope, not a briefing.
+- [Citation vs summary](https://github.com/TardisBooo/Mobius/blob/main/docs/blog/02-citation-not-summary.md): `@session` ranges over generated summaries.
+- [Approval tokens](https://github.com/TardisBooo/Mobius/blob/main/docs/blog/03-approval-tokens.md): human TTY grant; MCP cannot self-approve.
 
 ## What Möbius is
 
-Möbius indexes approved local agent transcripts by project directory and worktree. Native resume stays with the original harness. Switching agents starts a new target session and carries confirmed Session references, not a generated summary.
+Möbius indexes approved local agent transcripts by project directory and worktree, including OpenCode's read-only `opencode.db`. Native resume stays with the original harness. Switching agents starts a new target session and carries confirmed Session references, not a generated summary.
 
 ## What Möbius is not
 
 - It does not provide model accounts, subscriptions, or API credits.
-- It does not rewrite Codex, Claude Code, Pi, Grok, or OMP transcripts.
+- It does not rewrite Codex, Claude Code, OpenCode, Pi, Grok, or OMP transcripts.
 - It does not inject other sessions into context by default.
-- Semantic / vector search is not available in v0.3.19. Local recall is FTS/BM25 only.
+- It does not currently index OpenClaw / Clawdbot history.
+- Local recall is FTS/BM25. Optional hybrid ranking uses localhost Ollama embeddings only after an explicit enable command, and fails open to lexical if the model is missing.
 
 ## Core workflows
 
@@ -38,11 +44,16 @@ Möbius indexes approved local agent transcripts by project directory and worktr
 
 - Precise references: copy `@session:provider/id#mN` when the source is known.
 - Full-text recall: Mome uses local SQLite FTS/BM25, returns at most three citable sessions, and caps output at about 1,200 tokens.
-- Semantic / vector / hybrid search: not available in this release.
+- Hybrid ranking: opt-in localhost embeddings; missing models keep lexical recall.
 
 ## Supported harnesses
 
-Codex, Claude Code, Pi, Grok, and OMP. Native resume is shown only when the installed harness has a verified resume protocol. Current Grok history remains inspect/search/handoff-only.
+Codex, Claude Code, OpenCode, Pi, Grok, and OMP. Native resume is shown only when the installed harness has a verified resume protocol. Current Grok and OpenCode history remain inspect/search/handoff-only. OpenClaw is not shipped.
+
+## Repositories
+
+- Desktop: https://github.com/TardisBooo/Mobius
+- CLI + MCP: https://github.com/TardisBooo/mobius-connect
 
 ## Key facts
 
@@ -51,17 +62,21 @@ Codex, Claude Code, Pi, Grok, and OMP. Native resume is shown only when the inst
 - Price: $0
 - Platform: Windows preview
 - Version: 0.3.19
-- Search: local SQLite FTS/BM25; no embeddings
+- Search: local SQLite FTS/BM25; optional localhost embeddings
 - Handoff: reference-only; source transcripts stay read-only
+- MCP: cannot mint approvals, add sources, or attach a PTY
 - Distinct from: Microsoft Mobius, ControlTheory Möbius, Circular Labs Mobius
 
 ## Contact
 
 - Website: http://8.137.87.76/mobius/
-- Source: https://github.com/TardisBooo/Mobius
+- Desktop: https://github.com/TardisBooo/Mobius
+- CLI/MCP: https://github.com/TardisBooo/mobius-connect
 - Portfolio: https://tardisbooo.github.io/portfolio/
 
 ## Optional
 
-- [Product film](http://8.137.87.76/mobius/#demo): a scripted English tour of the real UI with fictional demo data.
+- [Product film](http://8.137.87.76/mobius/#demo): a scripted 109-second English tour of the real UI with fictional demo data, including citation handoff, the current lineage graph, and mobius-connect CLI + stdio MCP.
+- [60-second social GIF](http://8.137.87.76/mobius/product/session-hub-60s.gif): search → cite → handoff → lineage.
+- Chapter GIFs (same film): [01 workspaces](http://8.137.87.76/mobius/product/chapters/01-workspaces.gif), [02 search](http://8.137.87.76/mobius/product/chapters/02-search.gif), [03 memory](http://8.137.87.76/mobius/product/chapters/03-memory.gif), [04 cite](http://8.137.87.76/mobius/product/chapters/04-cite.gif), [05 handoff](http://8.137.87.76/mobius/product/chapters/05-handoff.gif), [06 continue](http://8.137.87.76/mobius/product/chapters/06-continue.gif), [07 lineage](http://8.137.87.76/mobius/product/chapters/07-lineage.gif), [08 canvas](http://8.137.87.76/mobius/product/chapters/08-canvas.gif), [09 media](http://8.137.87.76/mobius/product/chapters/09-media.gif), [10 library](http://8.137.87.76/mobius/product/chapters/10-library.gif), [11 skills](http://8.137.87.76/mobius/product/chapters/11-skills.gif), [12 CLI+MCP](http://8.137.87.76/mobius/product/chapters/12-cli.gif).
 - [Media credits](https://github.com/TardisBooo/Mobius/blob/main/licenses/MEDIA-CREDITS.md): third-party media used in the film.

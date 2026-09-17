@@ -1,107 +1,22 @@
-# MÖBIUS · 莫比乌斯
+# Möbius · 莫比乌斯 — 你的 Agent 会话层
 
-[![MÖBIUS — Keep the thread，切换 Agent，工作不断线](apps/website/public/product/video-poster.png)](http://8.137.87.76/mobius/?lang=zh)
+开源的跨 Agent **会话层**。在 Claude Code、Codex、OpenCode、Pi、Grok 与 OMP 之间**搜索、引用、恢复、交接**上下文。不改写任何 Harness。交接**传引用，不传摘要**。
 
-**切换 Agent，工作不断线。**
+**数据在你这台电脑上。** 索引是本地 SQLite FTS/BM25。已批准的会话仍在各 Harness 目录里，莫比乌斯只读。OpenCode 来自只读 `opencode.db`。模型账号、订阅和 API 额度仍由你已安装的 CLI 管理。莫比乌斯本身没有付费档，也不会主动上报。
 
-面向同时在同一项目中使用 Codex、Claude Code、Pi、Grok 与 OMP 的 Windows 工作台。采用 **Rust 核心、Tauri 2 桌面外壳、React/TypeScript 界面与 SQLite 本地索引**。
+[English](README.md) · [产品页](http://8.137.87.76/mobius/?lang=zh) · [CLI / MCP](https://github.com/TardisBooo/mobius-connect) · [下载](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.19) · [MIT License](LICENSE)
 
-[English](README.md) · [在线产品页](http://8.137.87.76/mobius/?lang=zh) · [播放产品视频](http://8.137.87.76/mobius/?lang=zh#demo) · [下载](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.19) · [自测清单](docs/acceptance/self-test-checklist.md) · [MIT License](LICENSE)
+> Windows 开发预览 v0.3.19。兼容性按 Harness 逐项验证并附证据。这不是 Microsoft Mobius、ControlTheory Möbius 或 Circular Labs Mobius。OpenClaw（`~/.openclaw`）在路线图上，本预览没有该适配器。
 
-> 当前为开发预览版。兼容性按 Harness 逐项验证并附证据发布。莫比乌斯不提供模型账号、订阅或 API 额度。
+## 为什么需要会话层
 
-## 四项核心能力
+Agent 已经把 transcript 写在磁盘上。痛点是下一个 Agent 用不了：不能搜索、不能精确引用、也不能无损继续。Harness 越多，缺口越大。
 
-- **跨 Agent 交接会话**：审核轨迹后，把上下文带到新会话。
-- **追踪项目交接历史**：用持久化关系图看清谁接手了什么。
-- **搜索会话内容**：定位决策、尝试与原始消息。
-- **记录文档与自由画布**：在工作台旁组织文字、图片、视频和链接。
-
-## 为什么需要莫比乌斯
-
-Agent CLI 各自记得自己的会话，却不会提供一张以项目为中心的工作地图。莫比乌斯按工作目录和 worktree 聚合会话，在真实 PowerShell 中恢复原 Agent，并通过明确审核的跨 Agent 交接传递完整轨迹，而不是覆盖原始会话。
-
-## 产品视频
-
-[![动态预览：工作区、Agent 交接图与多媒体画布。点击播放完整有声视频。](apps/website/public/product/product-teaser.gif)](http://8.137.87.76/mobius/?lang=zh#demo)
-
-**[▶ 播放 32 秒 v0.3.19 演示](http://8.137.87.76/mobius/?lang=zh#demo)** · [直接打开 MP4](http://8.137.87.76/mobius/media/mobius-product-film.mp4)
-
-上方是 GIF 动态预览，完整播放器在产品页中打开；仓库 MP4 链接不等于 GitHub 内嵌播放器。
-
-32 秒英文演示：会话库、按引用交接、项目图谱与本地资料库。真实界面截图，虚构演示数据，Agent 输出为脚本演示，不作为真实 Agent 验收证据；不包含个人会话。参见[素材授权说明](licenses/MEDIA-CREDITS.md)。
-
-## 核心功能
-
-### 功能一览
-
-| 能力 | 可以做什么 |
-| --- | --- |
-| **Rust 实现、本地优先** | Rust 负责索引、Harness 适配、交接数据与本地服务，Tauri 承载桌面界面；模型账号由用户自行配置。 |
-| **多 Agent 会话库** | 按项目目录与 worktree 聚合已批准的 Codex、Claude Code、Pi、Grok 与 OMP 会话。 |
-| **会话历史精准定位** | 按名称或原生 ID 找会话，查看原始消息，复制精确到 `@session:provider/id#mN` 或 `#mN-mM` 的引用。 |
-| **会话内容全文搜索** | 使用 SQLite FTS/BM25 检索本地索引、查看命中原文；通过 Mome 主动提取有预算限制的历史片段。 |
-| **跨 Agent 交接** | 审核完整轨迹后，在项目目录启动目标 Agent 的新会话，不覆盖来源记录。 |
-| **持久化交接历史** | 在项目交接图中回溯多轮接手关系与来源消息范围。 |
-| **原生终端工作台** | 恢复原 Harness、新建空白 PowerShell、分屏并返回运行中的终端。 |
-| **文档与自由画布** | Markdown 编辑／预览，统一组织文字、图片、视频、链接、分区及子画布，支持外部目录只读挂载。 |
-| **技能与 MCP** | 管理全局／项目技能，编辑并查看历史版本；通过 MCP 搜索会话、读取明确授权的来源范围。 |
-
-### 精准搜索、全文搜索与语义搜索的区别
-
-- **精准引用：已支持。** 已知 session ID 和消息范围时，直接定位对应证据。
-- **关键词／全文检索：已支持。** Mome 使用本地 SQLite FTS/BM25 分块索引，在已索引来源中优先排序当前项目／worktree，每次最多返回三个可引用会话，输出预算上限为 1,200 token。
-- **语义／向量与混合检索：v0.3.19 尚未提供。** 当前未接入 embedding 模型或向量后端，这是后续能力，不是可在设置中开启的现成功能；Mome 会明确显示当前仅为词法检索。
-
-默认不搜索其他会话，也不自动注入历史。本地检索不调用模型；将选中的片段发给 Agent 后，会占用上下文 token。
-
-### 1. 按项目找到全部会话
-
-![按项目与 Agent 聚合的会话库](apps/website/public/product/session-library.png)
-
-- 支持已批准的 Codex、Claude Code、Pi、Grok 与 OMP 来源目录；仅当已安装 Harness 有经过验证的恢复协议时显示原生恢复。OMP 使用其公开的 `--cwd … --resume …` 流程，当前 Grok 历史格式仅支持查看、搜索与交接。
-- 搜索消息、架构决策、进度和失败尝试。
-- 找到来源后复制精确的 `@session:provider/id#mN` 引用。
-- 只有主动运行 Mome 时，才检索相关历史，并优先排序当前项目／worktree 的结果。
-
-### 2. 在真实 PowerShell 中恢复
-
-![真实终端界面与脚本演示输出](apps/website/public/product/native-resume.png)
-
-恢复操作保留原 Harness 和原生 session ID，并在正确目录打开可交互 PowerShell。也可以随时创建空白终端、分屏工作并返回仍在运行的标签页。
-
-### 3. 交接完整轨迹
-
-![交接载荷审核](apps/website/public/product/handoff-review.png)
-
-切换 Agent 会创建新的目标会话。启动前可以审核消息范围、工具调用、失败尝试、修正过程、来源 ID 和 token 估算。原始记录保持只读；多次交接会形成可以回溯证据的关系图。
-
-![多轮 Agent 交接关系图](apps/website/public/product/handoff-graph.png)
-
-### 4. 本地资料与技能管理
-
-- Markdown 笔记编辑和渲染预览。
-- 支持文本、随笔、分区、链接、图片、音频、视频、PDF、会话引用和子画布的无限画布。
-- 外部目录只读挂载，目录树每一层均可折叠。
-- 全局与项目技能的查看、安装、编辑、卸载和历史版本恢复。
-
-## 隐私与上下文边界
-
-- 只读取有限且经批准的 Harness 来源目录。
-- 不重写原始 session JSON/JSONL。
-- 默认不搜索或注入其他会话。
-- 本地检索本身不消耗模型 token；只有发送所选内容时才会产生 token 消耗。
-- 原生恢复保持原 Agent；切换 Agent 是明确的新会话交接。
+莫比乌斯放在这些 CLI 之间。原生 resume 仍走原 Harness；切换 Agent 会创建新会话，只携带已确认的 Session 身份和祖先边。信封是一张图。磁带仍在磁盘上。
 
 ## 安装
 
-从 [GitHub Releases](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.19) 下载 v0.3.19 Windows 预览版安装包或便携 EXE，并核对 SHA-256 和已知限制。构建尚未签名，可能触发 SmartScreen。
-
-参见 [自测清单](docs/acceptance/self-test-checklist.md) 与 [0.3.18 Library 实时同步验收](docs/acceptance/library-live-sync-0.3.18.md)。MÖBIUS 只通过各 Harness 公开的命令行接口调用已安装程序，不会修改或替换 Codex、Claude Code、Pi、Grok 与 OMP。
-
-### 从源码构建
-
-需要 Rust、Node.js/pnpm、Windows C++ Build Tools 和 WebView2。
+从 [v0.3.19 Releases](https://github.com/TardisBooo/Mobius/releases/tag/v0.3.19) 下载 Windows 安装包或便携 EXE，并核对 SHA-256 和已知限制。开发构建可能未签名，会触发 SmartScreen。
 
 ```powershell
 git clone https://github.com/TardisBooo/Mobius.git
@@ -110,18 +25,149 @@ pnpm --dir apps/desktop install --frozen-lockfile
 pnpm --dir apps/desktop tauri build
 ```
 
-## 首次使用
+需要 Rust、Node.js/pnpm、Windows C++ Build Tools 和 WebView2。莫比乌斯只通过各 Harness 公开的命令行接口调用已安装程序。
+
+## 快速开始
 
 1. 检查本地发现的 Harness 来源。
-2. 批准需要索引的来源，或明确选择来源目录。
+2. 批准需要索引的来源，或明确选择目录。
 3. 建立只读索引。
 4. 添加或选择项目。
 5. 预览并恢复原会话，或打开空白 PowerShell。
-6. 只有需要新建目标 Agent 会话时，才使用“交接给其他 Agent”并选择轨迹范围。
+6. 只有需要新建目标 Agent 会话时，才使用「交接给其他 Agent」。
 
-应用内六步引导会详细说明产品价值、隐私边界、索引方式、原生恢复、交接图、资料库和技能范围，并可从帮助入口再次打开。
+## 怎么拼在一起
 
-## 开发与验证
+| 界面 | 仓库 | 给谁 |
+| --- | --- | --- |
+| 桌面 | 本仓库 | 会话库、PowerShell 工作台、交接图、笔记、画布、技能 |
+| CLI + MCP | [mobius-connect](https://github.com/TardisBooo/mobius-connect) | 终端搜索、谱系、交接、Mome、stdio MCP |
+
+内部 crate 仍叫 `mydesk-*`，以免改掉已有数据路径。对外产品名是 Möbius。分仓说明：[docs/REPOS.md](docs/REPOS.md)。
+
+## 产品视频
+
+[![109 秒 Agent 会话层演示。点击播放完整视频。](apps/website/public/product/video-poster.png)](http://8.137.87.76/mobius/?lang=zh#demo)
+
+**[▶ 播放 109 秒演示](http://8.137.87.76/mobius/?lang=zh#demo)** · [直接打开 MP4](http://8.137.87.76/mobius/media/mobius-product-film.mp4) · [60 秒 GIF](apps/website/public/product/session-hub-60s.gif)
+
+真实界面录制与截图，虚构演示数据，Agent 输出为脚本演示，不作为真实 Agent 验收证据；不含个人会话。[素材授权](licenses/MEDIA-CREDITS.md)。影片源工程归档在仓库外。
+
+## 功能切片（与成片一一对应）
+
+每段 GIF 对应产品视频的一章。产品本身索引 OpenCode；成片画面使用 Codex、Claude、Pi、Grok。
+
+### 01 工作区 — 多个 Agent，同一个项目
+
+![按项目与 Harness 分组的工作区](apps/website/public/product/chapters/01-workspaces.gif)
+
+按项目目录与 worktree 聚合已批准的 Codex、Claude Code、OpenCode、Pi、Grok 与 OMP 会话。OpenCode 来自只读 `opencode.db`，定位符形如 `{db}#opencode:{id}`。
+
+### 02 会话搜索 — 找到那条决策
+
+![命中原始消息的会话搜索](apps/website/public/product/chapters/02-search.gif)
+
+从一个入口搜索已批准的本地来源。查看命中的原始消息，再复制 `@session:provider/id#mN` 或 `#mN-mM`。
+
+### 03 本地记忆 — 只有你开口才检索
+
+![Mome 本地记忆检索](apps/website/public/product/chapters/03-memory.gif)
+
+Mome 用本地 SQLite FTS/BM25，优先当前项目／worktree，每次最多三个可引用会话，输出约 1,200 token。默认不搜索其他会话，也不自动注入历史。
+
+混合排序需显式开启。`mobius mome semantic enable` 或 `mobius-connect semantic enable` 会把已索引分块送到本机 Ollama。向量是可再生派生物。Ollama 不在时仍走词法，并报告该状态。本地词法检索不消耗模型 token。
+
+### 04 引用交接 — 传引用，不传摘要
+
+![精确范围复制进 references_only 包](apps/website/public/product/chapters/04-cite.gif)
+
+复制精确消息范围，封成 `references_only` 包，送进下一场对话。下一个 Agent 读的是已确认祖先，不是生成的简报。
+
+### 05 Agent 交接 — 新会话，同一项目
+
+![启动下一 Agent 前的交接审核](apps/website/public/product/chapters/05-handoff.gif)
+
+切换 Agent 会创建新的目标会话。启动前可以审核消息范围、工具调用、失败尝试、修正过程、来源 ID 和 token 估算。原始记录保持只读。多次交接形成接力 DAG：A→B 再「回去」是 A→B→C，不是环。
+
+### 06 继续工作 — 原生恢复仍走原 Harness
+
+![交接后的 PowerShell 继续工作](apps/website/public/product/chapters/06-continue.gif)
+
+恢复保留原 CLI 和原生 session ID，并在正确目录打开可交互 PowerShell。仅当已安装 Harness 有经过验证的恢复协议时显示原生恢复。OMP 使用其公开的 `--cwd … --resume …` 流程；当前 Grok 与 OpenCode 历史仅支持查看、搜索与交接。
+
+### 07 交接图谱 — 沿链回溯
+
+![当前交接图谱查看器](apps/website/public/product/chapters/07-lineage.gif)
+
+每次交接都会成为原始来源会话与新目标会话之间的一条边。沿图回溯到精确证据。
+
+### 08 无限画布
+
+![无限画布](apps/website/public/product/chapters/08-canvas.gif)
+
+在工作台旁组织文本、便签、分区、链接、图片、音视频、PDF、会话引用和嵌套画布。
+
+### 09 多媒体笔记
+
+![画布上的多媒体笔记](apps/website/public/product/chapters/09-media.gif)
+
+图片、视频和链接与产生它们的会话放在同一研究空间。
+
+### 10 文档与目录
+
+![资料库文档与目录挂载](apps/website/public/product/chapters/10-library.gif)
+
+可编辑 Markdown 与渲染预览。外部目录以递归只读方式挂载。
+
+### 11 技能管理
+
+![技能管理](apps/website/public/product/chapters/11-skills.gif)
+
+按全局或项目范围检查、安装、编辑、删除并按版本恢复技能。
+
+### 12 CLI + MCP — 同一套会话层，在终端里
+
+![mobius-connect 搜索与 stdio MCP](apps/website/public/product/chapters/12-cli.gif)
+
+发布用的会话层二进制是 [mobius-connect](https://github.com/TardisBooo/mobius-connect)。**MCP 不能签发审批令牌。**
+
+```powershell
+mobius-connect init
+mobius-connect sources add opencode $env:USERPROFILE\.local\share\opencode
+mobius-connect sources refresh
+mobius-connect sessions search "flaky tests"
+mobius-connect mcp serve
+```
+
+MCP 不能签发审批令牌、不能添加来源、不能接管 PTY。工具表见 [MCP.md](https://github.com/TardisBooo/mobius-connect/blob/main/docs/MCP.md)。
+
+本仓库仍会构建给桌面金库用的 `mobius` / `mydesk` 和 `mydesk-mcp`。它们不是对外发布的 CLI/MCP 产品。
+
+## 安全边界
+
+- 只读取有限且经批准的来源目录。
+- 不重写原始 session JSON/JSONL 与 OpenCode SQLite。
+- 默认不搜索或注入其他会话。
+- 原生恢复保持原 Agent；切换 Agent 是明确的新会话交接。
+- 审批令牌短时、一次性、限定范围。由桌面或 `mobius-connect approvals` 在真人输入 `APPROVE` 后签发。MCP 不能自己签发。
+
+## 支持的 Harness
+
+Codex、Claude Code、OpenCode、Pi、Grok、OMP。OpenClaw 尚未适配。原生恢复仅在协议已验证时启用。当前 Grok 与 OpenCode 历史仅支持查看、搜索与交接。
+
+## 文档
+
+| 目的 | 入口 |
+| --- | --- |
+| 产品页 / FAQ | http://8.137.87.76/mobius/?lang=zh |
+| CLI 与 MCP | https://github.com/TardisBooo/mobius-connect |
+| 分仓 | [docs/REPOS.md](docs/REPOS.md) |
+| 跨 Agent 交接 | [docs/blog/01-cross-agent-handoff.md](docs/blog/01-cross-agent-handoff.md) |
+| 精确引用 vs 摘要 | [docs/blog/02-citation-not-summary.md](docs/blog/02-citation-not-summary.md) |
+| 审批令牌 | [docs/blog/03-approval-tokens.md](docs/blog/03-approval-tokens.md) |
+| 发布稿 | [docs/gtm/launch.md](docs/gtm/launch.md) |
+
+## 开发
 
 ```powershell
 cargo test --workspace --all-targets --no-fail-fast
@@ -132,8 +178,4 @@ pnpm --dir apps/website build
 
 桌面验收只能使用隔离的 `E:\Workspaces\Mobius-Verification-*` 和 `D:\DataVault\Mobius-Verification-*`，不得针对已有用户项目或真实会话。
 
-## 灵感、署名与许可
-
-项目参考了开源会话查看器、Agent 工作台、记忆系统、笔记画布和技能管理器；产品表达参考 Blume 与 AionUi，官网扫描线方向参考 Kate Loseva 的 Hero 动效。
-
-完整研究来源和许可边界见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。项目代码使用 [MIT License](LICENSE)，第三方依赖、参考项目与商标保留各自许可和权利。
+完整研究来源见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。代码使用 [MIT License](LICENSE)。

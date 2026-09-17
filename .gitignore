@@ -11,6 +11,7 @@ apps/desktop/node_modules/
 apps/desktop/dist/
 apps/desktop/src-tauri/target/
 apps/website/node_modules/
+apps/website/film/
 apps/website/dist/
 /.research/
 apps/desktop/test-results/

@@ -10,7 +10,7 @@ All conversations, paths, project names and verification claims inside the demo 
 | Forest image | https://images.unsplash.com/photo-1441974231531-c6227db76b6e | Canvas material/reference (Unsplash) |
 | Big Buck Bunny thumbnail | https://i.ytimg.com/vi/aqz-KE-bpKQ/hqdefault.jpg | Accurate YouTube preview for https://www.youtube.com/watch?v=aqz-KE-bpKQ; Big Buck Bunny, Blender Foundation, https://peach.blender.org/, CC BY 3.0 https://creativecommons.org/licenses/by/3.0/; displayed in a preview card |
 | Flower video | https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4 | CC0 local-video playback demonstration |
-| House Vibez — Lily J | https://assets.mixkit.co/music/745/745.mp3 | Mixkit Stock Music Free License, embedded in film only |
+| House Vibez — Lily J | https://assets.mixkit.co/music/745/745.mp3 | Mixkit Stock Music Free License, embedded in the scored product film |
 | Fast small sweep transition | https://assets.mixkit.co/active_storage/sfx/166/166-preview.mp3 | Mixkit Sound Effects Free License |
 | Air zoom vacuum | https://assets.mixkit.co/active_storage/sfx/2608/2608-preview.mp3 | Mixkit Sound Effects Free License |
 | Cinematic whoosh deep impact | https://assets.mixkit.co/active_storage/sfx/1143/1143-preview.mp3 | Mixkit Sound Effects Free License |

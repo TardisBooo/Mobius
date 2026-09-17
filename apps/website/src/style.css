@@ -24,6 +24,9 @@
 
 .cite{border-top:1px solid var(--ink)}.cite-block{max-width:72ch;margin:0;font:16px/1.75 "Microsoft YaHei UI",sans-serif;color:var(--ink)}
 .film-chapters{display:grid;grid-template-columns:repeat(6,1fr);gap:0;margin:38px 0 0;padding:0;border-block:1px solid #425048;list-style:none}
-.film-chapters li{display:grid;gap:8px;padding:17px 14px;border-right:1px solid #425048;font-size:10px}
-.film-chapters li:last-child{border-right:0}.film-chapters b{color:#83b99a;font-size:9px}.film-chapters span{color:#d9e3dc}
-@media(max-width:900px){.film-chapters{grid-template-columns:repeat(3,1fr)}.film-chapters li:nth-child(3){border-right:0}.film-chapters li:nth-child(-n+3){border-bottom:1px solid #425048}}
+.film-chapters li{display:grid;gap:8px;padding:17px 14px;border-right:1px solid #425048;border-bottom:1px solid #425048;font-size:10px}
+.film-chapters li:nth-child(6n){border-right:0}
+.film-chapters li:nth-last-child(-n+6){border-bottom:0}
+.film-chapters b{color:#83b99a;font-size:9px}.film-chapters span{color:#d9e3dc}
+.product-shot img[src$=".gif"]{object-fit:contain;object-position:center;background:#f2f5ef}
+@media(max-width:900px){.film-chapters{grid-template-columns:repeat(3,1fr)}.film-chapters li:nth-child(6n){border-right:1px solid #425048}.film-chapters li:nth-child(3n){border-right:0}.film-chapters li:nth-last-child(-n+6){border-bottom:1px solid #425048}.film-chapters li:nth-last-child(-n+3){border-bottom:0}}

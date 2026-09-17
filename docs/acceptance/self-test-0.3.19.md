@@ -37,7 +37,7 @@ The smoke config already includes `tests/self-test-checklist.spec.ts`, so later 
 - Maintained install: `E:\SOFTWARE\Mobius\mobius-desktop.exe` FileVersion `0.3.19`
 - Product site: http://8.137.87.76/mobius/ (release dir `/data/mobius/releases/20260916-v0319`)
 - Crawler files: `/llms.txt`, `/robots.txt`, `/sitemap.xml`, `/pricing.md`
-- Film: 32-second silent tour, `apps/website/public/media/mobius-product-film.mp4`
+- Film: 109-second scored tour, `apps/website/public/media/mobius-product-film.mp4` (v5, SHA-256 6779F673…)
 
 ## Checks
 

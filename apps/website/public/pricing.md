@@ -6,7 +6,7 @@ Möbius is open-source desktop software under the MIT License. There is no paid 
 
 - Price: $0
 - Platform: Windows
-- Includes: local session index, PowerShell workbench, handoff graph, Markdown library, canvas, managed skills
+- Includes: local session index (including OpenCode SQLite), PowerShell workbench, handoff graph, Markdown library, canvas, managed skills, CLI/MCP session layer (`mobius-connect`)
 - Does not include: model accounts, subscriptions, or API credits
 - Distinct from: Microsoft Mobius, ControlTheory Möbius, Circular Labs Mobius
 

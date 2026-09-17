@@ -17,10 +17,21 @@ Harness integration to handle; it never types, pastes, or injects it into a
 PTY. MCP recall additionally needs a short-lived desktop approval matching
 the exact query and selected scope.
 
-This release is **lexical BM25 only**. `retrievalMode: "lexical_bm25"` and
-`semanticStatus: "lexical_only_no_semantic_backend_configured"` deliberately
-mean that no semantic/vector ranker has run. An installed embedding model is
-not presented as hybrid retrieval until a vector backend is actually wired in.
+Default recall is **lexical BM25**. Hybrid ranking is opt-in:
+
+```powershell
+mobius mome semantic enable --model nomic-embed-text
+mobius mome semantic sync
+mobius-connect semantic enable --model nomic-embed-text
+```
+
+`retrieval_mode` is `lexical_bm25` until embeddings are enabled **and** a
+localhost model answers. Then it becomes `hybrid` with
+`semantic_status: hybrid_ready`. Missing Ollama, a missing model, or empty
+coverage fail open to lexical and set `semantic_status: semantic_unavailable`
+plus `fallback_reason`. Vectors are a regenerable derived index. Source
+transcripts stay read-only. The three-session / 1,200-token citation budget
+does not change.
 
 ## Optional local model runtime
 
@@ -50,11 +61,10 @@ Without `--accept-download` it refuses before starting a download. If Ollama
 is not installed or running, Mome reports that condition and leaves the host
 unchanged.
 
-## Remaining semantic/hybrid boundary
+## Semantic/hybrid boundary
 
-Local model installation is setup and diagnosis only in this release. Mome
-does not yet create embeddings, persist vectors, or send transcript text to
-Ollama. Consequently it cannot honestly claim hybrid retrieval. A future
-backend must remain explicit, disclose that selected indexed text will be sent
-to a local runtime, use a regenerable derived vector index, and preserve the
-same three-session/1,200-token/citation limits.
+Local model installation remains a separate operator action. Recall never
+downloads a model. Enablement discloses that selected indexed chunks may be
+sent to localhost Ollama. Disablement leaves stored vectors in place as a
+cache; it does not delete transcripts. Embedding ranking never generates a
+summary and never expands the citation budget.
