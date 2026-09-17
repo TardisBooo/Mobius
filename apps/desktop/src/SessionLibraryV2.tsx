@@ -7,7 +7,7 @@ import type { AgentKind, ApprovedSessionSources, HealthStatus, LineageManifest, 
 import type { SessionFocus } from "./WorkspaceAtlas";
 
 type Locale = "zh-CN" | "en";
-const agents: AgentKind[] = ["codex", "claude", "pi", "grok", "omp"];
+const agents: AgentKind[] = ["codex", "claude", "pi", "grok", "omp", "opencode"];
 
 function labels(locale: Locale) {
   const zh = locale === "zh-CN";
@@ -24,13 +24,13 @@ function labels(locale: Locale) {
     momeHint: zh ? "Mome 仅在你输入查询后检索本地相关上下文。结果可审查、可复制；它不会创建 @session 精确引用，也不会写入终端或自动注入内容。" : "Mome searches related local context only after you enter a query. Results are reviewable and copyable; it does not create an @session reference or write to a terminal.",
     momePlaceholder: zh ? "描述当前任务、架构或遇到的问题" : "Describe the current task, architecture, or obstacle", momeRecall: zh ? "本地查找" : "Search locally",
     momeEmpty: zh ? "没有找到足够相关的已索引内容。" : "No sufficiently related indexed context was found.", momeCopy: zh ? "复制上下文包" : "Copy context package",
-    momeFallback: zh ? "当前为本地 BM25 词法检索；尚未配置语义/向量后端。" : "Using local BM25 lexical recall; no semantic/vector backend is configured.", sources: zh ? "来源" : "Sources",
+    momeFallback: zh ? "当前为本地 BM25 词法检索。语义排序需显式开启本机 embedding。" : "Using local BM25 lexical recall. Semantic ranking requires an explicit local embedding enablement.", momeHybrid: zh ? "词法与本机 embedding 已融合排序；引用仍指向原文范围。" : "Lexical and local embeddings were fused; citations still point at source ranges.", momeSemanticDown: zh ? "本机 embedding 未就绪，已回退到词法检索。" : "Local embeddings were not ready; recall failed open to lexical search.", sources: zh ? "来源" : "Sources",
     sourcesTitle: zh ? "会话来源" : "Session sources", sourcesHint: zh ? "只添加你选择的 Harness 目录。批准后会刷新本地只读索引；不会修改来源文件。" : "Add only Harness directories you choose. Approved sources refresh the local read-only index; source files are never changed.",
     addSource: zh ? "添加来源" : "Add source", chooseDirectory: zh ? "选择目录" : "Choose directory", sourcePath: zh ? "目录路径" : "Directory path", suggestedSources: zh ? "本机建议位置" : "Suggested local locations", approvedSources: zh ? "已批准来源" : "Approved sources", removeSource: zh ? "移除来源" : "Remove source", noApprovedSources: zh ? "尚未批准任何会话来源。" : "No session sources are approved yet.", sourceSaved: zh ? "来源已更新，本地索引已刷新。" : "Source updated and local index refreshed.", sourceDirectoryRequired: zh ? "请选择或输入一个目录路径。" : "Choose or enter a directory path."
   };
 }
 
-function name(provider: AgentKind) { return provider === "pi" ? "Pi" : provider === "omp" ? "OMP" : provider === "grok" ? "Grok" : provider === "claude" ? "Claude" : provider === "codex" ? "Codex" : `Unsupported (${provider})`; }
+function name(provider: AgentKind) { return provider === "pi" ? "Pi" : provider === "omp" ? "OMP" : provider === "grok" ? "Grok" : provider === "claude" ? "Claude" : provider === "codex" ? "Codex" : provider === "opencode" ? "OpenCode" : `Unsupported (${provider})`; }
 function dedupe(hits: SessionSearchHit[]) {
   const unique = new Map<string, SessionSearchHit>();
   for (const hit of hits) {
@@ -345,7 +345,7 @@ function MomeDialog({ text, workspaceId, checkoutId, providers, onClose, onCopy,
   return <AccessibleDialog title={text.momeTitle} closeLabel={text.close} onClose={close}>
     <div className="mome-dialog"><p className="context-dialog-hint">{text.momeHint}</p><label className="mome-query"><Search size={17}/><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void recall(); } }} placeholder={text.momePlaceholder}/></label>
       <div className="modal-actions"><button className="soft-button" type="button" onClick={close}>{text.close}</button><button className="primary-button" type="button" disabled={!query.trim() || loading} onClick={() => void recall()}>{loading ? <LoaderCircle className="spin" size={15}/> : <Sparkles size={15}/>} {text.momeRecall}</button></div>
-      {result ? <section className="mome-result"><header><div><strong>{text.sources} · {result.sources.length}</strong><small>~{result.estimated_tokens} / {result.max_tokens} tokens</small></div>{result.semantic_status === "lexical_only_no_semantic_backend_configured" ? <span>{text.momeFallback}</span> : null}</header>{result.sources.length ? <div className="mome-sources">{result.sources.map((source) => <article key={source.content_hash}><code>{source.citation}</code><small>{name(source.provider)} · m{source.start_ordinal}–m{source.end_ordinal} · ~{source.estimated_tokens}</small><p>{source.text}</p></article>)}</div> : <p className="mome-empty">{text.momeEmpty}</p>}{result.sources.length ? <button className="primary-button" type="button" onClick={() => void onCopy(momePacket(result))}><Copy size={15}/>{text.momeCopy}</button> : null}</section> : null}
+      {result ? <section className="mome-result"><header><div><strong>{text.sources} · {result.sources.length}</strong><small>~{result.estimated_tokens} / {result.max_tokens} tokens</small></div>{result.semantic_status === "hybrid_ready" ? <span>{text.momeHybrid}</span> : result.semantic_status === "semantic_unavailable" ? <span>{text.momeSemanticDown}</span> : <span>{text.momeFallback}</span>}</header>{result.sources.length ? <div className="mome-sources">{result.sources.map((source) => <article key={source.content_hash}><code>{source.citation}</code><small>{name(source.provider)} · m{source.start_ordinal}–m{source.end_ordinal} · ~{source.estimated_tokens}</small><p>{source.text}</p></article>)}</div> : <p className="mome-empty">{text.momeEmpty}</p>}{result.sources.length ? <button className="primary-button" type="button" onClick={() => void onCopy(momePacket(result))}><Copy size={15}/>{text.momeCopy}</button> : null}</section> : null}
     </div>
   </AccessibleDialog>;
 }

@@ -44,7 +44,7 @@ function packet(source: SessionSearchHit["session"], message: Message, messages:
 
 function parseQuery(value: string): ParsedQuery {
   const raw = value.trim();
-  const exact = raw.match(/^@session:(codex|claude|pi|grok)\/([^#\s]+)(?:#m(\d+)(?:-m?(\d+))?)?$/i);
+  const exact = raw.match(/^@session:(codex|claude|pi|grok|omp|opencode)\/([^#\s]+)(?:#m(\d+)(?:-m?(\d+))?)?$/i);
   if (!exact) {
     return { query: raw, providers: [], exactSession: null, exactReference: null, referenceError: null };
   }

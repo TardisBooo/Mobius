@@ -250,12 +250,20 @@ export const desktopApi = {
     }
     const summaries = await invoke<AgentSummary[]>("list_agents");
     const summaryByAgent = new Map(summaries.map((item) => [item.agent, item]));
-    return (["codex", "claude", "pi"] as const).map((id) => {
+    return (["codex", "claude", "pi", "grok", "omp", "opencode"] as const).map((id) => {
       const summary = summaryByAgent.get(id);
       const contexts = summary?.contexts ?? 0;
+      const labels: Record<typeof id, string> = {
+        pi: "Pi",
+        codex: "Codex",
+        claude: "Claude",
+        grok: "Grok",
+        omp: "OMP",
+        opencode: "OpenCode",
+      };
       return {
         id,
-        label: id === "pi" ? "Pi" : id === "codex" ? "Codex" : "Claude",
+        label: labels[id],
         status: contexts > 0 ? "connected" : "needs_setup",
         sessions: contexts,
         detail: contexts > 0

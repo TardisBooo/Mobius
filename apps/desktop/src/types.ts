@@ -1,5 +1,5 @@
 // "apodex" is retained only to decode legacy catalogues, never as a selectable adapter.
-export type AgentKind = "codex" | "claude" | "pi" | "grok" | "omp" | "apodex" | "unknown";
+export type AgentKind = "codex" | "claude" | "pi" | "grok" | "omp" | "opencode" | "apodex" | "unknown";
 
 export type ContextKind =
   | "session"
@@ -187,9 +187,9 @@ export interface RelayEdge { id: string; chain_id: string; source_session_id: st
 export interface HandoffPackage { id: string; source_session_id: string; target_provider: AgentKind; target_checkout_id: string; mode: "take_over" | "parallel"; payload: Record<string, unknown>; token_estimate: number; created_at: string; }
 export interface RelayGraph { chains: RelayChain[]; edges: RelayEdge[]; handoffs: HandoffPackage[]; }
 export interface SessionQuery { query: string; workspace_id: string | null; checkout_id: string | null; providers: AgentKind[]; limit: number; }
-export interface MomeRecallRequest { query: string; workspace_id: string | null; checkout_id: string | null; providers: AgentKind[]; max_tokens?: number | null; }
+export interface MomeRecallRequest { query: string; workspace_id: string | null; checkout_id: string | null; providers: AgentKind[]; max_tokens?: number | null; retrieval_mode?: string | null; }
 export interface MomeSource { provider: AgentKind; session_id: string; session_record_id: string; start_ordinal: number; end_ordinal: number; citation: string; content_hash: string; text: string; estimated_tokens: number; }
-export interface MomeRecallResponse { query: string; retrieval_mode: string; semantic_status: "lexical_only_no_semantic_backend_configured"; max_tokens: number; estimated_tokens: number; sources: MomeSource[]; }
+export interface MomeRecallResponse { query: string; retrieval_mode: string; semantic_status: "lexical_only_no_semantic_backend_configured" | "semantic_unavailable" | "hybrid_ready"; embedding_coverage?: string | null; fallback_reason?: string | null; max_tokens: number; estimated_tokens: number; sources: MomeSource[]; }
 export interface ProviderIndexReport { roots: number; discovered: number; indexed: number; unchanged: number; skipped: number; errors: string[]; by_provider: Array<{provider: AgentKind; roots: number; discovered: number; indexed: number; unchanged: number; skipped: number}>; }
 export interface SessionSourceRoot { agent: AgentKind; path: string; exists: boolean; mode: string; provenance: string; }
 export interface ApprovedSessionSources { version: number; roots: SessionSourceRoot[]; suppressed_auto_roots?: Array<{ agent: AgentKind; path: string }>; }
