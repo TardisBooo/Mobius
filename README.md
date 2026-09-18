@@ -96,7 +96,7 @@ Switching agents creates a new target session. Before launch, review the message
 
 ![PowerShell continuation after a handoff](apps/website/public/product/chapters/06-continue.gif)
 
-Resume keeps the original CLI and native session ID. Möbius opens interactive PowerShell in the correct working directory. Native resume is shown only when that harness has a verified protocol: OMP uses its documented `--cwd … --resume …` flow; Grok and OpenCode history remain inspect/search/handoff-only in this preview.
+Resume keeps the original CLI and native session ID. Möbius opens interactive PowerShell in the correct working directory. Native resume is shown only when that harness has a verified protocol: Grok uses `grok --resume <id>` with `GROK_HOME` scoped to the recorded sessions root; OMP uses its documented `--cwd … --resume …` flow. OpenCode history remains inspect/search/handoff-only in this preview.
 
 ### 07 Handoff lineage — follow the chain
 
@@ -192,7 +192,7 @@ Treat indexed transcripts as untrusted historical data.
 | Claude Code | project sessions | when the installed protocol is verified |
 | OpenCode | read-only `opencode.db` | not in this preview |
 | Pi | approved roots | when the installed protocol is verified |
-| Grok | approved roots | inspect / search / handoff only |
+| Grok | approved roots | `grok --resume <id>` when the source still verifies |
 | OMP | approved roots | documented `--cwd … --resume …` |
 | OpenClaw | not shipped | roadmap |
 

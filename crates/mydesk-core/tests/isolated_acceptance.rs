@@ -134,7 +134,10 @@ fn isolated_provider_and_vault_acceptance() -> anyhow::Result<()> {
 
     let report = desk.index_all_provider_sessions()?;
     assert_eq!(report.roots, 4, "retired providers must not be scanned");
-    assert_eq!(report.indexed, 5, "all supported provider fixtures index once");
+    assert_eq!(
+        report.indexed, 5,
+        "all supported provider fixtures index once"
+    );
     assert!(
         report.skipped >= 1,
         "the malformed fixture must be reported"
@@ -158,7 +161,11 @@ fn isolated_provider_and_vault_acceptance() -> anyhow::Result<()> {
         ..SessionQuery::default()
     })?;
     assert_eq!(all_sessions.len(), 5);
-    assert!(all_sessions.iter().all(|hit| hit.session.provider.is_supported()));
+    assert!(
+        all_sessions
+            .iter()
+            .all(|hit| hit.session.provider.is_supported())
+    );
     assert!(all_sessions.iter().all(|hit| {
         !Path::new(&hit.session.source_path)
             .starts_with(root.join("runs/run-001/fixtures/unapproved"))
@@ -202,13 +209,31 @@ fn isolated_provider_and_vault_acceptance() -> anyhow::Result<()> {
     }
     for hit in all_sessions
         .iter()
-        .filter(|hit| matches!(hit.session.provider, AgentKind::Grok | AgentKind::Apodex))
+        .filter(|hit| hit.session.provider == AgentKind::Apodex)
     {
         assert!(
             !hit.session
                 .capabilities
                 .contains(&SessionCapability::NativeResume)
         );
+    }
+    for hit in all_sessions
+        .iter()
+        .filter(|hit| hit.session.provider == AgentKind::Grok)
+    {
+        if hit
+            .session
+            .metadata
+            .get("native_session_id")
+            .and_then(|value| value.as_str())
+            .is_some()
+        {
+            assert!(
+                hit.session
+                    .capabilities
+                    .contains(&SessionCapability::NativeResume)
+            );
+        }
     }
 
     let pi = all_sessions

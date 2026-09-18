@@ -52,7 +52,7 @@ Möbius indexes approved local agent transcripts by project directory and worktr
 
 ## Supported harnesses
 
-Codex, Claude Code, OpenCode, Pi, Grok, and OMP. Native resume is shown only when the installed harness has a verified resume protocol. Current Grok and OpenCode history remain inspect/search/handoff-only. OpenClaw is not shipped.
+Codex, Claude Code, OpenCode, Pi, Grok, and OMP. Native resume is shown only when the installed harness has a verified resume protocol. Grok uses `grok --resume <id>`. OpenCode history remains inspect/search/handoff-only. OpenClaw is not shipped.
 
 ## Repositories
 

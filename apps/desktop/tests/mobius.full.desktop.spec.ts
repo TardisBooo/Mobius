@@ -457,8 +457,9 @@ test("full isolated desktop acceptance: all local product flows remain explicit 
     await page.keyboard.press("Escape");
     await expect(page.locator(".mobius-app")).not.toHaveClass(/terminal-focus/);
 
-    // Same-Harness continuation is adapter-limited. A native Codex record can
-    // create an original-Agent terminal; Grok truthfully refuses native resume.
+    // Same-Harness continuation is adapter-limited. A native Codex or Claude
+    // record can create an original-Agent terminal. Grok is now a verified
+    // resume adapter, but this isolated fixture may not ship a grok CLI.
     const sessionHits = await invoke<SessionHit[]>(page, "query_sessions", {
       query: { query: memoryMarker, workspace_id: null, checkout_id: null, providers: [], limit: 30 },
     });
@@ -467,7 +468,6 @@ test("full isolated desktop acceptance: all local product flows remain explicit 
     const grok = sessionHits.find((hit) => hit.session.provider === "grok")!;
     expect(codex.session.capabilities).toContain("native_resume");
     expect(claude.session.capabilities).toContain("native_resume");
-    expect(grok.session.capabilities).not.toContain("native_resume");
     const terminalsBeforeCodexResume = await invoke<Terminal[]>(page, "terminal_list");
     const resumeTerminal = await invoke<Terminal>(page, "resume_session", { sessionId: codex.session.id });
     expect(resumeTerminal.title.toLocaleLowerCase()).toContain("codex");
@@ -479,7 +479,9 @@ test("full isolated desktop acceptance: all local product flows remain explicit 
     expect(claudeTerminal.cwd.toLowerCase()).toBe(fixtureProject.toLowerCase());
     await expect.poll(() => terminalSnapshot(page, claudeTerminal.id)).toContain("MOBIUS_CLAUDE_HANDOFF_STUB");
     expect((await invoke<Terminal[]>(page, "terminal_list")).length).toBe(terminalsBeforeClaudeResume.length + 1);
-    await expect(invoke(page, "resume_session", { sessionId: grok.session.id })).rejects.toThrow(/inspection|handoff|native/i);
+    if (!grok.session.capabilities.includes("native_resume")) {
+      await expect(invoke(page, "resume_session", { sessionId: grok.session.id })).rejects.toThrow(/inspection|handoff|native/i);
+    }
 
     // Cross-Harness continuation is deliberately copy-only. The old APIs
     // which could seed another provider's terminal are unavailable, while the

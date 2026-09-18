@@ -1,10 +1,11 @@
 use mydesk_core::harness_launch;
 use mydesk_core::{
-    AgentSummary, AppSettings, AppSettingsView, BoardDocument, ContextRecord, HandoffDraft, HealthStatus, McpApprovalGrant,
-    McpApprovalRequest, McpApprovalStore, Message, MomeRecallRequest, MomeRecallResponse, MyDesk,
-    NoteDraft, NoteFileInfo, NoteLibrarySnapshot, ProjectSummary, ProviderIndexReport, RelayGraph,
-    RelayMode, SearchRequest, SessionQuery, SessionSearchHit, SessionSourceRoot, SkillInfo,
-    TrashItem, WikiDraft, WikiQueueItem, Workspace, WorkspaceInspection, WorkspaceStatus,
+    AgentSummary, AppSettings, AppSettingsView, BoardDocument, ContextRecord, HandoffDraft,
+    HealthStatus, McpApprovalGrant, McpApprovalRequest, McpApprovalStore, Message,
+    MomeRecallRequest, MomeRecallResponse, MyDesk, NoteDraft, NoteFileInfo, NoteLibrarySnapshot,
+    ProjectSummary, ProviderIndexReport, RelayGraph, RelayMode, SearchRequest, SessionQuery,
+    SessionSearchHit, SessionSourceRoot, SkillInfo, TrashItem, WikiDraft, WikiQueueItem, Workspace,
+    WorkspaceInspection, WorkspaceStatus,
     note_mounts::{
         list_note_files, list_note_library_snapshot, note_is_private_vault_file, read_note_file,
     },
@@ -76,8 +77,7 @@ impl LibraryScanGate {
     fn end(&self) {
         self.in_flight
             .store(false, std::sync::atomic::Ordering::Relaxed);
-        *self.quiet_until.lock() =
-            Some(std::time::Instant::now() + Duration::from_millis(250));
+        *self.quiet_until.lock() = Some(std::time::Instant::now() + Duration::from_millis(250));
     }
 
     fn suppress_watch_echo(&self) -> bool {
@@ -110,8 +110,8 @@ struct LibraryWatcher {
 
 impl LibraryWatcher {
     fn new(app: AppHandle, scan_gate: Arc<LibraryScanGate>) -> notify::Result<Self> {
-        let watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
-            match event {
+        let watcher =
+            notify::recommended_watcher(move |event: notify::Result<notify::Event>| match event {
                 Ok(event) if !matches!(event.kind, EventKind::Access(_)) => {
                     if scan_gate.suppress_watch_echo() {
                         return;
@@ -122,8 +122,7 @@ impl LibraryWatcher {
                 }
                 Ok(_) => {}
                 Err(error) => tracing::warn!("Library file watcher reported an error: {error}"),
-            }
-        })?;
+            })?;
         Ok(Self {
             watcher,
             roots: HashSet::new(),
@@ -139,7 +138,10 @@ impl LibraryWatcher {
             .collect::<Vec<_>>();
         for root in stale {
             if let Err(error) = self.watcher.unwatch(&root) {
-                tracing::debug!("Library source was already unwatched ({}): {error}", root.display());
+                tracing::debug!(
+                    "Library source was already unwatched ({}): {error}",
+                    root.display()
+                );
             }
             self.roots.remove(&root);
         }
@@ -152,7 +154,10 @@ impl LibraryWatcher {
                 Ok(()) => {
                     self.roots.insert(root);
                 }
-                Err(error) => tracing::warn!("could not watch Library source ({}): {error}", root.display()),
+                Err(error) => tracing::warn!(
+                    "could not watch Library source ({}): {error}",
+                    root.display()
+                ),
             }
         }
     }
@@ -161,7 +166,11 @@ impl LibraryWatcher {
 fn library_watch_roots(desk: &MyDesk) -> HashSet<PathBuf> {
     let mut roots = HashSet::from([desk.paths.notes_dir()]);
     match desk.database.list_note_mounts() {
-        Ok(mounts) => roots.extend(mounts.into_iter().map(|mount| PathBuf::from(mount.real_path))),
+        Ok(mounts) => roots.extend(
+            mounts
+                .into_iter()
+                .map(|mount| PathBuf::from(mount.real_path)),
+        ),
         Err(error) => tracing::warn!("could not list Library sources for watching: {error}"),
     }
     roots
@@ -847,12 +856,7 @@ fn read_note_file_command(state: State<'_, DesktopState>, path: String) -> Comma
         .database
         .list_note_mounts()
         .map_err(command_error)?;
-    read_note_file(
-        Path::new(&path),
-        &state.desk.paths.notes_dir(),
-        &mounts,
-    )
-    .map_err(command_error)
+    read_note_file(Path::new(&path), &state.desk.paths.notes_dir(), &mounts).map_err(command_error)
 }
 
 #[tauri::command]
@@ -2252,6 +2256,15 @@ fn resume_session(
             ps_quote(&terminal_process_path(&home).to_string_lossy())
         );
     }
+    if provider == mydesk_core::AgentKind::Grok {
+        let source = Path::new(&session.source_path);
+        let home = mydesk_core::providers::verified_grok_resume_home(source, native_session_id)
+            .map_err(command_error)?;
+        command = format!(
+            "$mobiusResumeHome=$env:GROK_HOME; try {{ $env:GROK_HOME={}; {command} }} finally {{ $env:GROK_HOME=$mobiusResumeHome; Remove-Variable mobiusResumeHome -ErrorAction SilentlyContinue }}",
+            ps_quote(&terminal_process_path(&home).to_string_lossy())
+        );
+    }
     create_terminal_inner(
         &app,
         &state,
@@ -2300,6 +2313,10 @@ fn native_resume_command(
         )),
         mydesk_core::AgentKind::Omp => Ok(format!(
             "{}{executable}{working_root} --resume {native_session_id}",
+            launch.setup
+        )),
+        mydesk_core::AgentKind::Grok => Ok(format!(
+            "{}{executable} --resume {native_session_id}",
             launch.setup
         )),
         _ => Err("native resume is not verified for this provider".into()),
@@ -2866,15 +2883,15 @@ mod terminal_tests {
         .unwrap();
         assert!(omp_command.contains("--cwd 'E:\\Workspaces\\Example'"));
         assert!(omp_command.contains("--resume 'omp-known-id'"));
-        assert!(
-            native_resume_command(
-                mydesk_core::AgentKind::Grok,
-                &PathBuf::from("grok.cmd"),
-                "grok-known-id",
-                Path::new(r"E:\Workspaces\Example"),
-            )
-            .is_err()
-        );
+        let grok_command = native_resume_command(
+            mydesk_core::AgentKind::Grok,
+            &PathBuf::from("grok.cmd"),
+            "grok-known-id",
+            Path::new(r"E:\Workspaces\Example"),
+        )
+        .expect("Grok is a verified native resume provider");
+        assert!(grok_command.contains("--resume 'grok-known-id'"));
+        assert!(!grok_command.contains("--session"));
         assert!(
             native_resume_command(
                 mydesk_core::AgentKind::Opencode,

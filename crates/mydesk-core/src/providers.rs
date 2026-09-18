@@ -123,9 +123,9 @@ impl SessionAdapterRegistry {
             },
             SessionAdapter {
                 provider: AgentKind::Grok,
-                version: "grok-history-v5",
+                version: "grok-history-v6",
                 coverage: "partial",
-                native_resume: false,
+                native_resume: true,
             },
             SessionAdapter {
                 provider: AgentKind::Omp,
@@ -324,9 +324,10 @@ impl<'a> ProviderIndexer<'a> {
             }
         };
         if root.agent == AgentKind::Opencode {
-            if let Some(db_path) = crate::opencode::db_file_in_root(&canonical_root)
-                .or_else(|| crate::opencode::is_opencode_db_name(&canonical_root).then_some(canonical_root.clone()))
-            {
+            if let Some(db_path) = crate::opencode::db_file_in_root(&canonical_root).or_else(|| {
+                crate::opencode::is_opencode_db_name(&canonical_root)
+                    .then_some(canonical_root.clone())
+            }) {
                 self.index_opencode_db(&db_path, mappings, report, &mut root_report, errors)?;
                 report.skipped += root_report.skipped;
                 report.root_reports.push(root_report);
@@ -434,7 +435,7 @@ impl<'a> ProviderIndexer<'a> {
         let mapping_revision = session_map_revision(mappings);
         let source_version = if provider == AgentKind::Grok {
             format!(
-                "{}:grok-cwd-v1:{fingerprint_suffix}:{}:maps-{mapping_revision}:relay-marker-v1",
+                "{}:grok-resume-v1:{fingerprint_suffix}:{}:maps-{mapping_revision}:relay-marker-v1",
                 adapter.version,
                 companion_source_fingerprint(path)
             )
@@ -454,7 +455,14 @@ impl<'a> ProviderIndexer<'a> {
             anyhow::bail!("OpenCode sessions are indexed from opencode.db, not as JSONL files");
         }
         let parsed = parse_session(path, provider.clone())?;
-        self.persist_parsed_session(provider, fingerprint, parsed, mappings, source_version, &adapter)
+        self.persist_parsed_session(
+            provider,
+            fingerprint,
+            parsed,
+            mappings,
+            source_version,
+            &adapter,
+        )
     }
 
     fn index_opencode_db(
@@ -576,8 +584,8 @@ impl<'a> ProviderIndexer<'a> {
         let catalogue_message_count = parsed.messages.len();
         let message_rows_omitted = catalogue_message_count < source_message_count;
         let message_catalogue_partial = message_rows_omitted || message_payload_truncated;
-        let source_catalogue_partial = provider != AgentKind::Opencode
-            && fingerprint.raw_bytes > MAX_JSONL_FULL_BYTES;
+        let source_catalogue_partial =
+            provider != AgentKind::Opencode && fingerprint.raw_bytes > MAX_JSONL_FULL_BYTES;
         let catalogue_coverage = if source_catalogue_partial || message_catalogue_partial {
             "partial"
         } else {
@@ -808,6 +816,34 @@ pub fn verified_codex_resume_home(path: &Path, expected_id: &str) -> Result<Path
         "This is a Codex child-agent history, not an independently resumable CLI conversation. Resume its parent explicitly in Codex; this source remains inspectable."
     );
     codex_home_for_source(path)
+}
+
+pub fn grok_home_for_source(path: &Path) -> Result<PathBuf> {
+    for ancestor in path.ancestors() {
+        if ancestor.file_name().is_some_and(|name| name == "sessions") {
+            return ancestor
+                .parent()
+                .map(Path::to_path_buf)
+                .ok_or_else(|| anyhow::anyhow!("Grok home is missing"));
+        }
+    }
+    anyhow::bail!("Grok source is not in a verified sessions directory; inspect only")
+}
+
+pub fn verified_grok_resume_home(path: &Path, expected_id: &str) -> Result<PathBuf> {
+    anyhow::ensure!(
+        path.is_file(),
+        "Grok session source moved or disappeared. Refresh session sources before resuming."
+    );
+    let parsed = parse_session(path, AgentKind::Grok)?;
+    let native = parsed.native_session_id.as_deref().ok_or_else(|| {
+        anyhow::anyhow!("Grok native session id was not verified for this source")
+    })?;
+    anyhow::ensure!(
+        native == expected_id,
+        "Grok source identity differs from the cached index. Refresh sessions; refusing to open a different thread."
+    );
+    grok_home_for_source(path)
 }
 
 fn approved_canonical_root(root: &Path) -> Result<PathBuf> {
@@ -1788,7 +1824,8 @@ mod tests {
     #[test]
     fn grok_session_reads_checkout_from_summary_companion() {
         let temporary = tempfile::tempdir().expect("temp");
-        let session_directory = temporary.path().join("grok-session-42");
+        let native_id = "01a0afc8-3b62-7b13-9879-24d7888b1a34";
+        let session_directory = temporary.path().join("sessions").join(native_id);
         fs::create_dir_all(&session_directory).expect("session directory");
         let history = session_directory.join("chat_history.jsonl");
         fs::write(
@@ -1802,18 +1839,23 @@ mod tests {
         fs::write(
             session_directory.join("summary.json"),
             serde_json::to_vec(&json!({
-                "info": {"id": "grok-session-42", "cwd": "C:\\Users\\example\\projects\\checkout-smoke"},
+                "info": {"id": native_id, "cwd": "C:\\Users\\example\\projects\\checkout-smoke"},
                 "git_root_dir": "C:/Users/example/projects/checkout-smoke/"
             }))
             .expect("summary json"),
         )
         .expect("summary");
 
+        assert!(SessionAdapterRegistry::for_provider(&AgentKind::Grok).native_resume);
         let parsed = parse_session(&history, AgentKind::Grok).expect("parse");
         assert_eq!(
             parsed.cwd.as_deref(),
             Some("C:\\Users\\example\\projects\\checkout-smoke")
         );
+        assert_eq!(parsed.native_session_id.as_deref(), Some(native_id));
+        let home = verified_grok_resume_home(&history, native_id).expect("grok home");
+        assert_eq!(home, temporary.path());
+        assert!(verified_grok_resume_home(&history, "other-id").is_err());
     }
 
     #[test]
@@ -2064,10 +2106,12 @@ mod tests {
             .find(|hit| hit.session.provider_session_id == "ses_parent")
             .unwrap();
         assert!(parent.session.source_path.contains("#opencode:ses_parent"));
-        assert!(!parent
-            .session
-            .capabilities
-            .contains(&SessionCapability::NativeResume));
+        assert!(
+            !parent
+                .session
+                .capabilities
+                .contains(&SessionCapability::NativeResume)
+        );
         assert_eq!(fs::metadata(&db).expect("meta").len(), before);
     }
 }

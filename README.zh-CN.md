@@ -86,7 +86,7 @@ Mome 用本地 SQLite FTS/BM25，优先当前项目／worktree，每次最多三
 
 ![交接后的 PowerShell 继续工作](apps/website/public/product/chapters/06-continue.gif)
 
-恢复保留原 CLI 和原生 session ID，并在正确目录打开可交互 PowerShell。仅当已安装 Harness 有经过验证的恢复协议时显示原生恢复。OMP 使用其公开的 `--cwd … --resume …` 流程；当前 Grok 与 OpenCode 历史仅支持查看、搜索与交接。
+恢复保留原 CLI 和原生 session ID，并在正确目录打开可交互 PowerShell。仅当已安装 Harness 有经过验证的恢复协议时显示原生恢复。Grok 使用 `grok --resume <id>`，并把 `GROK_HOME` 限定在该会话的 sessions 根目录；OMP 使用其公开的 `--cwd … --resume …` 流程。OpenCode 历史仍仅支持查看、搜索与交接。
 
 ### 07 交接图谱 — 沿链回溯
 
@@ -166,7 +166,7 @@ pnpm --dir apps/desktop tauri build
 
 ## 支持的 Harness
 
-Codex、Claude Code、OpenCode、Pi、Grok、OMP。OpenClaw 尚未适配。原生恢复仅在协议已验证时启用。当前 Grok 与 OpenCode 历史仅支持查看、搜索与交接。
+Codex、Claude Code、OpenCode、Pi、Grok、OMP。OpenClaw 尚未适配。原生恢复仅在协议已验证时启用。Grok 使用 `grok --resume <id>`；OpenCode 历史仍仅支持查看、搜索与交接。
 
 ## 文档
 
