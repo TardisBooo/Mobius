@@ -148,13 +148,35 @@ export function TerminalPage({ workspaces, requestedTerminal, onConsumed, onErro
       resizeFrame = requestAnimationFrame(() => {
         if (disposed) return;
         const dimensions = fit.proposeDimensions();
-        if (!dimensions || (terminal.rows === dimensions.rows && terminal.cols === dimensions.cols)) return;
+        if (!dimensions || dimensions.rows < 2 || dimensions.cols < 2) return;
+        if (terminal.rows === dimensions.rows && terminal.cols === dimensions.cols) return;
         terminal.resize(dimensions.cols, dimensions.rows);
         void desktopApi.resizeTerminal(activeId, dimensions.rows, dimensions.cols).catch((error) => onError(String(error)));
       });
     };
     resize();
     terminal.focus();
+    // xterm 6 scrolls through an internal scrollable element, but a running
+    // TUI can enable mouse reporting (DECSET 1006), which makes xterm forward
+    // the wheel to the app and stops native viewport scrolling entirely.
+    // Intercept the wheel at the stage before xterm sees it: normal-buffer
+    // history always scrolls with the wheel; alternate-buffer apps keep
+    // xterm's arrow-key translation.
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey || event.metaKey || disposed) return;
+      const buffer = terminal.buffer.active;
+      if (buffer.type !== "normal") return;
+      const delta = event.deltaMode === 1 ? event.deltaY : event.deltaMode === 2 ? event.deltaY * terminal.rows : event.deltaY / 40;
+      if (!delta) return;
+      const lines = Math.sign(delta) * Math.max(1, Math.round(Math.abs(delta)));
+      const canScrollUp = buffer.viewportY > 0;
+      const canScrollDown = buffer.viewportY < buffer.length - terminal.rows;
+      if ((lines < 0 && !canScrollUp) || (lines > 0 && !canScrollDown)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      terminal.scrollLines(lines);
+    };
+    host.current.addEventListener("wheel", onWheel, { passive: false, capture: true });
 
     void desktopApi.terminalSnapshot(activeId).then((snapshot) => {
       if (disposed || activeRef.current !== activeId) return;
@@ -169,6 +191,8 @@ export function TerminalPage({ workspaces, requestedTerminal, onConsumed, onErro
       }
       queuedOutput.current[activeId] = [];
       snapshotLoading.current = null;
+      resize();
+      terminal.scrollToBottom();
       terminal.focus();
     }).catch((error) => {
       snapshotLoading.current = null;
@@ -205,6 +229,7 @@ export function TerminalPage({ workspaces, requestedTerminal, onConsumed, onErro
       cancelAnimationFrame(resizeFrame);
       observer.disconnect();
       themeObserver.disconnect();
+      host.current?.removeEventListener("wheel", onWheel, { capture: true } as EventListenerOptions);
       input.dispose();
       if (activeRef.current === activeId) activeRef.current = null;
       terminalRef.current = null;
@@ -215,7 +240,7 @@ export function TerminalPage({ workspaces, requestedTerminal, onConsumed, onErro
   const create = async () => {
     const checkout = workspaces.flatMap((workspace) => workspace.checkouts)[0];
     try {
-      const cwd = await desktopApi.pickDirectory(checkout?.canonical_path ?? "E:\\Workspaces");
+      const cwd = await desktopApi.pickDirectory(checkout?.canonical_path);
       if (!cwd) return;
       const terminal = await desktopApi.createTerminal(cwd, checkout?.branch ? `PowerShell · ${checkout.branch}` : "PowerShell");
       setTerminals((items) => [...items, terminal]);

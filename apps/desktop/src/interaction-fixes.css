@@ -48,6 +48,42 @@
   background: #080b10 !important;
 }
 
+/* xterm only scrolls when its viewport is shorter than the buffer. If the
+   stage grows with output, FitAddon reports enough rows to show everything
+   and the wheel has nowhere to go. Pin the stage to the grid cell. */
+.mobius-terminal,
+.mobius-terminal .terminal-page,
+.mobius-page-host:has(.mobius-terminal) {
+  min-height: 0;
+  height: 100%;
+}
+
+.mobius-terminal .terminal-stage {
+  position: relative;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  /* The inset terminal owns its own padding; stage padding would be
+     double-counted out of FitAddon's row budget. */
+  padding: 0;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+/* FitAddon measures the stage and subtracts the .xterm element's own padding,
+   so the padding belongs on the terminal, not on the stage. */
+.mobius-terminal .terminal-stage .xterm {
+  position: absolute;
+  inset: 0;
+  padding: 8px;
+}
+
+/* xterm 6 scrolls through its internal scrollable element. The legacy
+   viewport layer is an empty overlay and must never eat pointer events. */
+.mobius-terminal .terminal-stage .xterm-viewport {
+  pointer-events: none;
+}
+
 .mobius-terminal .terminal-stage .xterm-helper-textarea {
   color: #e7edf5 !important;
   caret-color: #6ed3ff;
