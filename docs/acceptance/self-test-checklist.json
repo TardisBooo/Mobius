@@ -1,7 +1,7 @@
 {
   "id": "MOBIUS-DESKTOP-SELFTEST",
   "product": "MÖBIUS",
-  "revision": "0.3.19",
+  "revision": "0.3.20",
   "updated": "2026-09-16",
   "source_of_truth": "docs/acceptance/self-test-checklist.json",
   "generated_markdown": "docs/acceptance/self-test-checklist.md",

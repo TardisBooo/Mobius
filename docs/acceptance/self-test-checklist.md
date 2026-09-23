@@ -1,6 +1,6 @@
 # MÖBIUS self-test checklist
 
-Revision **0.3.19**. Updated 2026-09-16.
+Revision **0.3.20**. Updated 2026-09-16.
 
 JSON is the source of truth: `docs/acceptance/self-test-checklist.json`.
 Regenerate this file with `node apps/desktop/scripts/sync-self-test-checklist.mjs`.

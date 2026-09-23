@@ -1,7 +1,8 @@
 # Möbius Codex-style desktop acceptance — 2026-09-23
 
-Status: **partial acceptance; release gate not passed**. This report covers the
-current development build, not the maintained `E:\SOFTWARE\Mobius` installation.
+Status: **partial release acceptance; local 0.3.20 upgrade completed on
+2026-09-24**. The isolated checks below were repeated on the optimized 0.3.20
+executable before the maintained `E:\SOFTWARE\Mobius` installation was upgraded.
 
 ## Isolation and evidence
 
@@ -19,8 +20,8 @@ current development build, not the maintained `E:\SOFTWARE\Mobius` installation.
   attached read-only. The graph source files are not approved in the audit DB,
   so nodes correctly show an unauthorized/unavailable source status.
 - This audit tree is **retained for review**, not an accepted distributable or
-  deletion candidate. The maintained installation and desktop shortcut were
-  not changed.
+  deletion candidate. Before the 2026-09-24 upgrade, the maintained installation
+  and desktop shortcut were not changed.
 - A second audit, `E:\Workspaces\_audits\mobius-cross-harness-20260923`,
   used a new **empty** `workspace` directory. It remained empty after the
   native tests. Möbius state and handoff packets stayed in its separate
@@ -75,9 +76,48 @@ claimed, and no Harness settings were changed.
    matrix. The existing 58-row self-test checklist predates the new shell and
    has stale selectors/removed workbench expectations; migrate and execute it
    before calling this a full product acceptance.
-4. A distributable installer, `E:\SOFTWARE\Mobius` update, desktop shortcut
-   target, and installed-product launch have **not** been tested or changed.
+4. The 0.3.20 NSIS installer, maintained-install upgrade, shortcut target, and
+   installed-product launch passed the checks below. A separate clean-install /
+   uninstall / rollback lifecycle has **not** been executed for 0.3.20.
 
 No Harness executable, configuration or existing source transcript was edited
-by this tranche. Do not publish a release or replace the maintained installation
-until the remaining gates above are closed.
+by this tranche. The local installed copy was replaced at the user's direction;
+do not present the remaining checks as passed or publish a GitHub release until
+the unexecuted release-wide gates above are closed.
+
+## 2026-09-24 local upgrade and installed-build check
+
+- Candidate: optimized `target\release\mobius-desktop.exe`, FileVersion
+  `0.3.20`; NSIS `MÖBIUS_0.3.20_x64-setup.exe`, SHA-256
+  `3B440D8469680D45143D3A2C87FDC9EB928D1ECC80C06C81747B110AB2E6A65D`.
+- `pnpm --dir apps/desktop exec tauri build --bundles nsis`,
+  `cargo test --workspace`, `pnpm --dir apps/desktop check`,
+  `pnpm --dir apps/desktop test:window-drag`, and
+  `pnpm --dir apps/desktop check:checklist` passed. The 58-row checklist command
+  checks document synchronization, **not** the 58 interactions.
+- The optimized executable, running with isolated data and approved source
+  fixtures, passed the real Tauri WebView2 suite **18/18** in 48.8 seconds.
+- The installer was also copied to
+  `E:\Workspaces\_audits\mobius-install-20260924\MÖBIUS_0.3.20_x64-setup.exe`
+  with the same SHA-256 for retained candidate review. The installed EXE and
+  post-bundle build EXE have the same 22,182,912-byte length; they differ in
+  three bytes, consistent with Tauri's logged NSIS bundle-type patch, and both
+  report 0.3.20.
+- Before upgrade, the 0.3.19 executable, uninstaller, and canonical shortcut
+  were copied to `E:\Workspaces\_audits\mobius-install-20260924` for recovery.
+  The upgrade used the installer with `/S /D=E:\SOFTWARE\Mobius` and exited 0.
+  HKCU registration and installed EXE both report `0.3.20`.
+- Immediately after installation, `D:\DataVault\Mobius` remained 757 files /
+  6,499,071,398 bytes and the maintained WebView profile remained 326 files /
+  36,783,160 bytes, matching their pre-upgrade counts and bytes. Normal app
+  startup then refreshed its own index, so later SQLite/WAL bytes are not
+  expected to match the pre-launch inventory.
+- The installer generated an extra `MÖBIUS.lnk` with no target. It was moved
+  recoverably to the same audit directory. The sole desktop `Mobius.lnk` points
+  to `E:\SOFTWARE\Mobius\mobius-desktop.exe` with that working directory.
+  Launching it produced only the maintained executable (PID 60388 at test time).
+- The installed UI was inspected directly: Skill market loaded, Library mounted
+  tree and open editor loaded, the persistent sidebar returned to a folded
+  Session, and the startup Session index reached `running=false`. No installed
+  UI error was observed in these paths. This is a focused installed smoke test,
+  not the unexecuted full visual/control matrix above.
