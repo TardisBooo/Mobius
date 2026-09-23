@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, Braces, ChevronDown, ChevronRight, FolderGit2, FolderPlus, LoaderCircle, NotebookPen, RefreshCw, Search, Settings } from "lucide-react";
+import { Archive, Braces, ChevronDown, ChevronRight, FolderCog, FolderGit2, FolderPlus, LoaderCircle, NotebookPen, RefreshCw, Search, Settings, Sparkles } from "lucide-react";
 import { desktopApi } from "./api";
 import { AccessibleDialog } from "./AccessibleDialog";
 import { ContextMenu } from "./ContextMenu";
@@ -8,7 +8,7 @@ import type { SessionFocus } from "./WorkspaceAtlas";
 
 type Page = "workbench" | "sessions" | "notes" | "skills" | "settings";
 
-export function ProjectSidebar({ workspaces, page, locale, revision, refreshing, onNavigate, onOpenProject, onAddProject, onOpenSession, onRefresh, onRenamed, onError }: {
+export function ProjectSidebar({ workspaces, page, locale, revision, refreshing, onNavigate, onOpenProject, onAddProject, onOpenSession, onOpenSessionTool, onRefresh, onRenamed, onError }: {
   workspaces: WorkspaceView[];
   page: Page;
   locale: "zh-CN" | "en";
@@ -18,6 +18,7 @@ export function ProjectSidebar({ workspaces, page, locale, revision, refreshing,
   onOpenProject: (workspaceId: string) => void;
   onAddProject: () => void;
   onOpenSession: (focus: SessionFocus) => void;
+  onOpenSessionTool: (tool: "sources" | "memory") => void;
   onRefresh: () => void;
   onRenamed: () => void;
   onError: (error: string) => void;
@@ -122,7 +123,7 @@ export function ProjectSidebar({ workspaces, page, locale, revision, refreshing,
     <div className="project-sidebar-scroll">
       {query.trim() ? <section className="project-sidebar-section"><header><span>{zh ? "搜索结果" : "Results"}</span><small>{matchingProjects.length + results.length}</small></header>{matchingProjects.map((item) => <button key={item.workspace.id} type="button" className="project-sidebar-project" onClick={() => { setQuery(""); onOpenProject(item.workspace.id); }}><FolderGit2 size={16}/><strong title={item.workspace.canonical_path}>{projectName(item)}</strong></button>)}{loading ? <p className="project-sidebar-empty"><LoaderCircle className="spin" size={14}/></p> : results.length ? visible(results).map(sessionButton) : !matchingProjects.length ? <p className="project-sidebar-empty">{zh ? "没有找到项目或会话" : "No projects or sessions found"}</p> : null}</section> : <>
         {pinnedHits.length ? <section className="project-sidebar-section"><header><span>{zh ? "置顶" : "Pinned"}</span><small>{pinnedHits.length}</small></header>{visible(pinnedHits).map(sessionButton)}</section> : null}
-        <section className="project-sidebar-section"><header><span>{zh ? "最近" : "Recent"}</span><button type="button" title={zh ? "扫描会话" : "Scan sessions"} aria-label={zh ? "扫描会话" : "Scan sessions"} disabled={refreshing} onClick={onRefresh}>{refreshing ? <LoaderCircle className="spin" size={14}/> : <RefreshCw size={14}/>}</button></header>{visible(recent.filter((hit) => !preferences[hit.session.id]?.pinned)).map(sessionButton)}</section>
+        <section className="project-sidebar-section"><header><span>{zh ? "最近" : "Recent"}</span><span className="project-sidebar-heading-actions"><button type="button" title={zh ? "管理会话来源" : "Manage session sources"} aria-label={zh ? "管理会话来源" : "Manage session sources"} onClick={() => onOpenSessionTool("sources")}><FolderCog size={14}/></button><button type="button" title={zh ? "查找相关记忆" : "Find related memory"} aria-label={zh ? "查找相关记忆" : "Find related memory"} onClick={() => onOpenSessionTool("memory")}><Sparkles size={14}/></button><button type="button" title={zh ? "扫描会话" : "Scan sessions"} aria-label={zh ? "扫描会话" : "Scan sessions"} disabled={refreshing} onClick={onRefresh}>{refreshing ? <LoaderCircle className="spin" size={14}/> : <RefreshCw size={14}/>}</button></span></header>{visible(recent.filter((hit) => !preferences[hit.session.id]?.pinned)).map(sessionButton)}</section>
         <section className="project-sidebar-section"><header><span>{zh ? "项目" : "Projects"}</span><span className="project-sidebar-heading-actions"><button type="button" onClick={() => { const next = sort === "name" ? "recent" : "name"; setSort(next); localStorage.setItem("mobius.sidebar.sort", next); }} title={sort === "name" ? (zh ? "按名称排序" : "Sort by name") : (zh ? "按时间排序" : "Sort by recent")}>{sort === "name" ? "A–Z" : "↓"}</button><button type="button" onClick={onAddProject} title={zh ? "添加项目" : "Add project"} aria-label={zh ? "添加项目" : "Add project"}><FolderPlus size={15}/></button></span></header>
           {ordered.map((item) => <div key={item.workspace.id} className="project-sidebar-group"><div className={`project-sidebar-project ${expanded === item.workspace.id ? "active" : ""}`}><button type="button" className="project-sidebar-disclosure" aria-label={expanded === item.workspace.id ? (zh ? "折叠项目" : "Collapse project") : (zh ? "展开项目" : "Expand project")} aria-expanded={expanded === item.workspace.id} onClick={() => toggleProject(item.workspace.id)}>{expanded === item.workspace.id ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}</button><button type="button" className="project-sidebar-open" onClick={() => onOpenProject(item.workspace.id)} title={item.workspace.canonical_path}><FolderGit2 size={16}/><strong>{projectName(item)}</strong></button></div>{expanded === item.workspace.id ? <div className="project-sidebar-children">{visible(projectSessions[item.workspace.id] ?? []).map(sessionButton)}{projectSessions[item.workspace.id]?.length === 0 ? <p className="project-sidebar-empty">{zh ? "暂无主会话" : "No main sessions"}</p> : null}{(projectSessions[item.workspace.id]?.length ?? 0) === 200 ? <p className="project-sidebar-empty">{zh ? "显示最近 200 条；用搜索查找更早会话" : "Latest 200; search for older sessions"}</p> : null}<button className="project-sidebar-child-toggle" type="button" onClick={() => setChildrenOpen((current) => current === item.workspace.id ? null : item.workspace.id)}>{childrenOpen === item.workspace.id ? (zh ? "收起子任务" : "Hide child tasks") : (zh ? "查看子任务" : "Show child tasks")}</button>{childrenOpen === item.workspace.id ? visible(projectChildren[item.workspace.id] ?? []).map(sessionButton) : null}</div> : null}</div>)}
         </section>

@@ -95,8 +95,8 @@ function SessionMessageBody({ message, highlight }: { message: Message; highligh
   return <div className="session-message-body"><p>{message.content}</p></div>;
 }
 
-export function SessionLibraryV2({ revision, indexing, workspaces, health, attachedSessionIds, openTerminal, onError, onToast, locale, focus, onFocusConsumed, embedded = false }: {
-  revision: number; indexing: boolean; workspaces: WorkspaceView[]; health: HealthStatus | null; attachedSessionIds: string[]; openTerminal: (terminal: TerminalInfo, sessionId: string | null) => void; onError: (message: string) => void; onToast: (message: string) => void; locale: Locale; focus: SessionFocus | null; onFocusConsumed: () => void; embedded?: boolean;
+export function SessionLibraryV2({ revision, indexing, workspaces, health, attachedSessionIds, openTerminal, onError, onToast, locale, focus, onFocusConsumed, toolRequest, onToolRequestConsumed, embedded = false }: {
+  revision: number; indexing: boolean; workspaces: WorkspaceView[]; health: HealthStatus | null; attachedSessionIds: string[]; openTerminal: (terminal: TerminalInfo, sessionId: string | null) => void; onError: (message: string) => void; onToast: (message: string) => void; locale: Locale; focus: SessionFocus | null; onFocusConsumed: () => void; toolRequest?: "sources" | "memory" | null; onToolRequestConsumed?: () => void; embedded?: boolean;
 }) {
   const text = labels(locale);
   const handoffLabel = locale === "zh-CN" ? "交接" : "Hand off";
@@ -125,6 +125,7 @@ export function SessionLibraryV2({ revision, indexing, workspaces, health, attac
   const [hits, setHits] = useState<SessionSearchHit[]>([]); const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(() => localStorage.getItem("mobius.sessions.selected")); const [loadedMessages, setMessages] = useState<Message[]>([]); const [messageId, setMessageId] = useState<string | null>(() => localStorage.getItem("mobius.sessions.message")); const [messageLimit, setMessageLimit] = useState(180); const [handoffOpen, setHandoffOpen] = useState(false); const [momeOpen, setMomeOpen] = useState(false); const [sourcesOpen, setSourcesOpen] = useState(false);
   const [expandedMessageIds, setExpandedMessageIds] = useState<Set<string>>(new Set());
+  const [focusedMessageId, setFocusedMessageId] = useState<string | null>(null);
   const messageStreamRef = useRef<HTMLDivElement>(null);
   const requestedSessionId = useRef<string | null>(focus?.sessionId ?? null);
   const requestedMessageId = useRef<string | null>(focus?.messageId ?? null);
@@ -134,6 +135,12 @@ export function SessionLibraryV2({ revision, indexing, workspaces, health, attac
   const [showContext, setShowContext] = useState(() => localStorage.getItem("mobius.session.context-open") !== "0");
   useEffect(() => { localStorage.setItem("mobius.session.context-open", showContext ? "1" : "0"); }, [showContext]);
   useEffect(() => { if (indexing && momeOpen) setMomeOpen(false); }, [indexing, momeOpen]);
+  useEffect(() => {
+    if (!toolRequest || (toolRequest === "memory" && indexing)) return;
+    if (toolRequest === "sources") setSourcesOpen(true);
+    else setMomeOpen(true);
+    onToolRequestConsumed?.();
+  }, [indexing, onToolRequestConsumed, toolRequest]);
   const [sessionMenu, setSessionMenu] = useState<{ x: number; y: number; hit: SessionSearchHit } | null>(null);
   useEffect(() => { localStorage.setItem("mobius.sessions.query", query); }, [query]);
   useEffect(() => { localStorage.setItem("mobius.sessions.provider", provider); }, [provider]);
@@ -148,6 +155,10 @@ export function SessionLibraryV2({ revision, indexing, workspaces, health, attac
   }, [selectedId]);
   // Never offer a previous session's message for copying/handoff during fetch.
   const messages = useMemo(() => loadedMessages.filter((message) => message.session_id === selectedId), [loadedMessages, selectedId]);
+  useEffect(() => {
+    if (!focusedMessageId || !messages.some((message) => message.id === focusedMessageId)) return;
+    setExpandedMessageIds((current) => current.has(focusedMessageId) ? current : new Set(current).add(focusedMessageId));
+  }, [focusedMessageId, messages]);
   const [storedFocus, setStoredFocus] = useState<SessionFocus | null>(() => {
     if (focus) return focus; try { const raw = sessionStorage.getItem("mobius.session.focus"); sessionStorage.removeItem("mobius.session.focus"); if (!raw) return null; const value = JSON.parse(raw) as Partial<SessionFocus>; return typeof value.workspaceId === "string" ? { workspaceId: value.workspaceId, checkoutId: typeof value.checkoutId === "string" ? value.checkoutId : null, sessionId: typeof value.sessionId === "string" ? value.sessionId : undefined, messageId: typeof value.messageId === "string" ? value.messageId : undefined } : null; } catch { return null; }
   });
@@ -171,7 +182,7 @@ export function SessionLibraryV2({ revision, indexing, workspaces, health, attac
     scopeInitialized.current = true;
     setWorkspaceId((current) => current ?? (explicitGlobalScope.current ? null : initialWorkspace()));
   }, [workspaces]);
-  useEffect(() => { if (!effectiveFocus) return; requestedSessionId.current = effectiveFocus.sessionId ?? null; requestedMessageId.current = effectiveFocus.messageId ?? null; setQuery(""); setProvider("all"); setWorkspaceId(effectiveFocus.workspaceId || null); setCheckoutId(effectiveFocus.checkoutId); setSelectedId(effectiveFocus.sessionId ?? null); setStoredFocus(null); onFocusConsumed(); }, [effectiveFocus, onFocusConsumed]);
+  useEffect(() => { if (!effectiveFocus) return; requestedSessionId.current = effectiveFocus.sessionId ?? null; requestedMessageId.current = effectiveFocus.messageId ?? null; setFocusedMessageId(effectiveFocus.messageId ?? null); setQuery(""); setProvider("all"); setWorkspaceId(effectiveFocus.workspaceId || null); setCheckoutId(effectiveFocus.checkoutId); setSelectedId(effectiveFocus.sessionId ?? null); setStoredFocus(null); onFocusConsumed(); }, [effectiveFocus, onFocusConsumed]);
   const search = useCallback(async () => { setLoading(true); try { const next = await desktopApi.querySessions({ query, workspace_id: workspaceId, checkout_id: checkoutId, providers: provider === "all" ? agents : [provider], limit: 200 }); const unique = dedupe(next.filter((hit) => agents.includes(hit.session.provider))); const requested = requestedSessionId.current; if (requested && !unique.some((hit) => hit.session.id === requested)) { const session = await desktopApi.getSessionById(requested); if (session) unique.unshift({ session, message: null, ranges: [], last_turn: null }); } setHits(unique); setSelectedId((current) => unique.some((item) => item.session.id === current) ? current : unique[0]?.session.id ?? null); } catch (reason) { onError(String(reason)); } finally { setLoading(false); } }, [checkoutId, onError, provider, query, revision, workspaceId]);
   useEffect(() => { const timer = window.setTimeout(() => void search(), 130); return () => window.clearTimeout(timer); }, [search]);
   const selected = hits.find((item) => item.session.id === selectedId) ?? null;
@@ -242,6 +253,7 @@ export function SessionLibraryV2({ revision, indexing, workspaces, health, attac
     // persistence effect and lose the Session the person was reading.
     localStorage.setItem("mobius.sessions.selected", sessionId);
     if (nextMessageId) localStorage.setItem("mobius.sessions.message", nextMessageId);
+    setFocusedMessageId(nextMessageId);
     setSelectedId(sessionId);
     setMessageId(nextMessageId);
   };
@@ -266,7 +278,7 @@ export function SessionLibraryV2({ revision, indexing, workspaces, health, attac
         <button className="icon-soft" aria-label={text.copyReference} title={text.copyReference} disabled={!selectedMessage} onClick={() => selectedMessage && void copy(referenceText(selected.session, selectedMessage))}><Link2 size={16}/></button>
       </div></header>
       <div className="message-toolbar"><span>{text.messages} <small>{messages.length}</small></span><div className="message-toolbar-actions"><button type="button" onClick={() => updateExpanded(new Set(visibleMessages.map((message) => message.id)))}>{locale === "zh-CN" ? "全部展开" : "Expand all"}</button><button type="button" onClick={() => updateExpanded(new Set())}>{locale === "zh-CN" ? "全部折叠" : "Collapse all"}</button></div></div>
-      <div ref={messageStreamRef} className="message-stream-v2" onScroll={(event) => { if (selectedId) localStorage.setItem(`mobius.sessions.scroll.${selectedId}`, String(event.currentTarget.scrollTop)); }}>{messages.length > visibleMessages.length ? <button className="earlier-messages" onClick={() => setMessageLimit((current) => current + 180)}>{text.loadEarlier}</button> : null}{visibleMessages.map((message) => { const matched = selected.message?.id === message.id; const expanded = expandedMessageIds.has(message.id); const excerpt = message.content.replace(/\s+/g, " ").trim().slice(0, 180); return <article key={message.id} className={`${message.id === messageId ? "selected" : ""} ${matched ? "has-search-match" : ""} ${message.role} ${expanded ? "expanded" : "collapsed"}`}><button type="button" className="message-fold-trigger" aria-expanded={expanded} onClick={() => { setMessageId(message.id); const next = new Set(expandedMessageIds); if (expanded) next.delete(message.id); else next.add(message.id); updateExpanded(next); }}><span className="message-fold-chevron">{expanded ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}</span><span className="message-fold-copy"><span className="message-fold-meta">{message.role} · {message.timestamp ? new Date(message.timestamp).toLocaleString(locale, { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : `m${message.ordinal}`}</span>{!expanded ? <span className="message-fold-excerpt">{excerpt || (locale === "zh-CN" ? "无正文" : "No text")}</span> : null}</span></button>{expanded ? <SessionMessageBody message={message} highlight={matched ? query : null}/> : null}</article>; })}</div>
+      <div ref={messageStreamRef} className="message-stream-v2" onScroll={(event) => { if (selectedId) localStorage.setItem(`mobius.sessions.scroll.${selectedId}`, String(event.currentTarget.scrollTop)); }}>{messages.length > visibleMessages.length ? <button className="earlier-messages" onClick={() => setMessageLimit((current) => current + 180)}>{text.loadEarlier}</button> : null}{visibleMessages.map((message) => { const matched = selected.message?.id === message.id || focusedMessageId === message.id; const expanded = expandedMessageIds.has(message.id); const excerpt = message.content.replace(/\s+/g, " ").trim().slice(0, 180); return <article key={message.id} className={`${message.id === messageId ? "selected" : ""} ${matched ? "has-search-match" : ""} ${message.role} ${expanded ? "expanded" : "collapsed"}`}><button type="button" className="message-fold-trigger" aria-expanded={expanded} onClick={() => { setFocusedMessageId(null); setMessageId(message.id); const next = new Set(expandedMessageIds); if (expanded) next.delete(message.id); else next.add(message.id); updateExpanded(next); }}><span className="message-fold-chevron">{expanded ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}</span><span className="message-fold-copy"><span className="message-fold-meta">{message.role} · {message.timestamp ? new Date(message.timestamp).toLocaleString(locale, { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : `m${message.ordinal}`}</span>{!expanded ? <span className="message-fold-excerpt">{excerpt || (locale === "zh-CN" ? "无正文" : "No text")}</span> : null}</span></button>{expanded ? <SessionMessageBody message={message} highlight={matched ? query : null}/> : null}</article>; })}</div>
     </> : <div className="session-empty reader"><PanelRight size={28}/><strong>{text.empty}</strong></div>}</main>
     <aside className="session-context-v2" aria-label={locale === "zh-CN" ? "会话上下文" : "Session context"}>{selected ? <><header><strong>{locale === "zh-CN" ? "上下文" : "Context"}</strong></header><div className="reader-explanation"><ShieldCheck size={14}/><span>{referenceHint}</span></div><dl><dt>Harness</dt><dd>{name(selected.session.provider)}</dd><dt>{locale === "zh-CN" ? "工作区" : "Workspace"}</dt><dd>{activeWorkspace?.workspace.display_name ?? text.unassigned}</dd><dt>Checkout</dt><dd>{selected.session.checkout_id ?? text.unassigned}</dd><dt>{text.source}</dt><dd>{selected.session.provider_session_id}</dd><dt>{locale === "zh-CN" ? "原始记录" : "Transcript"}</dt><dd><code>{selected.session.source_path}</code><small>{locale === "zh-CN" ? "只读" : "read-only"}</small></dd></dl><SessionMemoryPath lineage={lineage} currentSessionId={selected.session.id} loading={lineageLoading} locale={locale}/></> : null}</aside>
     {sessionMenu ? <ContextMenu x={sessionMenu.x} y={sessionMenu.y} onClose={() => setSessionMenu(null)} items={[

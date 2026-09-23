@@ -97,6 +97,8 @@ function words(locale: Locale) {
     restore: zh ? "恢复此版本" : "Restore version",
     restored: zh ? "技能版本已恢复" : "Skill version restored",
     market: zh ? "技能市场" : "Skill market",
+    marketUnavailable: zh ? "技能市场暂时无法连接。已安装技能仍可离线管理。" : "The skill market is unavailable right now. Installed skills remain manageable offline.",
+    retry: zh ? "重试" : "Retry",
     localCatalogue: zh ? "本机已发现目录" : "Discovered local catalogue",
     installedTab: zh ? "已安装" : "Installed",
   };
@@ -167,12 +169,16 @@ export function SkillsLibraryV2({
     () => workspaces.flatMap((workspace) => workspace.checkouts),
     [workspaces],
   );
+  const checkoutLabels = useMemo(() => new Map(workspaces.flatMap((workspace) =>
+    workspace.checkouts.map((checkout) => [checkout.id, `${workspace.workspace.display_name} · ${checkout.branch ?? checkout.kind} · ${checkout.canonical_path}`] as const),
+  )), [workspaces]);
   const [scope, setScope] = useState<"global" | "project">("global");
   const [catalogueMode, setCatalogueMode] = useState<"market" | "installed">("market");
   const [checkoutId, setCheckoutId] = useState(allCheckouts[0]?.id ?? "");
   const [installTargetId, setInstallTargetId] = useState("global");
   const [items, setItems] = useState<SkillInfo[]>([]);
   const [marketplaceItems, setMarketplaceItems] = useState<MarketplaceSkill[]>([]);
+  const [marketError, setMarketError] = useState<string | null>(null);
   const [marketInstalling, setMarketInstalling] = useState<string | null>(null);
   const [managed, setManaged] = useState<ManagedSkillInstall[]>([]);
   const [query, setQuery] = useState("");
@@ -206,6 +212,7 @@ export function SkillsLibraryV2({
       if (catalogueMode === "market") {
         const marketplace = await fetchMarketplaceSkills(query);
         if (requestId !== reloadRequest.current) return;
+        setMarketError(null);
         setMarketplaceItems(marketplace);
         setItems([]);
       } else {
@@ -215,11 +222,15 @@ export function SkillsLibraryV2({
             ? await desktopApi.listCheckoutSkills(checkout.id)
             : [];
         if (requestId !== reloadRequest.current) return;
+        setMarketError(null);
         setItems(skills);
         setMarketplaceItems([]);
       }
     } catch (reason) {
-      if (requestId === reloadRequest.current) onError(String(reason));
+      if (requestId === reloadRequest.current) {
+        if (catalogueMode === "market") { setMarketplaceItems([]); setMarketError(String(reason)); }
+        onError(String(reason));
+      }
     } finally {
       if (requestId === reloadRequest.current) setLoading(false);
     }
@@ -375,7 +386,7 @@ export function SkillsLibraryV2({
               >
                 {allCheckouts.map((candidate) => (
                   <option key={candidate.id} value={candidate.id}>
-                    {candidate.branch ?? candidate.canonical_path}
+                    {checkoutLabels.get(candidate.id) ?? candidate.canonical_path}
                   </option>
                 ))}
               </select>
@@ -403,7 +414,7 @@ export function SkillsLibraryV2({
             {allCheckouts.map((candidate) => (
               <option key={candidate.id} value={`project:${candidate.id}`}>
                 {text.projectTarget}:{" "}
-                {candidate.branch ?? candidate.canonical_path}
+                {checkoutLabels.get(candidate.id) ?? candidate.canonical_path}
               </option>
             ))}
           </select>
@@ -416,6 +427,14 @@ export function SkillsLibraryV2({
           <div className="skills-loading">
             <LoaderCircle className="spin" size={19} />
             {text.loading}
+          </div>
+        ) : catalogueMode === "market" && marketError ? (
+          <div className="skills-empty market-error-v2" role="alert">
+            <Braces size={28} />
+            <strong>{text.marketUnavailable}</strong>
+            <small>{marketError}</small>
+            <button className="soft-button" type="button" onClick={() => void reload()}>{text.retry}</button>
+            <a className="soft-button" href="https://agentskill.sh/" target="_blank" rel="noreferrer">{text.openMarket}</a>
           </div>
         ) : catalogueMode === "market" && marketplaceItems.length ? (
           marketplaceItems.map((skill) => (

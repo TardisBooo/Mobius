@@ -77,10 +77,13 @@ impl MyDesk {
         // identity derived by a previous release. Preserve that row and its
         // relationships instead of violating the canonical-path uniqueness
         // constraint when the current identity algorithm inspects it again.
-        if let Some(existing_id) = self
+        if let Some((existing_id, existing_name)) = self
             .database
-            .workspace_id_by_canonical_path(&inspection.workspace.canonical_path)?
+            .workspace_identity_by_canonical_path(&inspection.workspace.canonical_path)?
         {
+            if display_name.is_none() {
+                inspection.workspace.display_name = existing_name;
+            }
             inspection.workspace.id = existing_id.clone();
             for checkout in &mut inspection.checkouts {
                 checkout.workspace_id = existing_id.clone();
@@ -757,6 +760,27 @@ mod tests {
                 .all(|checkout| checkout.workspace_id == "workspace:legacy-identity")
         );
         assert_eq!(desk.database.list_workspaces_v2()?.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn background_registration_preserves_an_explicit_project_name() -> anyhow::Result<()> {
+        let temporary = tempfile::tempdir()?;
+        let workspace = temporary.path().join("workspace");
+        fs::create_dir_all(&workspace)?;
+        let paths = WorkspacePaths {
+            workspace_root: temporary.path().join("workspace-root"),
+            data_root: temporary.path().join("data"),
+            artifacts_root: temporary.path().join("artifacts"),
+            catalog_root: temporary.path().join("catalog"),
+        };
+        let desk = MyDesk::open(paths)?;
+        let first = desk.register_workspace(&workspace, Some("My named project"))?;
+        let rescanned = desk.register_workspace(&workspace, None)?;
+        assert_eq!(rescanned.workspace.id, first.workspace.id);
+        assert_eq!(rescanned.workspace.display_name, "My named project");
+        let renamed = desk.register_workspace(&workspace, Some("Explicit rename"))?;
+        assert_eq!(renamed.workspace.display_name, "Explicit rename");
         Ok(())
     }
 }

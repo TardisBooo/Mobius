@@ -17,7 +17,7 @@ export function SessionLineagePanel({ graph, locale, onOpenSession, workspace, o
   const [selected, setSelected] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState("");
-  const [mode, setMode] = useState<"graph" | "list">("graph");
+  const [mode, setMode] = useState<"graph" | "list">(() => localStorage.getItem("mobius.lineage.mode") === "list" ? "list" : "graph");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [direction, setDirection] = useState<"horizontal" | "vertical">(() => localStorage.getItem("mobius.lineage.direction") === "vertical" ? "vertical" : "horizontal");
   const [compact, setCompact] = useState(() => localStorage.getItem("mobius.lineage.compact") === "1");
@@ -36,6 +36,9 @@ export function SessionLineagePanel({ graph, locale, onOpenSession, workspace, o
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [aliasDraft, setAliasDraft] = useState("");
+  useEffect(() => {
+    localStorage.setItem("mobius.lineage.mode", mode);
+  }, [mode]);
   useEffect(() => {
     localStorage.setItem("mobius.lineage.direction", direction);
     localStorage.setItem("mobius.lineage.compact", compact ? "1" : "0");

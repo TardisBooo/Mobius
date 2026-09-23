@@ -204,6 +204,19 @@ impl crate::Database {
         Ok(serde_json::json!({"handoff_id":id,"operation":operation,"target_session_ids":targets}))
     }
 
+    /// A PTY belongs to the desktop process. After restart an unbound launch
+    /// can no longer be claimed as running; a later native transcript may
+    /// still bind the edge through its exact handoff marker.
+    pub fn mark_interrupted_handoffs_unknown(&self) -> Result<usize> {
+        let changed = self.connection()?.execute(
+            "UPDATE handoff_operations SET state = 'unknown', detail = 'Möbius restarted before target identity was confirmed', updated_at = ?1
+             WHERE state IN ('starting', 'awaiting_identity')
+               AND NOT EXISTS (SELECT 1 FROM relay_edges WHERE relay_edges.handoff_id = handoff_operations.handoff_id AND relay_edges.target_session_id IS NOT NULL)",
+            [chrono::Utc::now().to_rfc3339()],
+        )?;
+        Ok(changed)
+    }
+
     /// No workspace filter: worktrees and presentation limits are not ancestry.
     pub fn incoming_lineage_edges(&self, session_id: &str) -> Result<Vec<LineageEdge>> {
         let connection = self.connection()?;
@@ -759,6 +772,30 @@ mod tests {
         assert!(desk.read_session_source_range("a", u64::MAX, 10).is_err());
         save_approved_session_sources(&desk.paths, vec![]).unwrap();
         assert!(desk.read_session_source_range("a", 0, 7).is_err());
+    }
+
+    #[test]
+    fn restart_marks_only_unbound_launches_unknown() {
+        let (_root, desk) = setup();
+        fs::create_dir_all(&desk.paths.workspace_root).unwrap();
+        let workspace = desk.register_workspace(&desk.paths.workspace_root, None).unwrap();
+        let package = desk.database.seal_handoff(&crate::HandoffDraft {
+            source_session_id: "a".into(),
+            target_provider: "pi".into(),
+            target_checkout_id: workspace.checkouts[0].id.clone(),
+            mode: crate::RelayMode::TakeOver,
+            message_ids: vec![],
+            payload: serde_json::json!({}),
+            token_estimate: 0,
+        }).unwrap();
+        desk.database.record_relay_edge(&package, &workspace.workspace.id).unwrap();
+        desk.database.set_handoff_state(&package.id, "awaiting_identity", None).unwrap();
+        assert_eq!(desk.database.mark_interrupted_handoffs_unknown().unwrap(), 1);
+        assert_eq!(desk.database.handoff_status(&package.id).unwrap()["operation"][0], "unknown");
+        assert_eq!(desk.database.mark_interrupted_handoffs_unknown().unwrap(), 0);
+        desk.database.set_handoff_state(&package.id, "bound", None).unwrap();
+        assert_eq!(desk.database.mark_interrupted_handoffs_unknown().unwrap(), 0);
+        assert_eq!(desk.database.handoff_status(&package.id).unwrap()["operation"][0], "bound");
     }
 
     #[test]

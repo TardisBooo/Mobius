@@ -50,6 +50,10 @@ struct DesktopState {
     /// guessing from a timer or relying only on an event it could miss.
     refresh_pending: Arc<Mutex<usize>>,
     terminals: Mutex<HashMap<String, TerminalProcess>>,
+    /// A native launch is only a pending handoff until a source transcript
+    /// proves the target Session ID. Closing its PTY must not leave a ghost
+    /// "awaiting identity" operation indefinitely.
+    handoff_terminals: Mutex<HashMap<String, String>>,
     library_watcher: Mutex<Option<LibraryWatcher>>,
     /// Explorer snapshots walk the disk. Those stats/opens are not external
     /// edits; the gate keeps them from bouncing into the renderer the way VS
@@ -2161,11 +2165,14 @@ fn start_agent_handoff(
     })();
     if let Some(id) = operation_id {
         match &launched {
-            Ok(_) => state
-                .desk
-                .database
-                .set_handoff_state(&id, "awaiting_identity", None)
-                .map_err(command_error)?,
+            Ok(info) => {
+                state.handoff_terminals.lock().insert(info.id.clone(), id.clone());
+                state
+                    .desk
+                    .database
+                    .set_handoff_state(&id, "awaiting_identity", None)
+                    .map_err(command_error)?;
+            }
             Err(error) => state
                 .desk
                 .database
@@ -2685,7 +2692,16 @@ fn terminal_close(state: State<'_, DesktopState>, id: String) -> CommandResult<(
         .lock()
         .remove(&id)
         .ok_or_else(|| "terminal not found".to_string())?;
-    terminal.child.kill().map_err(command_error)
+    let stopped = terminal.child.kill();
+    if let Some(handoff_id) = state.handoff_terminals.lock().remove(&id) {
+        // set_handoff_state refuses to overwrite a confirmed "bound" edge.
+        state.desk.database.set_handoff_state(
+            &handoff_id,
+            "cancelled",
+            Some("The handoff terminal was closed before target identity was confirmed"),
+        ).map_err(command_error)?;
+    }
+    stopped.map_err(command_error)
 }
 
 fn ps_quote(value: &str) -> String {
@@ -2701,6 +2717,9 @@ fn main() {
         eprintln!("Möbius could not initialize its local vault: {error}");
         std::process::exit(1);
     });
+    if let Err(error) = desk.database.mark_interrupted_handoffs_unknown() {
+        tracing::warn!("could not reconcile interrupted handoffs: {error}");
+    }
     // Perform only finite conventional-root discovery before the window is
     // created. This records available sources for first-run UI without reading
     // transcripts or delaying first paint with a full index.
@@ -2718,6 +2737,7 @@ fn main() {
             refresh_gate: Arc::new(tokio::sync::Mutex::new(())),
             refresh_pending: Arc::new(Mutex::new(0)),
             terminals: Mutex::new(HashMap::new()),
+            handoff_terminals: Mutex::new(HashMap::new()),
             library_watcher: Mutex::new(None),
             library_scan_gate: Arc::new(LibraryScanGate::new()),
         })

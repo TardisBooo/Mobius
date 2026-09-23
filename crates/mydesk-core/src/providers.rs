@@ -164,7 +164,11 @@ impl SessionAdapterRegistry {
                 .extension()
                 .and_then(|value| value.to_str())
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("jsonl")),
-            AgentKind::Claude | AgentKind::Pi | AgentKind::Omp => true,
+            AgentKind::Claude => path
+                .extension()
+                .and_then(|value| value.to_str())
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("jsonl")),
+            AgentKind::Pi | AgentKind::Omp => true,
             AgentKind::Grok => path
                 .file_name()
                 .is_some_and(|name| name.eq_ignore_ascii_case("chat_history.jsonl")),
@@ -450,7 +454,19 @@ impl<'a> ProviderIndexer<'a> {
             .database
             .session_source_unchanged(&fingerprint.source_path, &source_version)?;
         if source_is_current {
-            return Ok(IndexOutcome::Unchanged);
+            let existing = match self.database.session_id_for_source(&fingerprint.source_path)? {
+                Some(id) => self.database.get_session(&id)?,
+                None => None,
+            };
+            let needs_repair = existing.is_some_and(|session| {
+                    session.title.starts_with("[MOBIUS_HANDOFF_ID:")
+                        || (provider == AgentKind::Claude
+                            && is_claude_subagent_path(path)
+                            && !session.metadata["is_subagent"].as_bool().unwrap_or(false))
+                });
+            if !needs_repair {
+                return Ok(IndexOutcome::Unchanged);
+            }
         }
         if provider == AgentKind::Opencode {
             anyhow::bail!("OpenCode sessions are indexed from opencode.db, not as JSONL files");
@@ -597,7 +613,15 @@ impl<'a> ProviderIndexer<'a> {
                 .ok()
                 .flatten()
         });
-        let title = parsed
+        let mobius_handoff_id = parsed
+            .messages
+            .iter()
+            .filter(|message| message.role == MessageRole::User)
+            .find_map(|message| extract_handoff_marker(&message.content));
+        let title = mobius_handoff_id
+            .as_deref()
+            .map(|id| self.handoff_title(id, &provider, &parsed.provider_session_id))
+            .or_else(|| parsed
             .native_title
             .as_deref()
             .and_then(useful_native_title)
@@ -607,7 +631,7 @@ impl<'a> ProviderIndexer<'a> {
                     .iter()
                     .filter(|message| message.role == MessageRole::User)
                     .find_map(|message| meaningful_user_title(&message.content))
-            })
+            }))
             .unwrap_or_else(|| format!("{} · {}", provider, parsed.provider_session_id.chars().take(8).collect::<String>()));
         let session_id = self
             .database
@@ -625,16 +649,6 @@ impl<'a> ProviderIndexer<'a> {
             capabilities.push(SessionCapability::NativeResume);
         }
         let native_resume = capabilities.contains(&SessionCapability::NativeResume);
-        let handoff_marker = Regex::new(r"^\[MOBIUS_HANDOFF_ID:([^\]\r\n]+)\]")?;
-        let mobius_handoff_id = parsed
-            .messages
-            .iter()
-            .filter(|message| message.role == MessageRole::User)
-            .find_map(|message| {
-                handoff_marker
-                    .captures(&message.content)
-                    .map(|capture| capture[1].to_string())
-            });
         let session = Session {
             id: session_id.clone(),
             provider: provider.clone(),
@@ -730,6 +744,26 @@ impl<'a> ProviderIndexer<'a> {
         self.database
             .replace_session_messages_without_search(&session.id, &messages)?;
         Ok(IndexOutcome::Indexed)
+    }
+
+    fn handoff_title(&self, handoff_id: &str, provider: &AgentKind, native_id: &str) -> String {
+        let mut current = handoff_id.to_string();
+        for _ in 0..8 {
+            let Some(package) = self.database.get_handoff_package(&current).ok().flatten() else {
+                break;
+            };
+            let Some(source) = self.database.get_session(&package.source_session_id).ok().flatten() else {
+                break;
+            };
+            if let Some(parent) = source.metadata["mobius_handoff_id"].as_str() {
+                current = parent.to_string();
+                continue;
+            }
+            if !source.title.starts_with("[MOBIUS_HANDOFF_ID:") {
+                return format!("↪ {}", compact_title(&source.title));
+            }
+        }
+        format!("↪ {} · {}", provider, native_id.chars().take(8).collect::<String>())
     }
 }
 
@@ -935,6 +969,15 @@ fn parse_session(path: &Path, provider: AgentKind) -> Result<ParsedSession> {
     }
     if provider == AgentKind::Grok {
         absorb_grok_companion_metadata(path, &mut parsed);
+    }
+    if provider == AgentKind::Claude {
+        if is_claude_subagent_path(path) {
+            // Claude subagent files carry the parent's `sessionId` in every
+            // record. It is not the subagent's resumable native identity.
+            parsed.is_subagent = true;
+            parsed.parent_session_id = claude_subagent_parent(path);
+            parsed.native_session_id = None;
+        }
     }
     if parsed.provider_session_id == "unknown" {
         parsed.provider_session_id = stable_fragment(&path.display().to_string());
@@ -1156,6 +1199,19 @@ fn stable_provider_session_id(path: &Path, provider: &AgentKind) -> String {
     stem.to_string()
 }
 
+fn is_claude_subagent_path(path: &Path) -> bool {
+    path.parent()
+        .and_then(Path::file_name)
+        .is_some_and(|name| name.eq_ignore_ascii_case("subagents"))
+        && path.file_stem().is_some_and(|name| name.to_string_lossy().starts_with("agent-"))
+}
+
+fn claude_subagent_parent(path: &Path) -> Option<String> {
+    let directory = path.parent()?;
+    let parent = directory.parent()?.file_name()?.to_string_lossy();
+    uuid::Uuid::parse_str(&parent).ok().map(|id| id.to_string())
+}
+
 fn uuid_fragment(value: &str) -> Option<&str> {
     value
         .as_bytes()
@@ -1203,6 +1259,16 @@ fn meaningful_user_title(value: &str) -> Option<String> {
     }
     let title = compact_title(remainder);
     (!title.is_empty()).then_some(title)
+}
+
+fn extract_handoff_marker(value: &str) -> Option<String> {
+    // Grok Build wraps the actual prompt in <user_query>. Do not interpret a
+    // marker quoted later in a conversation or a tool result as a new relay.
+    static MARKER: OnceLock<Regex> = OnceLock::new();
+    MARKER
+        .get_or_init(|| Regex::new(r"^\s*(?:<user_query>\s*)?\[MOBIUS_HANDOFF_ID:([^\]\r\n]+)\]").expect("valid handoff marker"))
+        .captures(value)
+        .map(|capture| capture[1].to_string())
 }
 
 fn extract_message(value: &Value, line: usize, _provider: &AgentKind) -> Option<ParsedMessage> {
@@ -1556,6 +1622,34 @@ mod tests {
     }
 
     #[test]
+    fn claude_subagent_does_not_claim_its_parent_native_session_id() {
+        let temp = tempfile::tempdir().unwrap();
+        let parent_id = "97fab350-3d52-4752-be74-fc3c73105b33";
+        let project = temp.path().join("projects/audit");
+        let parent = project.join(format!("{parent_id}.jsonl"));
+        let child = project.join(parent_id).join("subagents/agent-add6049b72375541f.jsonl");
+        fs::create_dir_all(child.parent().unwrap()).unwrap();
+        fs::write(&parent, format!("{}\n", json!({"type":"user","sessionId":parent_id,"message":{"role":"user","content":"Parent task"}}))).unwrap();
+        fs::write(&child, format!("{}\n", json!({"type":"user","sessionId":parent_id,"agentId":"add6049b72375541f","isSidechain":true,"message":{"role":"user","content":"Child exploration"}}))).unwrap();
+        let main = parse_session(&parent, AgentKind::Claude).unwrap();
+        let subagent = parse_session(&child, AgentKind::Claude).unwrap();
+        assert_eq!(main.native_session_id.as_deref(), Some(parent_id));
+        assert!(!main.is_subagent);
+        assert_eq!(subagent.native_session_id, None);
+        assert_eq!(subagent.provider_session_id, "agent-add6049b72375541f");
+        assert_eq!(subagent.parent_session_id.as_deref(), Some(parent_id));
+        assert!(subagent.is_subagent);
+    }
+
+    #[test]
+    fn grok_user_query_wrapper_preserves_exact_handoff_marker() {
+        let marker = "[MOBIUS_HANDOFF_ID:handoff:1234] MOBIUS HANDOFF";
+        assert_eq!(extract_handoff_marker(marker).as_deref(), Some("handoff:1234"));
+        assert_eq!(extract_handoff_marker(&format!("<user_query>\n{marker}\n</user_query>")).as_deref(), Some("handoff:1234"));
+        assert_eq!(extract_handoff_marker(&format!("Earlier log: {marker}")), None);
+    }
+
+    #[test]
     fn codex_reindex_corrects_identity_preserves_row_and_marks_missing_source() {
         let temp = tempfile::tempdir().unwrap();
         let paths = test_paths(temp.path());
@@ -1838,6 +1932,8 @@ mod tests {
 
     #[test]
     fn title_skips_harness_wrappers_and_omp_uses_native_title() {
+        assert!(SessionAdapterRegistry::is_candidate(&AgentKind::Claude, Path::new("session.jsonl")));
+        assert!(!SessionAdapterRegistry::is_candidate(&AgentKind::Claude, Path::new("agent-a8a7.meta.json")));
         assert_eq!(useful_native_title("01a0ccef-7f0e-73f0-ae2e-2cbcda9e080d"), None);
         assert_eq!(
             meaningful_user_title(
