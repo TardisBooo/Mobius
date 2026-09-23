@@ -192,6 +192,7 @@ fn call_tool(desk: &MyDesk, approvals: &McpApprovalStore, params: &Value) -> Res
                 checkout_id: optional_string(&args, "checkout_id"),
                 providers,
                 limit: bounded_usize(args.get("limit"), 50, 100),
+                roots_only: false,
             })?;
             Ok(tool_result(json!(results)))
         }
@@ -241,6 +242,7 @@ fn call_tool(desk: &MyDesk, approvals: &McpApprovalStore, params: &Value) -> Res
                     checkout_id: attempt.checkout_id,
                     providers,
                     limit: bounded_usize(args.get("limit"), 12, 100),
+                    roots_only: false,
                 })?,
             )?))
         }

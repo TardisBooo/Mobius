@@ -175,6 +175,22 @@ impl Database {
             .context("listing V2 workspaces")
     }
 
+    /// Conversation activity, independent of catalogue refresh or workspace inspection time.
+    pub fn workspace_session_activity(&self) -> Result<HashMap<String, String>> {
+        let connection = self.connection()?;
+        let mut statement = connection.prepare(
+            r#"SELECT c.workspace_id, strftime('%Y-%m-%dT%H:%M:%fZ', MAX(julianday(s.updated_at)))
+               FROM sessions s JOIN checkouts c ON c.id = s.checkout_id
+               WHERE s.provider <> 'apodex' AND s.updated_at <> ''
+                 AND COALESCE(json_extract(s.metadata_json, '$.is_subagent'), 0) = 0
+                 AND json_extract(s.metadata_json, '$.parent_session_id') IS NULL
+               GROUP BY c.workspace_id"#,
+        )?;
+        statement.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+            .collect::<rusqlite::Result<HashMap<_, _>>>()
+            .context("listing workspace conversation activity")
+    }
+
     pub fn set_workspace_status(&self, id: &str, status: WorkspaceStatus) -> Result<bool> {
         let changed = self.connection()?.execute(
             "UPDATE workspaces SET user_status = ?2, updated_at = ?3 WHERE id = ?1",
@@ -526,7 +542,7 @@ impl Database {
             r#"SELECT id, provider, provider_session_id, checkout_id, title, state,
                       capabilities_json, source_path, source_available, started_at, updated_at,
                       metadata_json FROM sessions WHERE provider = ?1 AND provider_session_id = ?2 AND source_available = 1
-                      ORDER BY updated_at DESC, source_path ASC LIMIT 2"#,
+                      ORDER BY julianday(updated_at) DESC, source_path ASC LIMIT 2"#,
         )?;
         let matches = statement
             .query_map(params![provider, provider_session_id], session_from_row)?
@@ -613,7 +629,7 @@ impl Database {
         let mut statement = connection.prepare(
             r#"SELECT id, provider, provider_session_id, checkout_id, title, state,
                       capabilities_json, source_path, source_available, started_at, updated_at,
-                      metadata_json FROM sessions ORDER BY updated_at DESC"#,
+                      metadata_json FROM sessions ORDER BY julianday(updated_at) DESC"#,
         )?;
         statement
             .query_map([], session_from_row)?
@@ -673,7 +689,7 @@ impl Database {
         let sql = format!(
             r#"SELECT s.id, s.provider, s.provider_session_id, s.checkout_id, s.title, s.state,
                       s.capabilities_json, s.source_path, s.source_available, s.started_at, s.updated_at,
-                      s.metadata_json FROM sessions s {scope} ORDER BY s.updated_at DESC LIMIT ?"#,
+                      s.metadata_json FROM sessions s {scope} ORDER BY julianday(s.updated_at) DESC, s.id ASC LIMIT ?"#,
         );
         parameters.push(SqlValue::Integer(limit as i64));
         let mut statement = connection.prepare(&sql)?;
@@ -781,7 +797,7 @@ impl Database {
         let sql = format!(
             r#"SELECT s.id, s.provider, s.provider_session_id, s.checkout_id, s.title, s.state,
                       s.capabilities_json, s.source_path, s.source_available, s.started_at, s.updated_at,
-                      s.metadata_json FROM sessions s {where_clause} ORDER BY s.updated_at DESC LIMIT ?"#,
+                      s.metadata_json FROM sessions s {where_clause} ORDER BY julianday(s.updated_at) DESC, s.id ASC LIMIT ?"#,
         );
         let connection = self.connection()?;
         let mut statement = connection.prepare(&sql)?;
@@ -1434,6 +1450,10 @@ fn session_scope_sql(query: &SessionQuery, session_alias: &str) -> (String, Vec<
     // Keep retired catalogue rows recoverable, but exclude them from active UI/search.
     let mut clauses = vec![format!("{session_alias}.provider <> 'apodex'")];
     let mut parameters = Vec::new();
+    if query.roots_only {
+        clauses.push(format!("COALESCE(json_extract({session_alias}.metadata_json, '$.is_subagent'), 0) = 0"));
+        clauses.push(format!("json_extract({session_alias}.metadata_json, '$.parent_session_id') IS NULL"));
+    }
     if let Some(checkout_id) = query
         .checkout_id
         .as_deref()
@@ -1995,6 +2015,43 @@ mod tests {
             .expect("search checkout");
         assert_eq!(scoped_search.len(), 1);
         assert_eq!(scoped_search[0].session.id, target.id);
+
+        let child = Session {
+            id: "session:target:child".into(),
+            provider_session_id: "target-child".into(),
+            source_path: "target-child.jsonl".into(),
+            updated_at: "2027-01-01T00:00:00Z".into(),
+            metadata: serde_json::json!({"is_subagent": true, "parent_session_id": target.provider_session_id}),
+            ..target.clone()
+        };
+        database.upsert_session(&child).expect("child session");
+        let roots = database.query_sessions(&SessionQuery {
+            workspace_id: Some("workspace:target".into()),
+            roots_only: true,
+            limit: 10,
+            ..SessionQuery::default()
+        }).expect("main sessions");
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots[0].session.id, target.id);
+        assert_eq!(database.workspace_session_activity().expect("activity").get("workspace:target").map(String::as_str), Some("2020-01-01T00:00:00.000Z"));
+        let offset_root = Session {
+            id: "session:target:older-offset".into(),
+            provider_session_id: "target-older-offset".into(),
+            source_path: "target-older-offset.jsonl".into(),
+            // Lexically later than target, but one hour earlier in UTC.
+            updated_at: "2020-01-01T01:00:00+02:00".into(),
+            ..target.clone()
+        };
+        database.upsert_session(&offset_root).expect("offset session");
+        let roots = database.query_sessions(&SessionQuery {
+            workspace_id: Some("workspace:target".into()),
+            roots_only: true,
+            limit: 10,
+            ..SessionQuery::default()
+        }).expect("timestamp-sorted sessions");
+        assert_eq!(roots.len(), 2);
+        assert_eq!(roots[0].session.id, target.id);
+        assert_eq!(database.workspace_session_activity().expect("activity").get("workspace:target").map(String::as_str), Some("2020-01-01T00:00:00.000Z"));
     }
 
     #[test]

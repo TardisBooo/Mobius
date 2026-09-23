@@ -743,6 +743,7 @@ mod tests {
         let alias_hits = desk.database.query_sessions(&crate::SessionQuery {
             query: "User chosen name".into(), workspace_id: None, checkout_id: None,
             providers: vec![], limit: 20,
+            roots_only: false,
         }).unwrap();
         assert!(alias_hits.iter().any(|hit| hit.session.id == "a"));
         assert_eq!(

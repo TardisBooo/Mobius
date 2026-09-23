@@ -319,6 +319,7 @@ impl From<DesktopMcpApprovalRequest> for McpApprovalRequest {
 struct WorkspaceView {
     workspace: Workspace,
     checkouts: Vec<mydesk_core::Checkout>,
+    latest_session_at: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -413,6 +414,7 @@ fn list_agents(state: State<'_, DesktopState>) -> CommandResult<Vec<AgentSummary
 
 #[tauri::command]
 fn list_workspaces_v2(state: State<'_, DesktopState>) -> CommandResult<Vec<WorkspaceView>> {
+    let activity = state.desk.database.workspace_session_activity().map_err(command_error)?;
     state
         .desk
         .database
@@ -426,6 +428,7 @@ fn list_workspaces_v2(state: State<'_, DesktopState>) -> CommandResult<Vec<Works
                 .list_checkouts(&workspace.id)
                 .map_err(command_error)?;
             Ok(WorkspaceView {
+                latest_session_at: activity.get(&workspace.id).cloned(),
                 workspace,
                 checkouts,
             })

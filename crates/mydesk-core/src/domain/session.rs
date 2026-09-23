@@ -111,6 +111,8 @@ pub struct SessionQuery {
     pub checkout_id: Option<String>,
     pub providers: Vec<AgentKind>,
     pub limit: usize,
+    #[serde(default)]
+    pub roots_only: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]

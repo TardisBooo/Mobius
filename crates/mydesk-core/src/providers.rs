@@ -4,6 +4,7 @@ use crate::{
     sources::{SessionSourceRoot, load_approved_session_sources, source_fingerprint},
 };
 use anyhow::Result;
+use chrono::DateTime;
 #[cfg(test)]
 use chrono::Utc;
 use regex::Regex;
@@ -105,31 +106,31 @@ impl SessionAdapterRegistry {
         vec![
             SessionAdapter {
                 provider: AgentKind::Codex,
-                version: "codex-json-v4-clean-title",
+                version: "codex-json-v6-prompt-title",
                 coverage: "partial",
                 native_resume: true,
             },
             SessionAdapter {
                 provider: AgentKind::Claude,
-                version: "claude-jsonl-v3-clean-title",
+                version: "claude-jsonl-v4-prompt-title",
                 coverage: "partial",
                 native_resume: true,
             },
             SessionAdapter {
                 provider: AgentKind::Pi,
-                version: "pi-json-v3-clean-title",
+                version: "pi-json-v4-prompt-title",
                 coverage: "partial",
                 native_resume: true,
             },
             SessionAdapter {
                 provider: AgentKind::Grok,
-                version: "grok-history-v6",
+                version: "grok-history-v8-prompt-title",
                 coverage: "partial",
                 native_resume: true,
             },
             SessionAdapter {
                 provider: AgentKind::Omp,
-                version: "omp-jsonl-v1",
+                version: "omp-jsonl-v2-prompt-title",
                 coverage: "partial",
                 native_resume: true,
             },
@@ -607,7 +608,7 @@ impl<'a> ProviderIndexer<'a> {
                     .filter(|message| message.role == MessageRole::User)
                     .find_map(|message| meaningful_user_title(&message.content))
             })
-            .unwrap_or_else(|| format!("{} · {}", provider, parsed.provider_session_id));
+            .unwrap_or_else(|| format!("{} · {}", provider, parsed.provider_session_id.chars().take(8).collect::<String>()));
         let session_id = self
             .database
             .session_id_for_source(&fingerprint.source_path)?
@@ -691,6 +692,7 @@ impl<'a> ProviderIndexer<'a> {
                 "adapter_coverage": adapter.coverage,
                 "native_session_id": parsed.native_session_id,
                 "native_resume": native_resume,
+                "is_subagent": parsed.is_subagent,
                 "parent_session_id": parsed.parent_session_id,
                 "native_resume_reason": if parsed.is_subagent {
                     Some("Child agent history: inspect this session; resume the parent harness session to continue the tree.")
@@ -931,7 +933,7 @@ fn parse_session(path: &Path, provider: AgentKind) -> Result<ParsedSession> {
         // Headerless legacy content remains inspectable, never resumable.
         parsed.native_session_id = codex_identity.map(|identity| identity.id);
     }
-    if provider == AgentKind::Grok && (parsed.cwd.is_none() || parsed.native_session_id.is_none()) {
+    if provider == AgentKind::Grok {
         absorb_grok_companion_metadata(path, &mut parsed);
     }
     if parsed.provider_session_id == "unknown" {
@@ -1039,8 +1041,15 @@ fn absorb_metadata(value: &Value, parsed: &mut ParsedSession) {
     if parsed.started_at.is_none() {
         parsed.started_at = timestamp.map(str::to_string);
     }
-    if timestamp.is_some() {
-        parsed.updated_at = timestamp.map(str::to_string);
+    if let Some(timestamp) = timestamp {
+        update_latest_timestamp(&mut parsed.updated_at, timestamp);
+    }
+}
+
+fn update_latest_timestamp(current: &mut Option<String>, candidate: &str) {
+    let Ok(candidate_time) = DateTime::parse_from_rfc3339(candidate) else { return; };
+    if current.as_deref().and_then(|value| DateTime::parse_from_rfc3339(value).ok()).is_none_or(|time| candidate_time > time) {
+        *current = Some(candidate.to_string());
     }
 }
 
@@ -1072,6 +1081,19 @@ fn absorb_grok_companion_metadata(path: &Path, parsed: &mut ParsedSession) {
             continue;
         };
         absorb_metadata(&value, parsed);
+        if first_string(&value, &["session_kind"]) == Some("subagent") {
+            parsed.is_subagent = true;
+        }
+        if parsed.parent_session_id.is_none() {
+            parsed.parent_session_id = first_string(&value, &["parent_session_id", "parent_session_uuid"])
+                .map(str::to_string);
+        }
+        if let Some(created) = first_string(&value, &["created_at"]) {
+            parsed.started_at = Some(created.to_string());
+        }
+        if let Some(updated) = first_string(&value, &["last_active_at", "updated_at"]) {
+            update_latest_timestamp(&mut parsed.updated_at, updated);
+        }
         if parsed.native_title.is_none() {
             parsed.native_title = first_string(&value, &["title"])
                 .or_else(|| value.pointer("/info/title").and_then(Value::as_str))
@@ -1090,7 +1112,7 @@ fn absorb_grok_companion_metadata(path: &Path, parsed: &mut ParsedSession) {
                 parsed.native_session_id = Some(id.to_string());
             }
         }
-        if parsed.cwd.is_some() {
+        if parsed.cwd.is_some() && parsed.native_session_id.is_some() {
             break;
         }
     }
@@ -1158,6 +1180,7 @@ fn meaningful_user_title(value: &str) -> Option<String> {
         "environment_context",
         "user_info",
         "turn_aborted",
+        "git_status",
     ] {
         loop {
             let open = format!("<{tag}");
@@ -1171,7 +1194,11 @@ fn meaningful_user_title(value: &str) -> Option<String> {
             remainder = remainder[end + close.len()..].trim();
         }
     }
-    if remainder.is_empty() || remainder.starts_with('<') {
+    if let Some(query) = remainder.strip_prefix("<user_query>").and_then(|text| text.split_once("</user_query>")).map(|(text, _)| text.trim()) {
+        remainder = query;
+    }
+    if remainder.is_empty() || remainder.starts_with('<') || is_transcript_wrapper(remainder)
+        || matches!(remainder.to_ascii_lowercase().as_str(), "continue" | "go on" | "proceed" | "继续" | "接着") {
         return None;
     }
     let title = compact_title(remainder);
@@ -1400,10 +1427,19 @@ fn compact_title(value: &str) -> String {
 
 fn useful_native_title(value: &str) -> Option<String> {
     let title = compact_title(value);
-    if title.is_empty() || uuid::Uuid::parse_str(&title).is_ok() {
+    if title.is_empty() || uuid::Uuid::parse_str(&title).is_ok() || is_transcript_wrapper(&title) {
         return None;
     }
     Some(title)
+}
+
+fn is_transcript_wrapper(value: &str) -> bool {
+    let value = value.trim_start().to_ascii_lowercase();
+    value.starts_with("# agents.md instructions")
+        || value.starts_with("<instructions>")
+        || value.starts_with("this session is being continued from a previous conversation")
+        || value.starts_with("<system-reminder>")
+        || value.starts_with("<recommended_plugins>")
 }
 
 fn stable_fragment(value: &str) -> String {
@@ -1813,6 +1849,10 @@ mod tests {
             meaningful_user_title("<turn_aborted>stopped</turn_aborted>"),
             None
         );
+        assert_eq!(meaningful_user_title("# AGENTS.md instructions for E:\\Workspaces\\agentTect"), None);
+        assert_eq!(meaningful_user_title("<user_query>continue</user_query>"), None);
+        assert_eq!(meaningful_user_title("<user_query>Design the course evaluation rubric</user_query>"), Some("Design the course evaluation rubric".to_string()));
+        assert_eq!(useful_native_title("This session is being continued from a previous conversation that ran out of context."), None);
 
         let temporary = tempfile::tempdir().expect("temp");
         let path = temporary
@@ -1850,7 +1890,10 @@ mod tests {
             session_directory.join("summary.json"),
             serde_json::to_vec(&json!({
                 "info": {"id": native_id, "cwd": "C:\\Users\\example\\projects\\checkout-smoke"},
-                "git_root_dir": "C:/Users/example/projects/checkout-smoke/"
+                "git_root_dir": "C:/Users/example/projects/checkout-smoke/",
+                "session_kind": "subagent",
+                "created_at": "2026-09-20T07:59:57Z",
+                "updated_at": "2026-09-20T08:17:40Z"
             }))
             .expect("summary json"),
         )
@@ -1863,6 +1906,9 @@ mod tests {
             Some("C:\\Users\\example\\projects\\checkout-smoke")
         );
         assert_eq!(parsed.native_session_id.as_deref(), Some(native_id));
+        assert!(parsed.is_subagent);
+        assert_eq!(parsed.started_at.as_deref(), Some("2026-09-20T07:59:57Z"));
+        assert_eq!(parsed.updated_at.as_deref(), Some("2026-09-20T08:17:40Z"));
         let home = verified_grok_resume_home(&history, native_id).expect("grok home");
         assert_eq!(home, temporary.path());
         assert!(verified_grok_resume_home(&history, "other-id").is_err());

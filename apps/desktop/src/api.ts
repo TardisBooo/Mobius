@@ -74,8 +74,9 @@ export const desktopApi = {
     return inTauri() ? invoke<WorkspaceView[]>("list_workspaces_v2") : [];
   },
 
-  async registerWorkspace(path: string, name?: string): Promise<void> {
-    if (inTauri()) await invoke("register_workspace", { path, name: name ?? null });
+  async registerWorkspace(path: string, name?: string): Promise<WorkspaceView | null> {
+    if (inTauri()) return invoke<WorkspaceView>("register_workspace", { path, name: name ?? null });
+    return null;
   },
 
   /**

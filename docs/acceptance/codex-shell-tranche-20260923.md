@@ -17,6 +17,18 @@ instance used isolated data below `E:\Workspaces\_audits\mobius-codex-shell-2026
   and authorization and refuse an external-edit conflict. PDF/images are read-only.
 - Session preference schema migration (v5) and source-title filtering that does not
   overwrite user aliases during indexing.
+- Collapsible project/session sidebar shared with Library & canvas. A project name
+  opens its details directly; the former recent-workspace/drop-zone route is not
+  rendered. Every message starts folded unless the user expanded it previously;
+  exact search hits expand only the matching message. `Ctrl+K` and the global
+  search button restore a collapsed sidebar before focusing search; redundant
+  Library-only topbar navigation buttons were removed.
+- Root-session listing separates confirmed child/subagent records without deleting
+  them. Grok summary metadata is read for `session_kind` and latest activity;
+  project recency uses the latest root conversation, not catalogue inspection time.
+  Time ordering compares parsed instants, including differing UTC offsets. Session
+  rows show local time, Harness, and checkout directory. Generic harness wrappers
+  are excluded from automatic titles, and native user-query wrappers are unwrapped.
 
 ## Evidence
 
@@ -26,7 +38,9 @@ instance used isolated data below `E:\Workspaces\_audits\mobius-codex-shell-2026
 | Tauri debug build | Passed | `npm run build:desktop` |
 | Rust core unit tests | Passed | `cargo test -p mydesk-core --lib` (81) |
 | Tauri unit tests | Passed | `cargo test -p mobius-desktop --bin mobius-desktop` (12) |
-| Isolated real WebView2 desktop tests | Passed | `pnpm exec playwright test --config playwright.codex-shell.config.ts` (2) |
+| Isolated real WebView2 desktop tests | Passed | `npx playwright test --config playwright.codex-shell.config.ts` (3): sidebar/project/folded-message/library route and mounted-file conflict |
+| agentTect Grok index audit | Passed for approved Grok source in isolated DB | 54 source records; 47 child/parent-marked and 7 roots after reindex. Raw records retained. The production DB has additional Codex sources and was only queried read-only. |
+| Project detail visual | Passed, limited | `E:\Workspaces\_audits\mobius-codex-shell-20260923\rebuild-project-compact.png`; compact worktree row and one page scrollbar checked in the real WebView2 |
 | Search to exact message | Passed, manual desktop check | Search `CLAUDE55_DEFAULT_1M_OK` selected its matching message |
 | Unsaved editor buffer across navigation | Passed | Isolated WebView2 test: mounted-file buffer survives Library → Settings → Library |
 | Main-route overflow and control-name smoke | Passed, limited | Sessions, workbench, notes, skills, settings: no root horizontal overflow or unnamed visible button/input |

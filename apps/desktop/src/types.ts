@@ -208,7 +208,7 @@ export interface ProjectSummary {
 export type WorkspaceStatus = "working" | "paused";
 export interface Workspace { id: string; display_name: string; canonical_path: string; git_identity: string | null; status: WorkspaceStatus; created_at: string; updated_at: string; }
 export interface Checkout { id: string; workspace_id: string; kind: "main" | "worktree" | "directory"; canonical_path: string; branch: string | null; head: string | null; git_common_dir: string | null; dirty: boolean; ahead: number; behind: number; updated_at: string; }
-export interface WorkspaceView { workspace: Workspace; checkouts: Checkout[]; }
+export interface WorkspaceView { workspace: Workspace; checkouts: Checkout[]; latest_session_at?: string | null; }
 export interface DirectoryEntry { name: string; relative_path: string; path: string; kind: "directory" | "file" | "symlink"; has_children: boolean; size: number | null; modified_at: string | null; }
 export interface Session { id: string; provider: AgentKind; provider_session_id: string; checkout_id: string | null; title: string; state: string; capabilities: string[]; source_path: string; source_available: boolean; started_at: string | null; updated_at: string; metadata: Record<string, unknown>; }
 export interface SessionPreference { session_id: string; pinned: boolean; archived: boolean; }
@@ -220,7 +220,7 @@ export interface RelayChain { id: string; workspace_id: string; checkout_id: str
 export interface RelayEdge { id: string; chain_id: string; source_session_id: string; target_session_id: string | null; handoff_id: string; relation: "take_over" | "parallel"; created_at: string; }
 export interface HandoffPackage { id: string; source_session_id: string; target_provider: AgentKind; target_checkout_id: string; mode: "take_over" | "parallel"; payload: Record<string, unknown>; token_estimate: number; created_at: string; }
 export interface RelayGraph { chains: RelayChain[]; edges: RelayEdge[]; handoffs: HandoffPackage[]; }
-export interface SessionQuery { query: string; workspace_id: string | null; checkout_id: string | null; providers: AgentKind[]; limit: number; }
+export interface SessionQuery { query: string; workspace_id: string | null; checkout_id: string | null; providers: AgentKind[]; limit: number; roots_only?: boolean; }
 export interface MomeRecallRequest { query: string; workspace_id: string | null; checkout_id: string | null; providers: AgentKind[]; max_tokens?: number | null; retrieval_mode?: string | null; }
 export interface MomeSource { provider: AgentKind; session_id: string; session_record_id: string; start_ordinal: number; end_ordinal: number; citation: string; content_hash: string; text: string; estimated_tokens: number; }
 export interface MomeRecallResponse { query: string; retrieval_mode: string; semantic_status: "lexical_only_no_semantic_backend_configured" | "semantic_unavailable" | "hybrid_ready"; embedding_coverage?: string | null; fallback_reason?: string | null; max_tokens: number; estimated_tokens: number; sources: MomeSource[]; }

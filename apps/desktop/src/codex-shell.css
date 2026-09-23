@@ -2,11 +2,18 @@
 .mobius-app.codex-shell {
   grid-template: 48px minmax(0, 1fr) / 268px minmax(0, 1fr);
 }
+.mobius-app.codex-shell.sidebar-collapsed { grid-template-columns: minmax(0, 1fr); }
+.codex-shell.sidebar-collapsed > .project-sidebar { display: none; }
+.codex-shell.sidebar-collapsed > .mobius-main { grid-column: 1 / -1; }
+.codex-shell .sidebar-toggle { position: fixed; z-index: 7; inset-block-start: 9px; inset-inline-start: 9px; display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 7px; background: transparent; color: var(--m-muted); }
+.codex-shell .sidebar-toggle:hover { background: var(--m-hover); color: var(--m-text); }
+.codex-shell.terminal-focus .sidebar-toggle { display: none; }
 .mobius-app.codex-shell.terminal-focus { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
 .codex-shell.terminal-focus .project-sidebar { display: none; }
 .codex-shell.terminal-focus .mobius-main { grid-row: 1; grid-column: 1; }
 .codex-shell .mobius-topbar { min-height: 48px; padding: 0 12px; gap: 12px; }
-.codex-shell .mobius-brand { width: 244px; flex: 0 0 244px; }
+.codex-shell .mobius-brand { width: 244px; flex: 0 0 244px; padding-inline-start: 36px; }
+.codex-shell.sidebar-collapsed .mobius-brand { width: auto; flex-basis: auto; padding-inline-start: 36px; }
 .codex-shell .mobius-brand strong { font-size: 17px; }
 .codex-shell .global-search { width: min(400px, 38vw); height: 30px; margin-inline: 0 auto; font-size: 11px; }
 .codex-shell .topbar-actions { margin-left: auto; align-items: center; }
@@ -18,9 +25,6 @@
 .codex-shell .pagebar .primary-button, .codex-shell .pagebar .soft-button { min-height: 28px; font-size: 11px; }
 .codex-shell .page-sessions { grid-template-rows: minmax(0, 1fr); }
 .codex-shell .mobius-main.page-notes { grid-template-rows: minmax(0, 1fr); }
-.mobius-app.codex-shell:has(.page-notes) { grid-template-columns: minmax(0, 1fr); }
-.codex-shell:has(.page-notes) > .project-sidebar { display: none; }
-.codex-shell .mobius-main.page-notes { grid-column: 1 / -1; }
 .codex-shell .page-notes .notes-library-v2 { grid-template-columns: minmax(220px, var(--library-nav-width, 285px)) 5px minmax(0, 1fr); }
 .codex-shell .page-notes .notes-nav-v2 { border-inline-end: 1px solid var(--m-line); }
 .codex-shell .library-route-surface { width: 100%; height: 100%; min-width: 0; min-height: 0; }
@@ -37,6 +41,18 @@
 .codex-shell .session-library-embedded .message-stream-v2 article.user { border-inline-start: 0; }
 .codex-shell .session-library-embedded .message-stream-v2 article.assistant { border-inline-start: 0; }
 .codex-shell .session-library-embedded .message-stream-v2 article.selected { box-shadow: inset 3px 0 var(--m-accent); padding-inline-start: 12px; }
+.codex-shell .session-library-embedded .message-stream-v2 article.collapsed { padding-block: 3px; }
+.codex-shell .message-toolbar { justify-content: space-between; }
+.codex-shell .message-toolbar-actions { display: flex; align-items: center; gap: 4px; }
+.codex-shell .message-toolbar-actions button { min-height: 26px; padding: 0 7px; border-radius: 5px; background: transparent; color: var(--m-muted); font-size: 10px; }
+.codex-shell .message-toolbar-actions button:hover { background: var(--m-hover); color: var(--m-text); }
+.codex-shell .message-fold-trigger { display: flex; align-items: flex-start; gap: 8px; width: 100%; min-height: 43px; padding: 6px 8px; border-radius: 6px; background: transparent; color: var(--m-text); text-align: start; }
+.codex-shell .message-fold-trigger:hover { background: var(--m-hover); }
+.codex-shell .message-fold-chevron { flex: none; padding-top: 2px; color: var(--m-muted); }
+.codex-shell .message-fold-copy { display: grid; gap: 3px; min-width: 0; }
+.codex-shell .message-fold-meta { color: var(--m-muted); font-size: 10px; text-transform: uppercase; }
+.codex-shell .message-fold-excerpt { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.codex-shell .message-stream-v2 article.expanded > .session-message-body { padding: 4px 31px 12px; }
 .codex-shell .session-message-body { max-width: 880px; overflow-wrap: anywhere; color: var(--m-text); font: 13px/1.65 "Segoe UI Variable Text", "Microsoft YaHei UI", sans-serif; }
 .codex-shell .session-message-body p { margin: 8px 0; white-space: pre-wrap; font: inherit; }
 .codex-shell .session-message-body > :first-child { margin-top: 0; }
@@ -46,6 +62,16 @@
 .codex-shell .session-message-body table { display: block; max-width: 100%; overflow: auto; border-collapse: collapse; }
 .codex-shell .session-message-body th, .codex-shell .session-message-body td { padding: 5px 9px; border: 1px solid var(--m-line); }
 .codex-shell .scan-status, .codex-shell .indexing-status { inset-inline-start: 268px; inset-block-start: 48px; }
+.codex-shell.sidebar-collapsed .scan-status, .codex-shell.sidebar-collapsed .indexing-status { inset-inline-start: 0; }
+.codex-shell .project-context-view { height: 100%; overflow: auto; padding: 16px 20px; }
+.codex-shell .project-context-view .workspace-inspector-v2 { margin-top: 0; }
+.codex-shell .project-context-view .workspace-detail { margin: 0; }
+.codex-shell .project-context-view .inspector-title { min-height:48px; align-items:center; padding: 7px 14px; }
+.codex-shell .project-context-view .inspector-title h2, .codex-shell .project-context-view .inspector-title > div > span { display: none; }
+.codex-shell .project-context-view .inspector-title > label { display:flex; align-items:center; gap:7px; }
+.codex-shell .project-context-view .inspector-title select { height:29px; }
+.codex-shell .project-context-view .inspector-content { max-height:none; overflow:visible; }
+.codex-shell .project-context-view .project-session-note, .codex-shell .project-context-view .project-session-timeline > header { display: none; }
 
 .project-sidebar { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-width: 0; min-height: 0; border-inline-end: 1px solid var(--m-line); background: var(--m-sidebar); }
 .project-sidebar-search { display: flex; align-items: center; gap: 7px; height: 34px; margin: 12px 10px 6px; padding: 0 9px; border: 1px solid var(--m-line); border-radius: 7px; background: var(--m-surface); color: var(--m-muted); }
@@ -57,9 +83,15 @@
 .project-sidebar-section > header { display: flex; align-items: center; justify-content: space-between; height: 27px; padding: 0 10px; color: var(--m-muted); font-size: 10px; font-weight: 700; }
 .project-sidebar-section > header button { display: grid; place-items: center; min-width: 23px; min-height: 23px; border-radius: 5px; background: transparent; color: var(--m-muted); font-size: 10px; }
 .project-sidebar-section > header button:hover { background: var(--m-hover); color: var(--m-text); }
+.project-sidebar-heading-actions { display: flex; align-items: center; gap: 2px; }
 .project-sidebar-project, .project-session-link, .project-sidebar-nav button { display: flex; align-items: center; width: 100%; border-radius: 7px; background: transparent; color: var(--m-text); text-align: left; }
 .project-sidebar-project { gap: 7px; height: 32px; padding: 0 9px; }
 .project-sidebar-project strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 620; }
+.project-sidebar-disclosure { display: grid; place-items: center; flex: 0 0 22px; height: 27px; border-radius: 5px; background: transparent; color: var(--m-muted); }
+.project-sidebar-open { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; height: 29px; padding: 0; background: transparent; color: var(--m-text); text-align: start; }
+.project-sidebar-open strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.project-sidebar-child-toggle { width: 100%; padding: 6px 9px; border-radius: 6px; background: transparent; color: var(--m-muted); text-align: start; font-size: 10px; }
+.project-sidebar-child-toggle:hover { background: var(--m-hover); color: var(--m-text); }
 .project-sidebar-project:hover, .project-sidebar-project.active, .project-session-link:hover, .project-session-link.active, .project-sidebar-nav button:hover, .project-sidebar-nav button.active { background: var(--m-hover); }
 .project-sidebar-children { margin-inline-start: 19px; padding-inline-start: 4px; border-inline-start: 1px solid var(--m-line); }
 .project-session-link { gap: 8px; min-height: 39px; padding: 5px 10px; }
