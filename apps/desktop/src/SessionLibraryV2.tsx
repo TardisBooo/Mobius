@@ -202,6 +202,9 @@ export function SessionLibraryV2({ revision, indexing, workspaces, health, attac
     return () => window.cancelAnimationFrame(frame);
   }, [messageId, messages.length, selectedId]);
   const selectedMessage = messages.find((message) => message.id === messageId) ?? null; const visibleMessages = messages.slice(Math.max(0, messages.length - messageLimit)); const activeWorkspace = workspaces.find((item) => item.workspace.id === workspaceId) ?? null;
+  const handoffWorkspace = selected ? workspaces.find((item) => item.checkouts.some((checkout) => checkout.id === selected.session.checkout_id)) : null;
+  const canHandoff = !!selected && !!handoffWorkspace?.checkouts.some((checkout) => checkout.id === selected.session.checkout_id);
+  const handoffUnavailable = locale === "zh-CN" ? "先将会话关联到已登记的工作区，才能交接并记录来路" : "Associate this session with a registered workspace before handing off and recording lineage";
   const copy = async (value: string) => { try { await navigator.clipboard.writeText(value); onToast(text.copied); } catch (reason) { onError(String(reason)); } };
   const [resumingId, setResumingId] = useState<string | null>(null);
   const resume = async () => {
@@ -252,7 +255,7 @@ export function SessionLibraryV2({ revision, indexing, workspaces, health, attac
       <div className="reader-actions-v2">
         <button className="icon-soft" type="button" aria-label={showContext ? (locale === "zh-CN" ? "隐藏上下文" : "Hide context") : (locale === "zh-CN" ? "显示上下文" : "Show context")} title={showContext ? (locale === "zh-CN" ? "隐藏上下文" : "Hide context") : (locale === "zh-CN" ? "显示上下文" : "Show context")} onClick={() => setShowContext((value) => !value)}><PanelRight size={16}/></button>
         {attachedSessionIds.includes(selected.session.id) ? <span className="session-connected" role="status"><CheckCircle2 size={16}/>{text.connected}</span> : selected.session.capabilities.includes("native_resume") ? <button className="primary-button" disabled={resumingId === selected.session.id} onClick={() => void resume()}>{resumingId === selected.session.id ? <LoaderCircle className="spin" size={16}/> : <CirclePlay size={16}/>} {text.resume}</button> : <button className="soft-button" disabled>{text.noNative}</button>}
-        <button className="soft-button" onClick={() => setHandoffOpen(true)} aria-label={handoffLabel}><Send size={16}/>{handoffLabel}</button>
+        <button className="soft-button" disabled={!canHandoff} title={canHandoff ? handoffLabel : handoffUnavailable} onClick={() => setHandoffOpen(true)} aria-label={handoffLabel}><Send size={16}/>{handoffLabel}</button>
         <button className="icon-soft" aria-label={text.copyReference} title={text.copyReference} disabled={!selectedMessage} onClick={() => selectedMessage && void copy(referenceText(selected.session, selectedMessage))}><Link2 size={16}/></button>
       </div></header>
       <div className="message-toolbar"><span>{text.messages}</span><small>{messages.length}</small></div>

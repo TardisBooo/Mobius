@@ -10,7 +10,8 @@ instance used isolated data below `E:\Workspaces\_audits\mobius-codex-shell-2026
   persisted expansion and session selection, alias editing, `Ctrl+K` search, and exact
   message navigation from search results.
 - A compact session shell with an optional context inspector and Markdown message
-  rendering. The library uses a single navigation tree and document tabs.
+  rendering. Handoff is disabled with an explanation unless the Session is associated
+  with a registered checkout. The library uses a single navigation tree and document tabs.
 - CodeMirror for Markdown and plain-text editing. Private notes retain autosave;
   explicitly writable mounts require save. Mounted text saves check source version
   and authorization and refuse an external-edit conflict. PDF/images are read-only.
