@@ -191,6 +191,24 @@ export const desktopApi = {
     return listen("mobius://note-library-changed", () => handler());
   },
   async readNoteFile(path: string): Promise<string> { return invoke<string>("read_note_file_command", { path }); },
+  async readTextDocument(path: string): Promise<import("./types").TextDocumentSnapshot> {
+    return invoke("read_text_document_command", { path });
+  },
+  async readLibraryMedia(path: string): Promise<Uint8Array> {
+    return new Uint8Array(await invoke<number[]>("read_library_media_command", { path }));
+  },
+  async getSessionById(sessionId: string): Promise<import("./types").Session | null> {
+    return inTauri() ? invoke("get_session_command", { sessionId }) : null;
+  },
+  async listSessionPreferences(): Promise<import("./types").SessionPreference[]> {
+    return inTauri() ? invoke("list_session_preferences") : [];
+  },
+  async setSessionPreference(sessionId: string, pinned: boolean, archived: boolean): Promise<void> {
+    return invoke("set_session_preference", { sessionId, pinned, archived });
+  },
+  async saveMountedTextDocument(path: string, expectedRevision: string, content: string): Promise<import("./types").TextDocumentSnapshot> {
+    return invoke("save_mounted_text_document_command", { path, expectedRevision, content });
+  },
   async revealNoteSource(path: string): Promise<void> {
     if (!inTauri()) return;
     await invoke("reveal_note_source", { path });

@@ -93,6 +93,13 @@ export interface NoteDraft {
   source_ids: string[];
 }
 
+export interface TextDocumentSnapshot {
+  content: string;
+  revision: string;
+  encoding: "utf8" | "utf8-bom" | "utf16-le" | "utf16-be";
+  line_ending: "lf" | "crlf";
+}
+
 export interface WikiDraft {
   title: string;
   body: string;
@@ -204,6 +211,7 @@ export interface Checkout { id: string; workspace_id: string; kind: "main" | "wo
 export interface WorkspaceView { workspace: Workspace; checkouts: Checkout[]; }
 export interface DirectoryEntry { name: string; relative_path: string; path: string; kind: "directory" | "file" | "symlink"; has_children: boolean; size: number | null; modified_at: string | null; }
 export interface Session { id: string; provider: AgentKind; provider_session_id: string; checkout_id: string | null; title: string; state: string; capabilities: string[]; source_path: string; source_available: boolean; started_at: string | null; updated_at: string; metadata: Record<string, unknown>; }
+export interface SessionPreference { session_id: string; pinned: boolean; archived: boolean; }
 export interface Message { id: string; session_id: string; ordinal: number; role: "user" | "assistant" | "tool" | "system" | "developer" | "unknown"; kind: string; content: string; timestamp: string | null; source_locator: Record<string, unknown>; redacted: boolean; }
 export interface MatchRange { start: number; end: number; }
 export interface SessionTurnPreview { user_message_id: string; user_ordinal: number; user_excerpt: string; user_excerpt_truncated: boolean; assistant_start_ordinal: number | null; assistant_end_ordinal: number | null; assistant_excerpt: string | null; assistant_excerpt_truncated: boolean; state: "answered" | "awaiting_reply"; catalogue_complete: boolean; }

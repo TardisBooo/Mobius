@@ -29,6 +29,7 @@ impl Database {
         database.migrate_v2(&connection)?;
         database.migrate_mome_schema(&connection)?;
         database.migrate_lineage_schema()?;
+        database.migrate_session_preferences_schema()?;
         database.ensure_v2_indexes(&connection)?;
         database.migrate_mome_embeddings(&connection)?;
         Ok(database)

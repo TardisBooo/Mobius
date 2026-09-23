@@ -44,7 +44,44 @@ pub struct LineageManifest {
     pub missing_sources: Vec<String>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SessionPreference {
+    pub session_id: String,
+    pub pinned: bool,
+    pub archived: bool,
+}
+
 impl crate::Database {
+    pub(crate) fn migrate_session_preferences_schema(&self) -> Result<()> {
+        let connection = self.connection()?;
+        let version: i64 = connection.query_row("SELECT COALESCE(MAX(version), 0) FROM schema_migrations", [], |row| row.get(0))?;
+        if version >= 5 { return Ok(()); }
+        connection.execute_batch(
+            "BEGIN IMMEDIATE;
+             CREATE TABLE session_preferences (
+               session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+               pinned INTEGER NOT NULL DEFAULT 0 CHECK(pinned IN (0,1)),
+               archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN (0,1)),
+               updated_at TEXT NOT NULL
+             );
+             INSERT INTO schema_migrations(version, applied_at) VALUES (5, datetime('now'));
+             COMMIT;"
+        )?;
+        Ok(())
+    }
+
+    pub fn list_session_preferences(&self) -> Result<Vec<SessionPreference>> {
+        let connection = self.connection()?;
+        let mut statement = connection.prepare("SELECT session_id, pinned, archived FROM session_preferences")?;
+        Ok(statement.query_map([], |row| Ok(SessionPreference { session_id: row.get(0)?, pinned: row.get::<_, i64>(1)? != 0, archived: row.get::<_, i64>(2)? != 0 }))?.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    pub fn set_session_preference(&self, session_id: &str, pinned: bool, archived: bool) -> Result<()> {
+        ensure!(self.get_session(session_id)?.is_some(), "session not found");
+        self.connection()?.execute("INSERT INTO session_preferences(session_id, pinned, archived, updated_at) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(session_id) DO UPDATE SET pinned = excluded.pinned, archived = excluded.archived, updated_at = excluded.updated_at", rusqlite::params![session_id, pinned, archived, chrono::Utc::now().to_rfc3339()])?;
+        Ok(())
+    }
+
     pub(crate) fn migrate_lineage_schema(&self) -> Result<()> {
         let mut connection = self.connection()?;
         let tx = connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
@@ -703,6 +740,11 @@ mod tests {
             .set_session_alias("a", "User chosen name")
             .unwrap();
         desk.database.upsert_session(&original).unwrap();
+        let alias_hits = desk.database.query_sessions(&crate::SessionQuery {
+            query: "User chosen name".into(), workspace_id: None, checkout_id: None,
+            providers: vec![], limit: 20,
+        }).unwrap();
+        assert!(alias_hits.iter().any(|hit| hit.session.id == "a"));
         assert_eq!(
             desk.session_lineage(&["a".into()]).unwrap().nodes[0]
                 .title
@@ -719,18 +761,35 @@ mod tests {
     }
 
     #[test]
+    fn session_preferences_survive_reindex_and_v4_upgrade() {
+        let (_root, desk) = setup();
+        desk.database.set_session_preference("a", true, false).unwrap();
+        let original = desk.database.get_session("a").unwrap().unwrap();
+        desk.database.upsert_session(&original).unwrap();
+        assert_eq!(desk.database.list_session_preferences().unwrap(), vec![SessionPreference { session_id: "a".into(), pinned: true, archived: false }]);
+        desk.database.connection().unwrap().execute_batch(
+            "DROP TABLE session_preferences; DELETE FROM schema_migrations WHERE version = 5;"
+        ).unwrap();
+        let upgraded = MyDesk::open(desk.paths.clone()).unwrap();
+        assert_eq!(upgraded.database.schema_version().unwrap(), 5);
+        assert!(upgraded.database.list_session_preferences().unwrap().is_empty());
+        upgraded.database.set_session_preference("a", false, true).unwrap();
+        assert!(upgraded.database.list_session_preferences().unwrap()[0].archived);
+    }
+
+    #[test]
     fn v3_migration_preserves_edges_and_creates_recovery_backup() {
         let (_root, desk) = setup();
         edge(&desk, "a", "b");
         let before = desk.database.incoming_lineage_edges("b").unwrap();
         // Recreate the old single-source constraint in this disposable fixture.
         desk.database.connection().unwrap().execute_batch(
-            "DROP TABLE session_labels; DROP TABLE handoff_operations;
-             DELETE FROM schema_migrations WHERE version = 4;
+            "DROP TABLE session_preferences; DROP TABLE session_labels; DROP TABLE handoff_operations;
+             DELETE FROM schema_migrations WHERE version >= 4;
              CREATE UNIQUE INDEX legacy_single_source ON relay_edges(handoff_id);"
         ).unwrap();
         let migrated = MyDesk::open(desk.paths.clone()).unwrap();
-        assert_eq!(migrated.database.schema_version().unwrap(), 4);
+        assert_eq!(migrated.database.schema_version().unwrap(), 5);
         assert_eq!(migrated.database.incoming_lineage_edges("b").unwrap(), before);
         assert!(fs::read_dir(migrated.paths.migration_backup_dir()).unwrap().next().is_some());
     }

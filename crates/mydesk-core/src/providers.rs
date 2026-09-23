@@ -598,7 +598,8 @@ impl<'a> ProviderIndexer<'a> {
         });
         let title = parsed
             .native_title
-            .clone()
+            .as_deref()
+            .and_then(useful_native_title)
             .or_else(|| {
                 parsed
                     .messages
@@ -1397,6 +1398,14 @@ fn compact_title(value: &str) -> String {
     title.chars().take(100).collect()
 }
 
+fn useful_native_title(value: &str) -> Option<String> {
+    let title = compact_title(value);
+    if title.is_empty() || uuid::Uuid::parse_str(&title).is_ok() {
+        return None;
+    }
+    Some(title)
+}
+
 fn stable_fragment(value: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(value.as_bytes());
@@ -1793,6 +1802,7 @@ mod tests {
 
     #[test]
     fn title_skips_harness_wrappers_and_omp_uses_native_title() {
+        assert_eq!(useful_native_title("01a0ccef-7f0e-73f0-ae2e-2cbcda9e080d"), None);
         assert_eq!(
             meaningful_user_title(
                 "<system-reminder>internal</system-reminder>\n\nRepair the checkout identity"

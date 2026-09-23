@@ -5,10 +5,13 @@ import { desktopApi } from "./api";
 import { FirstRunOnboarding } from "./FirstRunOnboarding";
 import { useI18n } from "./i18n";
 import { MobiusLogo } from "./MobiusLogo";
+import { ProjectSidebar } from "./ProjectSidebar";
+import type { SessionFocus } from "./WorkspaceAtlas";
 import type { HealthStatus, ProviderIndexReport, TerminalInfo, WorkspaceView } from "./types";
 import "./mobius-shell.css";
 import "./relay-graph.css";
 import "./interaction-fixes.css";
+import "./codex-shell.css";
 
 const TerminalPage = lazy(() => import("./TerminalPage").then((module) => ({ default: module.TerminalPage })));
 const WorkspaceAtlas = lazy(() => import("./WorkspaceAtlas").then((module) => ({ default: module.WorkspaceAtlas })));
@@ -61,6 +64,7 @@ export function App() {
   const [indexing, setIndexing] = useState(false);
   const [terminalFocus, setTerminalFocus] = useState(false);
   const [sessionRevision, setSessionRevision] = useState(0);
+  const [sessionFocus, setSessionFocus] = useState<SessionFocus | null>(null);
   const [onboarding, setOnboarding] = useState(() => localStorage.getItem("mobius.onboarding.complete") !== "1");
 
   const reload = useCallback(async () => {
@@ -95,7 +99,7 @@ export function App() {
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape" && terminalFocus) { event.preventDefault(); setTerminalFocus(false); return; }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k" && !(event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)) { event.preventDefault(); setPage("sessions"); }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k" && !(event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)) { event.preventDefault(); setPage("sessions"); window.dispatchEvent(new Event("mobius:focus-search")); }
     };
     // xterm handles Escape itself. Capture it before the terminal consumes the
     // event so focus mode can always be exited without leaving a stuck overlay.
@@ -166,24 +170,13 @@ export function App() {
   ], [text.notes, text.sessions, text.workbench]);
   const title = page === "notes" ? text.notes : page === "settings" ? text.settings : nav.find((item) => item.id === page)?.label ?? text.skills;
 
-  return <div className={`mobius-app ${terminalFocus ? "terminal-focus" : ""}`}>
-    <header className="mobius-topbar" data-tauri-drag-region><div className="mobius-brand" data-tauri-drag-region><MobiusLogo size={30}/><strong>MÖBIUS</strong><span>LOCAL AGENT WORKSPACE</span></div><button className="global-search" type="button" onClick={() => setPage("sessions")}><Search size={17}/><span>{text.search}</span><kbd>Ctrl K</kbd></button><div className="topbar-actions"><button className="top-icon" type="button" onClick={() => setPage("settings")} aria-label={text.settings} title={text.settings}><Settings size={17}/></button><button className="top-icon" type="button" onClick={() => setPage("skills")} aria-label="Manage skills" title={text.skills}><Braces size={17}/></button><button className="top-icon" type="button" onClick={() => setOnboarding(true)} aria-label="Open Möbius guide"><Sparkles size={17}/></button><button className="top-icon" type="button" onClick={() => setLocale(locale === "zh-CN" ? "en" : "zh-CN")} aria-label="Switch language"><Languages size={17}/><span>{locale === "zh-CN" ? "EN" : "中文"}</span></button><button className="top-icon" type="button" onClick={() => setTheme(theme === "light" ? "dark" : "light")} aria-label="Switch theme">{theme === "light" ? <Moon size={17}/> : <Sun size={17}/>}</button><span className="window-controls"><button type="button" onClick={() => void windowAction("minimize")} aria-label="Minimize"><Minus size={15}/></button><button type="button" onClick={() => void windowAction("maximize")} aria-label="Maximize"><Maximize2 size={14}/></button><button className="window-close" type="button" onClick={() => void windowAction("close")} aria-label="Close"><X size={15}/></button></span></div></header>
-    <aside className="mobius-rail" aria-label="Möbius navigation">{nav.map((item) => <button
-      key={item.id}
-      className={page === item.id ? "rail-item active" : "rail-item"}
-      type="button"
-      onClick={() => {
-        setTerminalFocus(false);
-        if (item.id === "workbench") setWorkbenchPanel("workspaces");
-        if (item.id === "notes") { setRequestedBoardId(undefined); setLibraryMode("documents"); }
-        setPage(item.id);
-      }}
-      title={item.label}
-    >{item.icon}<span>{item.label}</span></button>)}<div className="rail-bottom"><i/><small>{desktopApi.runtime === "desktop" ? text.desktop : text.browser}</small></div></aside>
+  return <div className={`mobius-app codex-shell ${terminalFocus ? "terminal-focus" : ""}`}>
+    <header className="mobius-topbar" data-tauri-drag-region><div className="mobius-brand" data-tauri-drag-region><MobiusLogo size={25}/><strong>MÖBIUS</strong></div><button className="global-search" type="button" onClick={() => { setPage("sessions"); window.dispatchEvent(new Event("mobius:focus-search")); }}><Search size={17}/><span>{text.search}</span><kbd>Ctrl K</kbd></button><div className="topbar-actions">{page === "notes" ? <><button className="top-icon" type="button" onClick={() => setPage("sessions")} aria-label={locale === "zh-CN" ? "返回会话" : "Back to sessions"} title={locale === "zh-CN" ? "会话" : "Sessions"}><Archive size={17}/></button><button className="top-icon" type="button" onClick={() => setPage("workbench")} aria-label={locale === "zh-CN" ? "打开工作区" : "Open workspaces"} title={locale === "zh-CN" ? "工作区" : "Workspaces"}><FolderGit2 size={17}/></button></> : null}<button className="top-icon" type="button" onClick={() => setOnboarding(true)} aria-label="Open Möbius guide"><Sparkles size={17}/></button><button className="top-icon" type="button" onClick={() => setLocale(locale === "zh-CN" ? "en" : "zh-CN")} aria-label="Switch language"><Languages size={17}/><span>{locale === "zh-CN" ? "EN" : "中文"}</span></button><button className="top-icon" type="button" onClick={() => setTheme(theme === "light" ? "dark" : "light")} aria-label="Switch theme">{theme === "light" ? <Moon size={17}/> : <Sun size={17}/>}</button><span className="window-controls"><button type="button" onClick={() => void windowAction("minimize")} aria-label="Minimize"><Minus size={15}/></button><button type="button" onClick={() => void windowAction("maximize")} aria-label="Maximize"><Maximize2 size={14}/></button><button className="window-close" type="button" onClick={() => void windowAction("close")} aria-label="Close"><X size={15}/></button></span></div></header>
+    <ProjectSidebar workspaces={workspaces} page={page} locale={locale} revision={sessionRevision} refreshing={scanning} onNavigate={(target) => { setTerminalFocus(false); setPage(target); }} onOpenSession={(focus) => { setSessionFocus(focus); setPage("sessions"); }} onRefresh={() => void refresh()} onRenamed={() => setSessionRevision((value) => value + 1)} onError={setError}/>
     <main className={`mobius-main page-${page}`}><header className={`pagebar pagebar-${page}`}><div><span>{page === "workbench" ? workbenchPanel === "terminal" ? "WORKSPACE / POWERSHELL" : "PROJECTS / WORKSPACES" : page === "notes" ? "WORKSPACE / LIBRARY" : page === "settings" ? "APP / SETTINGS" : "AGENTS / RECENT ACTIVITY"}</span><h1>{title}</h1></div>{page === "workbench" ? <div className="pagebar-actions">{workbenchPanel === "terminal" ? <><button className="soft-button" type="button" onClick={() => { setTerminalFocus(false); setWorkbenchPanel("workspaces"); }}><FolderGit2 size={16}/>{text.showWorkspaces}</button><button className="soft-button" type="button" onClick={() => setTerminalFocus((value) => !value)}>{terminalFocus ? <ChevronDown size={16}/> : <PanelRight size={16}/>} {terminalFocus ? text.exitFocus : text.focus}</button></> : <><button className="soft-button" type="button" onClick={() => setWorkbenchPanel("terminal")}><TerminalSquare size={16}/>{locale === "zh-CN" ? `终端 ${terminalCount}` : `Terminals ${terminalCount}`}</button><button className="primary-button" type="button" onClick={() => void createFreeTerminal()}><Plus size={16}/>{locale === "zh-CN" ? "新建 PowerShell" : "New PowerShell"}</button></>}</div> : page === "sessions" ? <button className="primary-button" type="button" onClick={() => void refresh()} disabled={scanning}>{scanning ? <LoaderCircle className="spin" size={16}/> : <RefreshCw size={16}/>} {text.scan}</button> : page === "skills" ? <button className="soft-button" type="button" onClick={() => setPage("workbench")}><TerminalSquare size={16}/>{text.workbench}</button> : null}</header><section className="mobius-page-host">
-      {page === "workbench" && workbenchPanel === "workspaces" ? <Suspense fallback={<Loading label={text.loading}/>}><WorkspaceAtlas workspaces={workspaces} reload={reload} openTerminal={openTerminal} onError={setError} onToast={setToast} locale={locale} onOpenSessions={(focus) => { sessionStorage.setItem("mobius.session.focus", JSON.stringify(focus)); setPage("sessions"); }}/></Suspense> : null}
+      {page === "workbench" && workbenchPanel === "workspaces" ? <Suspense fallback={<Loading label={text.loading}/>}><WorkspaceAtlas workspaces={workspaces} reload={reload} openTerminal={openTerminal} onError={setError} onToast={setToast} locale={locale} onOpenSessions={(focus) => { setSessionFocus(focus); setPage("sessions"); }}/></Suspense> : null}
       {page === "workbench" && workbenchPanel === "terminal" ? <div className="mobius-terminal"><Suspense fallback={<Loading label={text.loading}/> }><TerminalPage workspaces={workspaces} requestedTerminal={requestedTerminal} onConsumed={() => setRequestedTerminal(null)} onError={setError} focusMode={terminalFocus} onExitFocus={() => setTerminalFocus(false)}/></Suspense></div> : null}
-      {page === "sessions" ? <Suspense fallback={<Loading label={text.loading}/>}><SessionLibraryV2 revision={sessionRevision} indexing={indexing} workspaces={workspaces} health={health} attachedSessionIds={Object.keys(attachedSessions)} openTerminal={(terminal, sessionId) => { if (sessionId) setAttachedSessions((current) => ({ ...current, [sessionId]: terminal.id })); openTerminal(terminal); }} onError={setError} onToast={setToast} locale={locale} focus={null} onFocusConsumed={() => undefined}/></Suspense> : null}
+      {page === "sessions" ? <Suspense fallback={<Loading label={text.loading}/>}><SessionLibraryV2 revision={sessionRevision} indexing={indexing} workspaces={workspaces} health={health} attachedSessionIds={Object.keys(attachedSessions)} openTerminal={(terminal, sessionId) => { if (sessionId) setAttachedSessions((current) => ({ ...current, [sessionId]: terminal.id })); openTerminal(terminal); }} onError={setError} onToast={setToast} locale={locale} focus={sessionFocus} onFocusConsumed={() => setSessionFocus(null)} embedded/></Suspense> : null}
       {page === "notes" && libraryMode === "documents" ? <Suspense fallback={<Loading label={text.loading}/>}><NotesLibraryV2 onError={setError} onToast={setToast} locale={locale} onOpenCanvas={(boardId) => { setRequestedBoardId(boardId); setLibraryMode("canvas"); }}/></Suspense> : null}
       {page === "notes" && libraryMode === "canvas" ? <Suspense fallback={<Loading label={text.loading}/>}><BoardPage onToast={setToast} initialBoardId={requestedBoardId} onBackToLibrary={() => { setRequestedBoardId(undefined); setLibraryMode("documents"); }}/></Suspense> : null}
       {page === "skills" ? <Suspense fallback={<Loading label={text.loading}/>}><SkillsLibraryV2 workspaces={workspaces} onError={setError} onToast={setToast} locale={locale}/></Suspense> : null}

@@ -18,7 +18,7 @@ use std::{
     str::FromStr,
 };
 
-pub const TARGET_SCHEMA_VERSION: i64 = 4;
+pub const TARGET_SCHEMA_VERSION: i64 = 5;
 const V2_SCHEMA_VERSION: i64 = 2;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -767,12 +767,13 @@ impl Database {
         let pattern = format!("%{escaped}%");
         let (scope, mut parameters) = session_scope_sql(query, "s");
         let where_clause = if scope.is_empty() {
-            "WHERE (lower(s.title) LIKE lower(?) ESCAPE '\\' OR lower(s.provider_session_id) LIKE lower(?) ESCAPE '\\' OR lower(s.source_path) LIKE lower(?) ESCAPE '\\')".to_string()
+            "WHERE (lower(s.title) LIKE lower(?) ESCAPE '\\' OR lower(s.provider_session_id) LIKE lower(?) ESCAPE '\\' OR lower(s.source_path) LIKE lower(?) ESCAPE '\\' OR EXISTS (SELECT 1 FROM session_labels label WHERE label.session_id = s.id AND lower(label.alias) LIKE lower(?) ESCAPE '\\'))".to_string()
         } else {
             format!(
-                "{scope} AND (lower(s.title) LIKE lower(?) ESCAPE '\\' OR lower(s.provider_session_id) LIKE lower(?) ESCAPE '\\' OR lower(s.source_path) LIKE lower(?) ESCAPE '\\')"
+                "{scope} AND (lower(s.title) LIKE lower(?) ESCAPE '\\' OR lower(s.provider_session_id) LIKE lower(?) ESCAPE '\\' OR lower(s.source_path) LIKE lower(?) ESCAPE '\\' OR EXISTS (SELECT 1 FROM session_labels label WHERE label.session_id = s.id AND lower(label.alias) LIKE lower(?) ESCAPE '\\'))"
             )
         };
+        parameters.push(SqlValue::Text(pattern.clone()));
         parameters.push(SqlValue::Text(pattern.clone()));
         parameters.push(SqlValue::Text(pattern.clone()));
         parameters.push(SqlValue::Text(pattern));
@@ -1567,7 +1568,7 @@ mod tests {
         let temporary = tempfile::tempdir().expect("temp");
         let paths = paths(temporary.path());
         let database = Database::open(&paths).expect("open V2 database");
-        assert_eq!(database.schema_version().expect("version"), 4);
+        assert_eq!(database.schema_version().expect("version"), 5);
         assert_eq!(
             fs::read_dir(paths.migration_backup_dir())
                 .expect("backups")
@@ -1593,7 +1594,7 @@ mod tests {
         drop(connection);
 
         let database = Database::open(&paths).expect("migrate");
-        assert_eq!(database.schema_version().expect("version"), 4);
+        assert_eq!(database.schema_version().expect("version"), 5);
         let backups = fs::read_dir(paths.migration_backup_dir())
             .expect("backup dir")
             .collect::<Result<Vec<_>, _>>()

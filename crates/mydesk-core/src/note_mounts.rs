@@ -6,10 +6,12 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     fs,
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
     sync::Mutex,
 };
+use sha2::{Digest, Sha256};
+use tempfile::NamedTempFile;
 
 fn title_cache() -> &'static Mutex<HashMap<String, (String, String)>> {
     static CACHE: std::sync::OnceLock<Mutex<HashMap<String, (String, String)>>> =
@@ -45,6 +47,86 @@ pub struct NoteFileInfo {
     pub real_path: String,
     pub read_only: bool,
     pub modified_at: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct TextDocumentSnapshot {
+    pub content: String,
+    pub revision: String,
+    pub encoding: String,
+    pub line_ending: String,
+}
+
+const MAX_EDITABLE_DOCUMENT_BYTES: u64 = 8 * 1024 * 1024;
+
+fn decode_text_document(bytes: &[u8]) -> Result<(String, &'static str)> {
+    if bytes.starts_with(&[0xef, 0xbb, 0xbf]) {
+        return Ok((String::from_utf8(bytes[3..].to_vec())?, "utf8-bom"));
+    }
+    if bytes.starts_with(&[0xff, 0xfe]) {
+        let units = bytes[2..]
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect::<Vec<_>>();
+        anyhow::ensure!((bytes.len() - 2) % 2 == 0, "invalid UTF-16 document");
+        return Ok((String::from_utf16(&units)?, "utf16-le"));
+    }
+    if bytes.starts_with(&[0xfe, 0xff]) {
+        let units = bytes[2..]
+            .chunks_exact(2)
+            .map(|pair| u16::from_be_bytes([pair[0], pair[1]]))
+            .collect::<Vec<_>>();
+        anyhow::ensure!((bytes.len() - 2) % 2 == 0, "invalid UTF-16 document");
+        return Ok((String::from_utf16(&units)?, "utf16-be"));
+    }
+    Ok((String::from_utf8(bytes.to_vec())?, "utf8"))
+}
+
+fn document_revision(bytes: &[u8]) -> String {
+    hex::encode(Sha256::digest(bytes))
+}
+
+pub fn read_text_document(path: &Path, notes_dir: &Path, mounts: &[MountInfo]) -> Result<TextDocumentSnapshot> {
+    let canonical = path.canonicalize()?;
+    anyhow::ensure!(is_note_extension(&canonical), "not a Markdown or text document");
+    anyhow::ensure!(note_path_is_in_libraries(&canonical, notes_dir, mounts), "document is outside approved libraries");
+    anyhow::ensure!(fs::metadata(&canonical)?.len() <= MAX_EDITABLE_DOCUMENT_BYTES, "document exceeds the 8 MiB editor limit");
+    let bytes = fs::read(&canonical)?;
+    let (content, encoding) = decode_text_document(&bytes)?;
+    let line_ending = if content.contains("\r\n") { "crlf" } else { "lf" };
+    Ok(TextDocumentSnapshot { content, revision: document_revision(&bytes), encoding: encoding.into(), line_ending: line_ending.into() })
+}
+
+pub fn write_mounted_text_document(
+    path: &Path,
+    notes_dir: &Path,
+    mounts: &[MountInfo],
+    expected_revision: &str,
+    content: &str,
+) -> Result<TextDocumentSnapshot> {
+    let canonical = path.canonicalize()?;
+    anyhow::ensure!(is_note_extension(&canonical), "not a Markdown or text document");
+    anyhow::ensure!(!path_is_under(&canonical, notes_dir), "private notes use the vault save operation");
+    anyhow::ensure!(mounts.iter().any(|mount| mount.access == "read_write" && path_is_under(&canonical, Path::new(&mount.real_path))), "document is not in a writable mount");
+    anyhow::ensure!(content.len() as u64 <= MAX_EDITABLE_DOCUMENT_BYTES, "document exceeds the 8 MiB editor limit");
+    let current = read_text_document(&canonical, notes_dir, mounts)?;
+    anyhow::ensure!(current.revision == expected_revision, "document changed outside Möbius; reload or save a copy before writing");
+    let normalized = content.replace("\r\n", "\n");
+    let text = if current.line_ending == "crlf" { normalized.replace('\n', "\r\n") } else { normalized };
+    let bytes = match current.encoding.as_str() {
+        "utf8-bom" => [&[0xef, 0xbb, 0xbf][..], text.as_bytes()].concat(),
+        "utf16-le" => [&[0xff, 0xfe][..], &text.encode_utf16().flat_map(u16::to_le_bytes).collect::<Vec<_>>()].concat(),
+        "utf16-be" => [&[0xfe, 0xff][..], &text.encode_utf16().flat_map(u16::to_be_bytes).collect::<Vec<_>>()].concat(),
+        _ => text.into_bytes(),
+    };
+    let parent = canonical.parent().ok_or_else(|| anyhow::anyhow!("document has no parent"))?;
+    let mut temporary = NamedTempFile::new_in(parent)?;
+    temporary.write_all(&bytes)?;
+    temporary.flush()?;
+    temporary.as_file().sync_all()?;
+    anyhow::ensure!(document_revision(&fs::read(&canonical)?) == expected_revision, "document changed during save; reload before writing");
+    fs::rename(temporary.path(), &canonical)?;
+    read_text_document(&canonical, notes_dir, mounts)
 }
 
 /// Runtime-only result of scanning one persisted mount.  `MountInfo` is the
@@ -250,7 +332,8 @@ fn collect_note_root(
             .and_then(|value| value.to_str())
             .unwrap_or_default()
             .to_ascii_lowercase();
-        if !matches!(extension.as_str(), "md" | "markdown" | "txt") {
+        let is_text = matches!(extension.as_str(), "md" | "markdown" | "txt");
+        if !is_text && !matches!(extension.as_str(), "pdf" | "png" | "jpg" | "jpeg" | "gif" | "webp" | "avif") {
             continue;
         }
         if scan.file_count >= MAX_FILES_PER_SOURCE {
@@ -280,10 +363,10 @@ fn collect_note_root(
             // Explorer labels come from a path+mtime cache. Opening every
             // file on each scan is what echoed into the native watcher and
             // made the tree look like it had changed.
-            title: cached_note_title(entry.path(), modified_at.as_deref()),
+            title: if is_text { cached_note_title(entry.path(), modified_at.as_deref()) } else { entry.path().file_stem().map(|value| value.to_string_lossy().into_owned()).unwrap_or_else(|| "Untitled".into()) },
             virtual_path,
             real_path: entry.path().display().to_string(),
-            read_only,
+            read_only: read_only || !is_text,
             modified_at,
         });
         scan.file_count += 1;
@@ -381,6 +464,15 @@ pub fn read_note_file(path: &Path, notes_dir: &Path, mounts: &[MountInfo]) -> Re
     fs::read_to_string(&canonical).with_context(|| format!("reading {}", canonical.display()))
 }
 
+pub fn read_library_media_file(path: &Path, notes_dir: &Path, mounts: &[MountInfo]) -> Result<Vec<u8>> {
+    let canonical = path.canonicalize()?;
+    let extension = canonical.extension().and_then(|value| value.to_str()).unwrap_or_default().to_ascii_lowercase();
+    anyhow::ensure!(matches!(extension.as_str(), "pdf" | "png" | "jpg" | "jpeg" | "gif" | "webp" | "avif"), "unsupported media format");
+    anyhow::ensure!(note_path_is_in_libraries(&canonical, notes_dir, mounts), "media file is outside approved libraries");
+    anyhow::ensure!(fs::metadata(&canonical)?.len() <= 15 * 1024 * 1024, "media file exceeds the 15 MiB preview limit");
+    Ok(fs::read(&canonical)?)
+}
+
 fn note_path_is_in_libraries(path: &Path, notes_dir: &Path, mounts: &[MountInfo]) -> bool {
     if path_is_under(path, notes_dir) {
         return true;
@@ -440,6 +532,51 @@ mod tests {
             created_at: "2026-09-16T00:00:00Z".to_string(),
             updated_at: "2026-09-16T00:00:00Z".to_string(),
         }
+    }
+
+    #[test]
+    fn writable_mount_preserves_text_format_and_rejects_stale_saves() -> Result<()> {
+        let temporary = tempfile::tempdir()?;
+        let paths = paths(temporary.path());
+        paths.ensure_layout()?;
+        let source = temporary.path().join("editable");
+        fs::create_dir_all(&source)?;
+        let document = source.join("memo.txt");
+        fs::write(&document, [vec![0xef, 0xbb, 0xbf], b"first\r\nline".to_vec()].concat())?;
+        let mut configured = mount("mount:editable", &source);
+        let before = read_text_document(&document, &paths.notes_dir(), &[configured.clone()])?;
+        assert_eq!(before.encoding, "utf8-bom");
+        assert_eq!(before.line_ending, "crlf");
+        assert!(write_mounted_text_document(&document, &paths.notes_dir(), &[configured.clone()], &before.revision, "changed").is_err());
+        configured.access = "read_write".into();
+        let after = write_mounted_text_document(&document, &paths.notes_dir(), &[configured.clone()], &before.revision, "changed\nline")?;
+        assert_eq!(after.content, "changed\r\nline");
+        assert!(fs::read(&document)?.starts_with(&[0xef, 0xbb, 0xbf]));
+        assert!(write_mounted_text_document(&document, &paths.notes_dir(), &[configured], &before.revision, "stale").is_err());
+        assert_eq!(read_text_document(&document, &paths.notes_dir(), &[]) .is_err(), true);
+        Ok(())
+    }
+
+    #[test]
+    fn media_is_listed_for_preview_but_never_editable() -> Result<()> {
+        let temporary = tempfile::tempdir()?;
+        let paths = paths(temporary.path());
+        paths.ensure_layout()?;
+        let source = temporary.path().join("media");
+        fs::create_dir_all(&source)?;
+        let image = source.join("cover.png");
+        let bytes = [137, 80, 78, 71, 13, 10, 26, 10];
+        fs::write(&image, bytes)?;
+        let mut configured = mount("mount:media", &source);
+        configured.access = "read_write".into();
+        let snapshot = list_note_library_snapshot(&paths, &[configured.clone()])?;
+        let listed = snapshot.files.iter().find(|item| item.virtual_path.ends_with("cover.png")).unwrap();
+        assert_eq!(listed.title, "cover");
+        assert!(listed.read_only);
+        assert_eq!(read_library_media_file(&image, &paths.notes_dir(), &[configured.clone()])?, bytes);
+        assert!(read_library_media_file(&image, &paths.notes_dir(), &[]).is_err());
+        assert!(write_mounted_text_document(&image, &paths.notes_dir(), &[configured], "irrelevant", "text").is_err());
+        Ok(())
     }
 
     #[test]

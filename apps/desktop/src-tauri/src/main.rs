@@ -8,6 +8,7 @@ use mydesk_core::{
     WorkspaceInspection, WorkspaceStatus,
     note_mounts::{
         list_note_files, list_note_library_snapshot, note_is_private_vault_file, read_note_file,
+        read_text_document, write_mounted_text_document, read_library_media_file, TextDocumentSnapshot,
     },
     skills::{
         ManagedSkillInstall, SkillDeployment, SkillHistoryEntry, discover_project_skills,
@@ -693,11 +694,38 @@ fn query_sessions(
     state: State<'_, DesktopState>,
     query: SessionQuery,
 ) -> CommandResult<Vec<SessionSearchHit>> {
-    state
+    let mut hits = state
         .desk
         .database
         .query_sessions(&query)
-        .map_err(command_error)
+        .map_err(command_error)?;
+    for hit in &mut hits {
+        if let Some(alias) = state.desk.database.session_alias(&hit.session.id).map_err(command_error)? {
+            hit.session.title = alias;
+        }
+    }
+    Ok(hits)
+}
+
+#[tauri::command]
+fn get_session_command(state: State<'_, DesktopState>, session_id: String) -> CommandResult<Option<mydesk_core::Session>> {
+    let mut session = state.desk.database.get_session(&session_id).map_err(command_error)?;
+    if let Some(current) = &mut session {
+        if let Some(alias) = state.desk.database.session_alias(&current.id).map_err(command_error)? {
+            current.title = alias;
+        }
+    }
+    Ok(session)
+}
+
+#[tauri::command]
+fn list_session_preferences(state: State<'_, DesktopState>) -> CommandResult<Vec<mydesk_core::lineage::SessionPreference>> {
+    state.desk.database.list_session_preferences().map_err(command_error)
+}
+
+#[tauri::command]
+fn set_session_preference(state: State<'_, DesktopState>, session_id: String, pinned: bool, archived: bool) -> CommandResult<()> {
+    state.desk.database.set_session_preference(&session_id, pinned, archived).map_err(command_error)
 }
 #[tauri::command]
 fn get_session_messages(
@@ -857,6 +885,26 @@ fn read_note_file_command(state: State<'_, DesktopState>, path: String) -> Comma
         .list_note_mounts()
         .map_err(command_error)?;
     read_note_file(Path::new(&path), &state.desk.paths.notes_dir(), &mounts).map_err(command_error)
+}
+
+#[tauri::command]
+fn read_text_document_command(state: State<'_, DesktopState>, path: String) -> CommandResult<TextDocumentSnapshot> {
+    let mounts = state.desk.database.list_note_mounts().map_err(command_error)?;
+    read_text_document(Path::new(&path), &state.desk.paths.notes_dir(), &mounts).map_err(command_error)
+}
+
+#[tauri::command]
+fn read_library_media_command(state: State<'_, DesktopState>, path: String) -> CommandResult<Vec<u8>> {
+    let mounts = state.desk.database.list_note_mounts().map_err(command_error)?;
+    read_library_media_file(Path::new(&path), &state.desk.paths.notes_dir(), &mounts).map_err(command_error)
+}
+
+#[tauri::command]
+fn save_mounted_text_document_command(
+    state: State<'_, DesktopState>, path: String, expected_revision: String, content: String,
+) -> CommandResult<TextDocumentSnapshot> {
+    let mounts = state.desk.database.list_note_mounts().map_err(command_error)?;
+    write_mounted_text_document(Path::new(&path), &state.desk.paths.notes_dir(), &mounts, &expected_revision, &content).map_err(command_error)
 }
 
 #[tauri::command]
@@ -2728,6 +2776,9 @@ fn main() {
             remove_approved_session_source,
             grant_mcp_approval,
             query_sessions,
+            get_session_command,
+            list_session_preferences,
+            set_session_preference,
             get_session_messages,
             prepare_handoff_trajectory,
             session_lineage,
@@ -2740,6 +2791,9 @@ fn main() {
             list_note_files_command,
             note_library_snapshot_command,
             read_note_file_command,
+            read_text_document_command,
+            read_library_media_command,
+            save_mounted_text_document_command,
             reveal_note_source,
             read_note_asset_command,
             list_note_mounts,

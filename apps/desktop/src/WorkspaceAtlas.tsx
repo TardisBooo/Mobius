@@ -6,7 +6,7 @@ import { SessionLineagePanel } from "./SessionLineagePanel";
 import { desktopApi } from "./api";
 import type { Checkout, DirectoryEntry, RelayGraph, SessionSearchHit, SkillInfo, TerminalInfo, WorkspaceView } from "./types";
 
-export type SessionFocus = { workspaceId: string; checkoutId: string | null; sessionId?: string };
+export type SessionFocus = { workspaceId: string; checkoutId: string | null; sessionId?: string; messageId?: string };
 
 type Locale = "zh-CN" | "en";
 type WorkspaceSort = "updated" | "name";
