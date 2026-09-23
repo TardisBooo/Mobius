@@ -1749,7 +1749,7 @@ async fn fetch_marketplace_skills(query: String) -> CommandResult<Vec<Marketplac
     endpoint
         .query_pairs_mut()
         .append_pair("page", "1")
-        .append_pair("limit", "36")
+        .append_pair("limit", "12")
         .append_pair("section", "top")
         .append_pair("includeTotal", "false");
     if !query.is_empty() {
@@ -1760,7 +1760,7 @@ async fn fetch_marketplace_skills(query: String) -> CommandResult<Vec<Marketplac
         .header(header::ACCEPT, "application/json")
         .send()
         .await
-        .map_err(|error| format!("could not fetch skill marketplace: {error}"))?;
+        .map_err(|error| format!("could not fetch skill marketplace: {}", describe_http_error(&error)))?;
     if !response.status().is_success() {
         return Err(format!("skill marketplace returned HTTP {}", response.status()).into());
     }
@@ -1783,6 +1783,17 @@ async fn fetch_marketplace_skills(query: String) -> CommandResult<Vec<Marketplac
                 .collect()
         })
         .unwrap_or_default())
+}
+
+fn describe_http_error(error: &reqwest::Error) -> String {
+    let mut details = vec![error.to_string()];
+    let mut cause = std::error::Error::source(error);
+    for _ in 0..4 {
+        let Some(next) = cause else { break };
+        details.push(next.to_string());
+        cause = next.source();
+    }
+    details.join(": ")
 }
 
 fn marketplace_skill_from_value(value: &serde_json::Value) -> Option<MarketplaceSkillRemote> {
@@ -1863,7 +1874,7 @@ async fn fetch_marketplace_skill(slug: String) -> CommandResult<String> {
         .header(header::ACCEPT, "application/json")
         .send()
         .await
-        .map_err(|error| format!("could not fetch marketplace skill: {error}"))?;
+        .map_err(|error| format!("could not fetch marketplace skill: {}", describe_http_error(&error)))?;
     if !response.status().is_success() {
         return Err(format!("marketplace skill returned HTTP {}", response.status()).into());
     }

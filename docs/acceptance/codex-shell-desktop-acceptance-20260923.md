@@ -33,14 +33,14 @@ current development build, not the maintained `E:\SOFTWARE\Mobius` installation.
 | Surface | Actual verification |
 | --- | --- |
 | Build/core | `npm run build:desktop`, `cargo test --workspace` (85 core unit tests plus desktop/CLI/MCP/integration checks), and `npm run test:window-drag` passed. One separately provisioned isolated-acceptance fixture is explicitly ignored. |
-| Desktop regression | `npx playwright test --config playwright.codex-shell.config.ts`: **18/18 passed** serially on the isolated Tauri WebView2 after the final fixes. |
+| Desktop regression | `npx playwright test --config playwright.codex-shell.config.ts`: **18/18 passed** serially on the isolated Tauri WebView2 after the market layout changes. |
 | Shell/navigation | Collapsible sidebar, `Ctrl+K`, project direct-open, Library/session round-trip, onboarding/Escape, theme and language persistence, named controls and 1100×720 root overflow. |
 | Session catalogue | agentTect approved Grok sample: 54 records, 7 roots, 47 children; child records remain discoverable. Separate same-name directories remain path-distinct. Project sorting matches latest root conversation activity, not scan time. Sidebar shows time, Harness and checkout folder. |
 | Search/naming | Content search lands on and expands the exact message; manual aliases remain editable/searchable. Harness wrappers and Claude sidecar metadata are not mislabelled as sessions. |
 | Sources/memory | Approved Codex root add → index → remove round-trip; source transcript unchanged. Memory search returns an explicit local result. Last refresh: 280 discovered, 0 index errors beyond one real Claude JSONL with no shareable messages. |
 | Library/editor | Private note create/preview/return/trash/restore; mounted text explicit save; live tree add and delete while an editor buffer is dirty; external-edit conflict refuses overwrite. |
 | Canvas | Object creation, save, leave and reopen preserves the object. |
-| Skills | Skill market and installed views are distinct; project-private Skill is discoverable. Managed project copy install/uninstall leaves original unchanged. Checkout labels include project, branch/kind and full path. |
+| Skills | Skill market and installed views are distinct; project-private Skill is discoverable. Managed project copy install/uninstall leaves original unchanged. Checkout labels include project, branch/kind and full path. The live agentskill.sh catalogue displayed 12 cards in the actual desktop, and a live `SKILL.md` fetch returned 6,273 characters. Three-column market cards keep all action labels on one line at 1440×823. |
 | Terminal | New PowerShell starts in the selected audit project, accepts input, returns output and closes. |
 | Handoff/graph | Handoff review generates exact `@session` references without launching a Harness. Real copied graph shows 3 nodes, 1 verified edge, and pending-target warning. Layout, compact nodes and graph/list mode persist. |
 | Live cross-Harness chain | In the empty audit project, one short Codex probe was handed to Pi, then Claude, then Grok Build. The four native Session IDs were indexed with the same verified checkout; the lineage graph returned **4 nodes / 3 confirmed edges / 0 missing sources**. The reference-only packets were read by the target Harnesses. |
@@ -49,22 +49,26 @@ current development build, not the maintained `E:\SOFTWARE\Mobius` installation.
 | Native resume probe | Pi launched its exact native `--session` path and remained idle without a model prompt. Codex reached its own folder-trust confirmation for the fresh audit directory; this was not accepted on the user's behalf. Resuming the previously interrupted Claude turn auto-continued model work, so that terminal was stopped immediately to limit calls. Grok/OMP native resume was not attempted. |
 | Visual spot check | The actual 1440×823 desktop window was inspected in worktree graph, Library/editor, and folded Session views. The main sidebar stayed available across routes and the inspected controls were visible without root clipping. This is a spot check, not the full fixed-Codex pixel/state baseline. |
 
+## Explicitly excluded from this acceptance round
+
+**OMP was skipped at the user's direction.** Its official CLI presented a
+first-run provider-login wizard; no OMP model call or target Session was
+claimed, and no Harness settings were changed.
+
 ## Not accepted / required before release
 
-1. **OMP is not accepted**: its official CLI presents the first-run provider
-   sign-in wizard. Configuring it would change a Harness outside this task's
-   permitted boundary, so the test stopped without an OMP model call. The
-   Codex→Pi→Claude→Grok chain is real, but native resume/send/cancel/approval
+1. The Codex→Pi→Claude→Grok chain is real, but native resume/send/cancel/approval
    still needs a separate cross-Harness acceptance matrix. Native CLI trust and
-   onboarding gates were left to the user. Claude's test was
-   stopped after it read the packet to limit model calls; the confirmed edge
-   proves identity, not a completed downstream task. Its later resume
-   automatically restarted the interrupted turn and was stopped immediately.
-2. The remote [agentskill.sh](https://agentskill.sh/) homepage was reachable
-   during research, but the desktop marketplace API request and local curl
-   request timed out. The UI now shows an explicit unavailable state, retry and
-   external-site link rather than a false "no matching skills" result. The
-   live marketplace load/install path remains unverified.
+   onboarding gates were left to the user. Claude's test was stopped after it
+   read the packet to limit model calls; the confirmed edge proves identity,
+   not a completed downstream task. Its later resume automatically restarted
+   the interrupted turn and was stopped immediately.
+2. The live [agentskill.sh](https://agentskill.sh/) catalogue and read-only
+   skill-content fetch **did succeed** in the desktop after reducing the first
+   page to 12 cards. The service remained intermittent: other desktop requests
+   failed and correctly showed retry/external-site actions rather than a false
+   empty result. A remote skill was **not installed**; that write path remains
+   unexecuted pending an explicitly approved test installation.
 3. Pixel/state comparisons against fixed Codex Desktop 26.915.4065.0 are not
    complete for every dialog, menu, scale, theme and window size. The 1100×720
    geometry check emulates the WebView viewport; it is not a Win32 window-resize

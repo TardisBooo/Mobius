@@ -271,6 +271,18 @@ test("skill market and project-private installed skills are distinct", async () 
     if (await page.locator(".market-error-v2").count()) {
       await expect(page.locator(".market-error-v2 button")).toContainText(/重试|Retry/);
       await expect(page.locator(".market-error-v2 a")).toHaveAttribute("href", "https://agentskill.sh/");
+    } else {
+      const firstCard = page.locator(".marketplace-card-v2").first();
+      const fits = await firstCard.evaluate((card) => {
+        const bounds = card.getBoundingClientRect();
+        const actions = [...card.querySelectorAll<HTMLElement>("footer .soft-button")];
+        return bounds.width >= 310 && actions.length === 3 && actions.every((action) => {
+          const rect = action.getBoundingClientRect();
+          return rect.height <= 36 && action.scrollWidth <= action.clientWidth + 1
+            && rect.left >= bounds.left && rect.right <= bounds.right;
+        });
+      });
+      expect(fits, "marketplace action labels should fit inside their cards").toBe(true);
     }
     await page.locator(".skills-segment").first().locator("button").filter({ hasText: /已安装|Installed/ }).click();
     await page.locator(".skills-segment").nth(1).locator("button").filter({ hasText: /项目|Project/ }).click();

@@ -130,7 +130,7 @@ async function fetchMarketplaceSkills(query: string): Promise<MarketplaceSkill[]
       return desktopApi.listMarketplaceSkills(query);
     }
   }
-  const params = new URLSearchParams({ page: "1", limit: "36", section: "top", includeTotal: "false" });
+  const params = new URLSearchParams({ page: "1", limit: "12", section: "top", includeTotal: "false" });
   if (query.trim()) params.set("q", query.trim());
   const response = await fetch(`https://agentskill.sh/api/skills?${params.toString()}`, { headers: { Accept: "application/json" } });
   if (!response.ok) throw new Error(`agentskill.sh returned ${response.status}`);

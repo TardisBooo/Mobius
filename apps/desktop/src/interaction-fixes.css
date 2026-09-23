@@ -328,6 +328,11 @@
   grid-template-rows: auto auto auto auto;
 }
 
+/* Discovery cards have three actions; four 245px columns crush their labels. */
+.skills-grid-v2:has(.marketplace-card-v2) {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 310px), 1fr));
+}
+
 .marketplace-description-v2 {
   grid-column: 1 / -1;
   margin: 0;
@@ -352,7 +357,22 @@
 }
 
 .marketplace-card-v2 footer {
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 6px;
+}
+
+.marketplace-card-v2 footer .soft-button {
+  min-width: 0;
+  min-height: 32px;
+  padding-inline: 6px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.marketplace-card-v2 footer .soft-button svg {
+  flex: none;
 }
 
 .marketplace-card-v2 footer a {
