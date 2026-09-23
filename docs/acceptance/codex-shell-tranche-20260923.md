@@ -27,6 +27,7 @@ instance used isolated data below `E:\Workspaces\_audits\mobius-codex-shell-2026
 | Tauri unit tests | Passed | `cargo test -p mobius-desktop --bin mobius-desktop` (12) |
 | Isolated real WebView2 desktop tests | Passed | `pnpm exec playwright test --config playwright.codex-shell.config.ts` (2) |
 | Search to exact message | Passed, manual desktop check | Search `CLAUDE55_DEFAULT_1M_OK` selected its matching message |
+| Unsaved editor buffer across navigation | Passed | Isolated WebView2 test: mounted-file buffer survives Library → Settings → Library |
 | Main-route overflow and control-name smoke | Passed, limited | Sessions, workbench, notes, skills, settings: no root horizontal overflow or unnamed visible button/input |
 | Library layout screenshot | Passed for the tested viewport | `E:\Workspaces\_audits\mobius-codex-shell-20260923\library-layout-fixed.png` |
 
@@ -39,7 +40,8 @@ instance used isolated data below `E:\Workspaces\_audits\mobius-codex-shell-2026
   versioned Tauri/CLI/MCP protocol. Native create/send/stream/cancel/approval capability
   contracts and fallback boundaries remain to be implemented and verified per Harness.
 - The complete project/worktree/session navigation, all context menus and shortcuts,
-  canvas integration, search hit highlighting, long-document cases, restart recovery,
+  canvas integration, search hit highlighting, long-document cases, unsaved-buffer
+  recovery after application restart,
   multiple-window and multiple-worktree behavior, and full light/dark/scale matrix
   remain unexecuted in this tranche.
 - Packaging, maintained installation, shortcut update, and release are blocked until

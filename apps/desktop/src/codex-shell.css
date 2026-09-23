@@ -23,6 +23,8 @@
 .codex-shell .mobius-main.page-notes { grid-column: 1 / -1; }
 .codex-shell .page-notes .notes-library-v2 { grid-template-columns: minmax(220px, var(--library-nav-width, 285px)) 5px minmax(0, 1fr); }
 .codex-shell .page-notes .notes-nav-v2 { border-inline-end: 1px solid var(--m-line); }
+.codex-shell .library-route-surface { width: 100%; height: 100%; min-width: 0; min-height: 0; }
+.codex-shell .library-route-surface[hidden] { display: none; }
 .codex-shell .pagebar-sessions { display: none; }
 .codex-shell .session-library-embedded { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 290px); min-height: 0; height: 100%; }
 .codex-shell .session-library-embedded.context-hidden { grid-template-columns: minmax(0, 1fr); }

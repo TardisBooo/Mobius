@@ -71,5 +71,10 @@ test("writable mount saves explicitly and refuses an external conflict", async (
     await page.locator(".note-editor-v2>header .primary-button").click();
     await expect(page.getByText(/文件在外部发生变化|File changed outside Möbius/)).toBeVisible();
     expect(readFileSync(fixtureFile, "utf8")).toContain("external edit");
+    await page.locator(".mobius-modal button").first().click();
+    await page.locator(".mobius-topbar button[aria-label='打开设置'],.mobius-topbar button[aria-label='Open settings']").click();
+    await expect(page.locator(".page-settings")).toBeVisible();
+    await page.locator(".project-sidebar-nav .rail-item").nth(2).click();
+    await expect(page.locator(".cm-content")).toContainText("unsaved working copy");
   } finally { await browser.close(); }
 });
