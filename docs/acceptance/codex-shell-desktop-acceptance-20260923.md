@@ -46,6 +46,7 @@ current development build, not the maintained `E:\SOFTWARE\Mobius` installation.
 | Live cross-Harness chain | In the empty audit project, one short Codex probe was handed to Pi, then Claude, then Grok Build. The four native Session IDs were indexed with the same verified checkout; the lineage graph returned **4 nodes / 3 confirmed edges / 0 missing sources**. The reference-only packets were read by the target Harnesses. |
 | Live-discovered repairs | Claude's `subagents/agent-*.jsonl` inherited its parent's `sessionId`; it is now indexed as a non-resumable child with its own identity. Grok's `<user_query>` wrapper now preserves exact handoff-marker detection. Handoff-created titles now use the original task instead of raw launch instructions. Reindex of the actual records confirmed these changes. |
 | Unconfirmed handoff recovery | OMP opened its first-run provider-login wizard, so no model call or target Session was claimed. Closing its terminal now records `cancelled`; a prior unbound launch became `unknown` after restart. Already confirmed edges stayed `bound`. |
+| Native resume probe | Pi launched its exact native `--session` path and remained idle without a model prompt. Codex reached its own folder-trust confirmation for the fresh audit directory; this was not accepted on the user's behalf. Resuming the previously interrupted Claude turn auto-continued model work, so that terminal was stopped immediately to limit calls. Grok/OMP native resume was not attempted. |
 | Visual spot check | The actual 1440×823 desktop window was inspected in worktree graph, Library/editor, and folded Session views. The main sidebar stayed available across routes and the inspected controls were visible without root clipping. This is a spot check, not the full fixed-Codex pixel/state baseline. |
 
 ## Not accepted / required before release
@@ -54,9 +55,11 @@ current development build, not the maintained `E:\SOFTWARE\Mobius` installation.
    sign-in wizard. Configuring it would change a Harness outside this task's
    permitted boundary, so the test stopped without an OMP model call. The
    Codex→Pi→Claude→Grok chain is real, but native resume/send/cancel/approval
-   still needs a separate cross-Harness acceptance matrix. Claude's test was
+   still needs a separate cross-Harness acceptance matrix. Native CLI trust and
+   onboarding gates were left to the user. Claude's test was
    stopped after it read the packet to limit model calls; the confirmed edge
-   proves identity, not a completed downstream task.
+   proves identity, not a completed downstream task. Its later resume
+   automatically restarted the interrupted turn and was stopped immediately.
 2. The remote [agentskill.sh](https://agentskill.sh/) homepage was reachable
    during research, but the desktop marketplace API request and local curl
    request timed out. The UI now shows an explicit unavailable state, retry and
