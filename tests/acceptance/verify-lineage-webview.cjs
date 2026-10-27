@@ -10,6 +10,7 @@ function loadReceipt(root) {
   if (path.resolve(receipt.Fixture) !== path.resolve(root)) throw Error('Launch receipt uses another fixture');
   if (!['source', 'candidate', 'installed'].includes(receipt.Layer)) throw Error('Acceptance layer is required');
   if (!Number.isInteger(receipt.ProcessId) || receipt.ProcessId <= 0) throw Error('Launch process is required');
+  if (typeof receipt.StartedAt !== 'string' || Number.isNaN(Date.parse(receipt.StartedAt))) throw Error('Process start identity is required');
   if (!Number.isInteger(receipt.Port) || receipt.Port < 9300 || receipt.Port > 9399) throw Error('Invalid verification port');
   if (path.resolve(receipt.Profile) !== path.resolve(root, 'webview')) throw Error('Wrong WebView profile');
   const digest = crypto.createHash('sha256').update(fs.readFileSync(receipt.Executable)).digest('hex');
@@ -27,21 +28,39 @@ function checkPageUrl(url, layer) {
   if (layer !== 'source' && !['tauri://localhost', 'http://tauri.localhost', 'https://tauri.localhost'].includes(parsed.origin === 'null' ? `${parsed.protocol}//${parsed.host}` : parsed.origin)) throw Error('Candidate and installed checks require packaged application assets');
 }
 
-function verifyPortOwner(receipt) {
-  const command = `$ownerPid = @(Get-NetTCPConnection -State Listen -LocalPort ${receipt.Port} -ErrorAction Stop | Select-Object -ExpandProperty OwningProcess -Unique); if ($ownerPid.Count -ne 1) { throw 'Ambiguous debugging port owner' }; $current = $ownerPid[0]; for ($i=0; $i -lt 16 -and $current -gt 0; $i++) { if ($current -eq ${receipt.ProcessId}) { Write-Output 'owned'; exit 0 }; $current = (Get-CimInstance Win32_Process -Filter "ProcessId=$current" -ErrorAction Stop).ParentProcessId }; throw 'Debugging port does not belong to the launched application'`;
-  execFileSync('powershell.exe', ['-NoProfile', '-Command', command], { encoding: 'utf8' });
+function verifyOwnedProcess(receipt, action = 'verify') {
+  const literal = value => `'${String(value).replaceAll("'", "''")}'`;
+  const command = `
+    $ErrorActionPreference = 'Stop'
+    $owned = Get-Process -Id ${receipt.ProcessId} -ErrorAction Stop
+    $expectedStart = [DateTimeOffset]::Parse(${literal(receipt.StartedAt)}).UtcDateTime
+    if ($owned.Path -ine ${literal(receipt.Executable)} -or $owned.StartTime.ToUniversalTime().Ticks -ne $expectedStart.Ticks) {
+      throw 'Launch process identity changed'
+    }
+    $ownerPid = @(Get-NetTCPConnection -State Listen -LocalPort ${receipt.Port} -ErrorAction Stop | Select-Object -ExpandProperty OwningProcess -Unique)
+    if ($ownerPid.Count -ne 1) { throw 'Ambiguous debugging port owner' }
+    $current = $ownerPid[0]
+    $portOwned = $false
+    for ($i=0; $i -lt 16 -and $current -gt 0; $i++) {
+      if ($current -eq ${receipt.ProcessId}) { $portOwned = $true; break }
+      $current = (Get-CimInstance Win32_Process -Filter "ProcessId=$current" -ErrorAction Stop).ParentProcessId
+    }
+    if (-not $portOwned) { throw 'Debugging port does not belong to the launched application' }
+    ${action === 'stop' ? "Stop-Process -InputObject $owned -ErrorAction Stop; if (-not $owned.WaitForExit(10000)) { throw 'Owned application did not stop' }" : ''}
+    Write-Output 'owned'
+  `;
+  execFileSync('powershell.exe', ['-NoProfile', '-Command', command], { encoding: 'utf8', windowsHide: true, stdio: 'pipe' });
 }
 
-module.exports = { loadReceipt, checkPageUrl };
+module.exports = { loadReceipt, checkPageUrl, verifyOwnedProcess };
 
 async function main() {
   const { chromium, expect } = require(require.resolve('@playwright/test', { paths: [path.resolve(__dirname, '../../apps/desktop'), process.env.MOBIUS_PLAYWRIGHT_ROOT].filter(Boolean) }));
   const root = path.resolve(process.argv[2] || '');
   if (!root.startsWith('E:\\Workspaces\\_verification\\') || !fs.existsSync(path.join(root, 'vault', 'mobius.sqlite'))) throw Error('Isolated fixture required');
   let receipt = loadReceipt(root);
-  const runningPath = execFileSync('powershell.exe', ['-NoProfile', '-Command', `(Get-Process -Id ${receipt.ProcessId} -ErrorAction Stop).Path`], { encoding: 'utf8' }).trim();
-  if (path.resolve(runningPath).toLowerCase() !== path.resolve(receipt.Executable).toLowerCase()) throw Error('Receipt does not identify the running executable');
-  verifyPortOwner(receipt);
+  verifyOwnedProcess(receipt);
+
   let browser = await chromium.connectOverCDP(`http://127.0.0.1:${receipt.Port}`);
   const pages = browser.contexts().flatMap(context => context.pages());
   if (pages.length !== 1) throw Error(`Expected one isolated application page, found ${pages.length}`);
@@ -89,13 +108,13 @@ async function main() {
     const reopened = await page.evaluate(() => window.__TAURI_INTERNALS__.invoke('session_lineage', { sessionIds: ['fixture-d'] }));
     if (reopened.nodes.find(n => n.session_id === 'fixture-d').title !== secondAlias) throw Error('Second alias was lost after reopening the page');
     await browser.close();
-    execFileSync('powershell.exe', ['-NoProfile', '-Command', `Stop-Process -Id ${receipt.ProcessId} -ErrorAction SilentlyContinue; Wait-Process -Id ${receipt.ProcessId} -Timeout 10 -ErrorAction SilentlyContinue`]);
+    verifyOwnedProcess(receipt, 'stop');
     execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, 'start-lineage-desktop.ps1'), '-FixtureRoot', root, '-Executable', receipt.Executable, '-Layer', receipt.Layer, '-Port', String(receipt.Port)], { encoding: 'utf8' });
     const firstLaunch = receipt;
     receipt = loadReceipt(root);
     if (receipt.BinarySha256 !== firstLaunch.BinarySha256 || receipt.Profile !== firstLaunch.Profile) throw Error('Application restart changed binary or profile');
     await expect.poll(() => {
-      try { verifyPortOwner(receipt); return true; } catch { return false; }
+      try { verifyOwnedProcess(receipt); return true; } catch { return false; }
     }, { timeout: 20000 }).toBe(true);
     browser = await chromium.connectOverCDP(`http://127.0.0.1:${receipt.Port}`);
     page = browser.contexts()[0].pages()[0];

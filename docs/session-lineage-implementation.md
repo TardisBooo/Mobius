@@ -100,6 +100,8 @@ executable SHA-256, file version, process, isolated profile, port and acceptance
 
 Run `node tests/acceptance/verify-lineage-webview.cjs FIXTURE`. The check connects
 to the receipt's application and verifies the port owner's process ancestry.
+Before stopping it for restart, the check verifies its executable, actual process
+start time and debugging-port ancestry again in the stop operation.
 It keeps the actual loaded URL. Candidate and installed checks reject a local
 Vite page. The check saves an alias twice, reloads, then restarts only the owned
 isolated app with the same executable and profile and checks the persisted alias.

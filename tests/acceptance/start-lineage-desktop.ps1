@@ -38,7 +38,7 @@ $receipt = [ordered]@{
   Profile = $env:WEBVIEW2_USER_DATA_FOLDER
   Port = $Port
   Layer = $Layer
-  StartedAt = (Get-Date).ToUniversalTime().ToString('o')
+  StartedAt = $child.StartTime.ToUniversalTime().ToString('o')
 }
 $json = $receipt | ConvertTo-Json
 [IO.File]::WriteAllText((Join-Path $fixturePath 'launch-receipt.json'), $json, [Text.UTF8Encoding]::new($false))
