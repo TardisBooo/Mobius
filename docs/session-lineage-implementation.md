@@ -88,3 +88,20 @@ Canonical development is this desktop repository plus
 [mobius-connect](https://github.com/TardisBooo/mobius-connect). Isolated
 verification trees are retained for review; they are not accepted deliverables.
 No new release has been accepted solely because fixture tests pass.
+
+## Verify the delivered desktop entry
+
+Use a newly seeded fictional fixture. Launch the exact executable with
+`tests/acceptance/start-lineage-desktop.ps1 -FixtureRoot FIXTURE -Executable EXE
+-Layer installed -Port 9337`. Installed checks require the maintained executable
+under `E:\SOFTWARE`. Use `candidate` for a built package or `source` for an explicit
+development-server run. The launcher writes `launch-receipt.json` with the
+executable SHA-256, file version, process, isolated profile, port and acceptance layer.
+
+Run `node tests/acceptance/verify-lineage-webview.cjs FIXTURE`. The check connects
+to the receipt's application and verifies the port owner's process ancestry.
+It keeps the actual loaded URL. Candidate and installed checks reject a local
+Vite page. The check saves an alias twice, reloads, then restarts only the owned
+isolated app with the same executable and profile and checks the persisted alias.
+This lineage regression is one affected workflow. It does not accept a full
+product release or verify all harness and installer controls.
